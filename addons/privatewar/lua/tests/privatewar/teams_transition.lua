@@ -51,6 +51,23 @@ return {
     end,
     cases = {
         {
+            name = "Transition: authorization callbacks cannot reenter or change another participant",
+            func = function()
+                local ply = participant(1)
+                local other = participant(1)
+                local asked = false
+                hook.Add("PW_CanChangeTeam", listener, function()
+                    if not asked then
+                        asked = true
+                        expect(transition(other, 2, "role_change")).to.beFalse()
+                    end
+                    return true
+                end)
+                expect(transition(ply, 2, "role_change")).to.beTrue()
+                expect(other:Team()).to.equal(1)
+            end
+        },
+        {
             name = "Transition: admitted dead and pre-spawn observer bodies can change without spawn heal or give",
             func = function()
                 local ply, data = participant(1)
