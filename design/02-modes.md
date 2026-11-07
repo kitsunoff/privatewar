@@ -94,6 +94,52 @@ Inherited from `01-extensibility.md`:
 
    - The full list of `PW_*` hooks a mode may answer is defined together with the subsystems that fire them (spawn: `03-mapdata`, loadout: `05-loadout`, bots: `07-bots`).
 
+### Additional modes: user-approved revision (2026-11-08)
+
+8. **Search and Destroy first; independent Hardpoint/Infection preparation in parallel.** The user renewed
+   implementation authorization; this does not pass the outstanding player/weapon HUD visual checkpoint.
+   Shared API changes still require orchestrator review/freeze before implementation.
+
+   - **S&D:** two authored sites on `gm_construct`, one bomb, one life per round; 120 s round, 5 s plant,
+     7.5 s defuse, 45 s fuse; first to 6 round wins; swap sides every 3 completed rounds. Select a random
+     attacking carrier. Interactions hold E continuously with no partial progress. A planted bomb keeps the
+     round alive beyond the ordinary deadline even if every attacker is dead. Explosion resolves the round
+     without damaging players. Join in progress spectates until the next round.
+     Before plant: no attackers means defender win, no defenders means attacker win, both absent means draw.
+     Plant must complete strictly before the round deadline, defuse strictly before the fuse; equality loses
+     to the deadline. Damage alone does not cancel held use; release/range/death do. Carrier death/disconnect
+     drops once; invalid out-of-world/unreachable drops recover at the authored point. Reconnect grants no
+     second life, spectators see only their own team, bot quota replacements occur between rounds.
+      Intermission has no combat; clear grenades/active effects but keep unused earned streak inventory.
+      Carrier and dropped-bomb markers are visible only to attackers; planted bomb and fuse timer are visible
+      to both teams. Defenders can see the dropped physical bomb by ordinary sight, never hidden bot coordinates.
+      Actor death cancels an unfinished interaction; a completed plant survives carrier death. Exact deadline
+      equality loses to the deadline.
+   - **Hardpoint:** two teams, one rotating authored zone, first authored map `gm_construct`; 60 s per zone,
+     1 point per second, score limit 250, match limit 10 minutes, tied scores draw. Only exclusive living
+     occupancy scores; empty and contested zones score zero regardless of unequal counts. No additional
+     personal rewards. Bots pursue the active zone, without pre-rotation.
+   - **Infection:** a separate optional addon, not mandatory built-in content; default 3 rounds, configurable
+     including 1. Reseed initial infected each round, preferring no repeat where possible; survivor deaths
+     convert, infected continue playing. Each round lasts 120 s, with one random initial infected; infected
+     respawn after 3 s, new joiners wait for the next round. Any survivor death converts, including world
+     death/suicide without a reward. All converted means infected win; at time expiry remaining survivors
+     win. No new XP/money events. Infected have 400 health, walk and run speeds multiplied by 1.15 over
+     ordinary player values, GMod's built-in fists and the HL2 zombie player skin; jump and fist damage
+     are unchanged. Apply identically to humans/bots and fully restore ordinary state outside Infection.
+     Verify the built-in fists weapon class and valid player model in the engine; no substitute crowbar.
+     At least two participants means humans or bots (one host plus one bot is valid). Last infected
+     disconnect gives survivors the round; no survivors gives infected the round; a pending infected respawn
+     still counts as present. Deadline wins over equal-time death. Personal round wins go to surviving
+     survivors at expiry or the initial seed on infected victory; converted players never inherit a win.
+     Final match standings use personal round wins (`teams = false`), shared top is a draw; infection counts
+     are informational statistics only. Infected receive no perks/grenades/streaks; revoke them on conversion.
+     Each round has a fresh roster/classes; reconnect must not bypass role/life restrictions.
+
+   Shared lifecycle/role APIs remain generic: two-phase round preparation, synchronous team transition,
+   post-base spawn notification and optional terminal result transform. These interface approvals do not
+   change existing ordinary modes or grant new XP/money events.
+
 ## Interfaces
 
 TBD.

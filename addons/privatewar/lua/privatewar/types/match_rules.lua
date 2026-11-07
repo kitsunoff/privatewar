@@ -49,6 +49,8 @@
 ---Team index of FFA players: a real engine team, so the base GM:PlayerSpawn (GM.TeamBased) does not make them
 ---spectators. Outside 1..N, so it never counts as a team of the match (no team score, every player an enemy).
 ---@field FreeTeam integer
+---Server: engine Spawn once, then synchronous PW_PlayerSpawned after base/loadout initialization returns.
+---@field Spawn? fun(ply: Player)
 ---Server: the mode's default reaction to PW_PlayerKilled: awards "kill" (and "headshot") to the attacker for an
 ---enemy kill and counts the kill toward the score limit; suicides, team kills and world kills score nothing.
 ---@field ScoreKill? fun(victim: Player, attacker: Entity, dmg: CTakeDamageInfo)
@@ -106,3 +108,5 @@
 ---@class PW
 ---@field MatchRules? PW.MatchRulesLib the match_rules module (nil when the module is missing)
 ---@field _MatchRules PW.MatchRulesStore internal
+
+---@alias PW.PlayerSpawnedHook fun(ply: Player)
