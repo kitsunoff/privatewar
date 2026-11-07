@@ -437,7 +437,9 @@ Source: `gamemodes/privatewar/gamemode/core/sh_call.lua` (shared, T-1.8), `desig
 `PW.Call(entity, method, ...) -> ...`:
 
 1. Returns nothing without calling when `entity[method]` is not a function, when the entity failed earlier without
-   a registry, or when `entity.IsValid` is a function and returns `false`.
+   a registry, or when `entity.IsValid` is a function and returns `false`. The sole removal-only admission below
+   lets the real `instance:Remove()` call its `OnUnequip` once despite instance/source invalidity; arbitrary
+   callers cannot create that admission.
 2. Otherwise runs `pcall(entity[method], entity, ...)` and returns the method's results.
 3. On error it returns nothing and:
    - for an entity that is not `PW.ActiveMode`: logs one line

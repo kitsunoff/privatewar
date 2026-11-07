@@ -2,7 +2,7 @@
 -- hooks and timers that end with the instance. Callbacks run through PW.Call; an instance has no own _Registry,
 -- so an error lands it in PW._Call.failed: IsValid turns false, GMod drops its hooks, and it is ended.
 -- Definition validity also blocks gameplay; the registry ends exact-definition instances before notifying disable.
--- Remove has a protected cleanup-only path: failed/disabled instances still unequip, without resuming PW.Call.
+-- Remove grants one private cleanup admission to PW.Call: failed/disabled instances still unequip and are profiled.
 -- The core ends every live instance on PW_MatchEnd (00-core.md d.3); PW_MatchEnd is server only, so the client ends
 -- its instances when the phase leaves LIVE (cl_phase.lua, T-1.13).
 
@@ -11,6 +11,19 @@ PW._Instances = PW._Instances or { live = {}, count = 0 }
 
 ---@type table<string, function> copied onto every instance
 local methods = {}
+
+---@type table<table, true> private, single-use admissions created only inside actual Remove
+local cleanupPending = setmetatable({}, { __mode = "k" })
+
+---Only consumes existing admission; callers cannot create a cleanup bypass.
+---@param entity table
+---@param method string
+---@return boolean
+function PW._TakeInstanceCleanup(entity, method)
+    if method ~= "OnUnequip" or not cleanupPending[entity] then return false end
+    cleanupPending[entity] = nil
+    return true
+end
 
 ---@param self PW.Instance
 ---@param ... any
@@ -63,19 +76,14 @@ function methods.Timer(self, delay, reps, fn)
     timer.Create(name, delay, reps, function() run(self, key) end)
 end
 
----Only invoked through pcall by Remove, never a gameplay entry point.
----@param self PW.Instance
-local function unequip(self)
-    local fn = self.OnUnequip
-    if isfunction(fn) then fn(self, self._Owner) end
-end
-
 ---@param self PW.Instance
 function methods.Remove(self)
     if self._Ended then return end
     self._Ended = true
     self._Dead = true
-    local ok, err = pcall(unequip, self)
+    cleanupPending[self] = true
+    local ok, err = pcall(PW.Call, self, "OnUnequip", self._Owner)
+    cleanupPending[self] = nil
     PW._Instances.live[self] = nil
     for name in pairs(self._Hooks) do hook.Remove(name, self) end
     for name in pairs(self._Timers) do timer.Remove(name) end
@@ -95,6 +103,7 @@ function PW.Instance(def, owner)
     for name, fn in pairs(methods) do instance[name] = fn end
     PW._Instances.live[instance] = true
     PW.Call(instance, "OnEquip", owner)
+    settle(instance)
     return instance
 end
 
