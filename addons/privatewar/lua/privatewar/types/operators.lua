@@ -63,6 +63,8 @@
 
 ---The operators module: one global operator per player, random operators for bots.
 ---@class PW.OperatorsLib
+---Server: apply the validated PW_PlayerModelOverride, else the saved ordinary operator; never change choices.
+---@field Refresh? fun(ply: Player): boolean, string?
 ---@field Auto string the choice that means "my GMod model" ("auto")
 ---@field FallbackName string last-resort stock name ("kleiner"), not preferred over list order
 ---@field FallbackPath string the model used when no entry is usable

@@ -1,4 +1,6 @@
 ---@meta
+---First non-nil answer wins; false excludes selection, running frames, transition targets and resume.
+---@alias PW.CanRunBotBehaviorQuestion fun(bot: Player, behaviorId: string): boolean?
 -- Types of the bots_brain module (T-5.9; 07-bots.md d.4, d.5; docs/api/bots-blackboard.md "bot_behaviors") and of the
 -- bot_behaviors kind. Code: lua/privatewar/modules/bots_brain/ (shared.lua: the pure selection; sh_stack.lua: the
 -- per-bot state, the Action stack and the ctx; init.lua: the scheduler glue).
