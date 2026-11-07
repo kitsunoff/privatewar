@@ -1,8 +1,9 @@
 # Infection addon: Phase 1 contract draft
 
-Status: **DRAFT / NOT FROZEN / NOT IMPLEMENTED**. For orchestrator review only.
-No existing API contract or design decision is changed by this proposal. Names below are proposed,
-not available APIs. No observed game RED, GREEN, manual HUD approval or gameplay completion is claimed.
+Status: historical Phase 1 proposal; generic surfaces are now **FROZEN, NOT IMPLEMENTED**.
+Canonical corrections: [teams API](api/teams.md), [player overrides API](api/player-overrides.md),
+[operators API](api/operators.md). Declarations and functional tests precede production.
+No observed game RED, GREEN, manual HUD approval or gameplay completion is claimed.
 
 ## Approved boundary and scaffold
 
@@ -57,10 +58,11 @@ Proposed server-only signatures, to be declared in `types/teams.lua` only after 
 ---@field PW_SelectLateTeam? fun(self: PW.Mode, ply: Player): integer|false|nil
 ```
 
-`Transition` requires an enabled teams module, active valid mode, `LIVE`, valid non-spectating player,
+`Transition` requires an enabled teams module, active valid mode, `LIVE`, valid admitted non-spectating player,
 finite integer destination in `1..N`, valid reason, and an explicit `true` from the question
-`PW_CanChangeTeam(ply, from, to, reason)`. A `false` veto wins by the usual question contract;
-`nil` does not authorize. Invalid input or reentrant transition returns `false, reason` before mutation
+`PW_CanChangeTeam(ply, from, to, reason)`. First non-nil answer wins: an earlier false blocks, a later
+false cannot override an earlier true. `nil` does not authorize. Dead participants and initial pre-spawn
+observer bodies remain eligible. Invalid input or reentrant transition returns `false, reason` before mutation
 or notifications. An authorized same-team request succeeds without events. It does not spawn, heal,
 give a loadout, score, or change a saved class. No client team-changing message is introduced.
 No public team transition is a security boundary against arbitrary server Lua.
@@ -187,8 +189,9 @@ The new module must cooperate with ordinary spawn initialization, not race engin
 release all override state and restore baseline max/current health and walk/run speeds; normal
 operator/class choices survive. Missing provider on the next game session leaves ordinary behavior.
 Do not restore a dead life's snapshot into a new life or resurrect a dead player during cleanup.
-**Freeze clarification needed:** exact current-health rollback for a living damaged player versus
-ordinary new-life health at the next spawn; current/max-health restoration must be tested separately.
+**Frozen rollback:** restore living baseline maximum/speeds, clamp current HP down only, never heal;
+dead release never revives, new life never restores old-life current HP. Capture ordinary postspawn
+baseline per life through SND-owned `PW.MatchRules.Spawn` / `PW_PlayerSpawned`, then apply spawn HP once.
 
 Targeted source verification: `docs/api/core.md` documents `weapon_fists` at weapon-registration time,
 and the [official built-in SWEP](https://github.com/Facepunch/garrysmod/blob/master/garrysmod/lua/weapons/weapon_fists.lua)
@@ -262,8 +265,14 @@ An addon manifest without any Lua fails the current packaging self-test, hence t
 No packaging script/test changes are included or requested without exact follow-up scope approval.
 No new third-party material is introduced; the root GPL-3.0-or-later licence applies.
 
-Await orchestrator freeze of generic transition/placement/admission, player overrides and round seams,
-exact shared-path ownership, insufficient-roster behavior, deadline/disconnect precedence,
-JIP next-round admission/replacement/reconnect details, living current-health rollback and final
-personal scoring. The pending HUD human checkpoint remains pending; resumed implementation
-permission does not mark it passed. Game RED and the full merge gate remain pending a Deck grant.
+Approved follow-up: fewer than two participants aborts to lobby with explanation (a host plus a bot is
+enough); last infected disconnect awards survivors, pending infected respawn does not; exact deadline
+wins precedence and terminal results cannot change. Reconnect cannot gain a new life. Personal round
+wins belong only to a surviving survivor or an initial seed when infected win; conversions never gain
+retroactive wins. Final standings use personal round wins, shared top is a draw; infections are only
+informational. Infected have no perks/grenades/streak inventory or active effects. Generic owner paths
+are authorized; SND still owns rounds/match_rules/core/commander/objective, HP owns its map.
+SND frozen names: PrepareRound, RoundLimit, FinalizeRounds, PW_RoundPreparing/PW_RoundPrepared and
+PW.MatchRules.Spawn/PW_PlayerSpawned. Their implementation is an external integration dependency;
+never duplicate the loop or access private round state. The pending HUD human checkpoint remains
+pending. No push/PR/main merge is authorized. Observed RED and the complete runtime matrix are pending.

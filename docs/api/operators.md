@@ -60,6 +60,15 @@ during `LIVE` from the next spawn.
 
 ## API
 
+Frozen extension (declarations/tests first): question `PW_PlayerModelOverride(ply) -> string?` may supply
+a temporary player-model path. Accept it only when registered by `player_manager.AllValidModels()`
+and accepted by `util.IsValidModel`. An invalid/missing/NPC-only path logs once and falls back to the
+ordinary operator, never downloads content. Standard first-non-nil question dispatch applies.
+Server `PW.Operators.Refresh(ply) -> boolean, string?` applies through this same owner; no competing
+PlayerSetModel hook, permanent choice update or private-store access. Removing the provider restores
+the saved human operator or the bot's existing session choice. The Infection candidate
+`models/player/zombie_classic.mdl` still needs installed-asset/animation verification on the Deck.
+
 | Function | Contract |
 | --- | --- |
 | `PW.Operators.List(input) -> PW.OperatorEntry[]` | Shared, pure. `input = { stock, economy, unlocked }` |
