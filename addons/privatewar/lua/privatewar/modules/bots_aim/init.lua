@@ -292,4 +292,16 @@ function lib.OwnsView(bot)
     return store.states[bot] ~= nil
 end
 
+local function clearAll()
+    for bot in pairs(store.states) do
+        if boardOf(bot) ~= nil then lib.SetTarget(bot, nil) end
+    end
+    for bot in pairs(store.override) do
+        if boardOf(bot) ~= nil then lib.SetTarget(bot, nil) end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+
 include("privatewar/modules/bots_aim/sv_command.lua")

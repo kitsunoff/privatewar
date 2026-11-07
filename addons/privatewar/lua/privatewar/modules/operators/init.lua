@@ -12,6 +12,27 @@
 local module = MODULE --[[@as PW.OperatorsModuleServer]]
 
 local lib = PW.Operators --[[@as PW.OperatorsLib]]
+---@type table<string, boolean>
+local warned = {}
+
+---@param store PW.OperatorsStore
+---@param ply Player
+---@return string?
+local function overrideOf(store, ply)
+    local path = PW.Ask("PW_PlayerModelOverride", ply)
+    if path == nil then return nil end
+    if isstring(path) and util.IsValidModel(path) then
+        for _, registered in pairs(player_manager.AllValidModels()) do
+            if string.lower(registered) == string.lower(path) then return path end
+        end
+    end
+    local key = tostring(path)
+    if not warned[key] then
+        warned[key] = true
+        store.log("invalid temporary player model: " .. key .. "; using ordinary operator")
+    end
+    return nil
+end
 
 ---@param message string
 local function defaultLog(message)
@@ -116,6 +137,7 @@ end
 
 function lib._OnSetModel(store, ply)
     local path, own = lookOf(store, ply)
+    path = overrideOf(store, ply) or path
     util.PrecacheModel(path)
     ply:SetModel(path)
     local index = ply:Team()
@@ -125,6 +147,12 @@ function lib._OnSetModel(store, ply)
     })
     ply:SetPlayerColor(Vector(colour[1], colour[2], colour[3]))
     return path
+end
+
+function lib.Refresh(ply)
+    if not IsValid(ply) or not ply:IsPlayer() then return false, "invalid player" end
+    lib._OnSetModel(PW._Operators, ply)
+    return true
 end
 
 function lib._OnRequest(store, ply, choice)

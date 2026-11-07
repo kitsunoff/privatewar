@@ -60,7 +60,7 @@ during `LIVE` from the next spawn.
 
 ## API
 
-Frozen extension (declarations/tests first): question `PW_PlayerModelOverride(ply) -> string?` may supply
+Frozen extension: question `PW_PlayerModelOverride(ply) -> string?` may supply
 a temporary player-model path. Accept it only when registered by `player_manager.AllValidModels()`
 and accepted by `util.IsValidModel`. An invalid/missing/NPC-only path logs once and falls back to the
 ordinary operator, never downloads content. Standard first-non-nil question dispatch applies.

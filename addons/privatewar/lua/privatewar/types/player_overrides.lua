@@ -1,5 +1,4 @@
 ---@meta
--- Frozen contract declarations only. Implementation must follow observed game RED.
 
 ---@class PW.PlayerOverrideProfile
 ---@field maxHealth? number finite positive maximum
@@ -10,6 +9,11 @@
 ---@alias PW.PlayerOverridesQuestion fun(ply: Player): PW.PlayerOverrideProfile?
 ---@alias PW.PlayerModelOverrideQuestion fun(ply: Player): string?
 
+---@class PW.PlayerOverrideBaseline
+---@field max number ordinary maximum for this life
+---@field walk number ordinary walk speed for this life
+---@field run number ordinary run speed for this life
+
 ---@class PW.PlayerOverridesLib
 ---Validate the complete profile before mutation. Repeated refresh never heals or compounds speed.
 ---@field Refresh fun(ply: Player): boolean, string?
@@ -18,3 +22,4 @@
 
 ---@class PW
 ---@field PlayerOverrides? PW.PlayerOverridesLib nil when the generic module is absent
+---@field _PlayerOverrideBaselines table<Player, PW.PlayerOverrideBaseline>? internal, retained across reload

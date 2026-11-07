@@ -76,7 +76,7 @@ The module also listens to core hooks (auto-subscribed `PW_*` methods): `PW_Phas
 - `PW_PendingMatchApplied(pending)`: restores `pending.teams` (keys of digits, integer teams `>= 1`) as
   preferences for the next assignment.
 
-## Managed placement and transitions (frozen; tests before implementation)
+## Managed placement and transitions
 
 `MODE.TeamPolicy` is `"balanced"` (also the default) or `"managed"`. Initial assignment stays balanced
 for both; a managed mode prepares its roles before playable spawning. Managed late placement asks

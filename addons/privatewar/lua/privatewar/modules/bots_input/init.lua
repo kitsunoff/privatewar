@@ -21,6 +21,20 @@ function lib.SetScripted(bot, intent)
     PW._BotInput.scripted[bot] = intent
 end
 
+local function clearAll()
+    local bots = PW.Bot
+    if bots == nil or bots.Get == nil then return end
+    for bot in pairs(PW._BotInput.scripted) do
+        if bots.Get(bot) ~= nil then PW._BotInput.scripted[bot] = nil end
+    end
+    for bot in pairs(PW._BotInput.states) do
+        if bots.Get(bot) ~= nil then PW._BotInput.states[bot] = nil end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+
 function lib.IntentFor(bot)
     local scripted = PW._BotInput.scripted[bot]
     if scripted ~= nil then return scripted, true end
