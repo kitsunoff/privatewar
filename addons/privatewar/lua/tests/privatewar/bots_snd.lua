@@ -127,6 +127,58 @@ return {
             end
         },
         {
+            name = "Objective follower: real SetGoal rejects outside projected discs and records visit identity",
+            func = function()
+                local api, goals = must(PW.Bot), must(PW.BotGoal)
+                local actor = must(player.GetHumans()[1])
+                local origin = actor:GetPos()
+                local obj = objective("hold")
+                obj.pos, obj.radius = origin + Vector(300, 0, 0), 24
+                obj.eligible = { [actor:UserID()] = true }
+                obj.zone = { pos = obj.pos, radius = 100, above = 80, below = 8 }
+                ---@type PW.BotBoard
+                local board = { bot = actor, intent = { buttons = 0 }, team = 1 }
+                stub(goals, "BoardOf").with(function(ply) return ply == actor and board or nil end)
+                local projected = obj.pos + Vector(1000, 0, 0)
+                stub(goals, "Project").with(function() return projected end)
+                stub(must(PW.BotNav), "RequestPath").with(function()
+                    return { status = "queued", partial = false, cached = false, iterations = 0,
+                        slices = 0, done = false, from = 1, to = 2 }
+                end)
+                stub(must(PW.BotNav), "Cancel").with(function() end)
+                ---@type PW.BotBrainCtx
+                local ctx = { bot = actor, board = board, now = 10, state = {}, contacts = {}, memory = {}, _api = {},
+                    order = order(obj), factsAt = 10, facts = { pos = origin, objectives = { obj }, mates = {},
+                        deaths = {}, candidates = {}, stationary = false, teamwork = 1 },
+                    Intent = function() return must(board.intent) end,
+                    SetGoal = function(_, point, radius, priority)
+                        return api.SetGoal(actor, point, radius, priority)
+                    end,
+                    ClearGoal = function() api.ClearGoal(actor) end,
+                    GoalStatus = function() return board.goal ~= nil and board.goal.status or nil end,
+                    SetTarget = function() end, Contact = function() end, SearchPlan = function() end }
+                local behavior = must(PW.BotBehaviors.Get("objective")) --[[@as PW.BotBehavior]]
+                local ok, err = pcall(function()
+                    for _, offset in ipairs({ Vector(1000, 0, 0), Vector(0, 0, 500) }) do
+                        projected = obj.pos + offset
+                        api.ClearGoal(actor)
+                        ctx.state = {}
+                        behavior:Update(actor, ctx)
+                        local goal = board.goal
+                        if goal ~= nil then
+                            local delta = must(goal.projected) - obj.pos
+                            expect(delta.x * delta.x + delta.y * delta.y <= (100 - goal.radius) ^ 2).to.beTrue()
+                            expect(delta.z >= -8 and delta.z <= 80).to.beTrue()
+                        end
+                        expect(must(ctx.state).id).to.equal(obj.id)
+                        expect(must(ctx.state).revision).to.equal(obj.revision)
+                    end
+                end)
+                api.ClearGoal(actor)
+                assert(ok, tostring(err))
+            end
+        },
+        {
             name = "SND bots: malformed present restrictions never become unrestricted",
             func = function()
                 for _, invalid in ipairs({ false, "all", 1 }) do

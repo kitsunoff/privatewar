@@ -276,8 +276,8 @@ return {
             func = function(state)
                 local mode = child(state)
                 mode.RoundsToWin = 1
-                local first = { IsPlayer = function() return true end }
-                local second = { IsPlayer = function() return true end }
+                local first = { IsPlayer = function() return true end, UserID = function() return 1 end }
+                local second = { IsPlayer = function() return true end, UserID = function() return 2 end }
                 stub(_G, "isentity").with(function(value) return value == first or value == second end)
                 local result = { reason = "roundlimit", teams = false, draw = true,
                     standings = { { id = first, score = 1 }, { id = second, score = 1 } } }
@@ -359,6 +359,24 @@ return {
                     expect({ finishes, aborts }).to.deepEqual({ 0, 1 })
                     expect(s.phase).to.equal("over")
                     mode:Cleanup()
+                end
+            end
+        },
+        {
+            name = "Round objective: saved personal UserIDs remain valid and Player aliases cannot duplicate standings",
+            func = function()
+                ---@type PW.MatchResult
+                local result = { reason = "roundlimit", teams = false, draw = false, winner = 7,
+                    standings = { { id = 7, score = 2 }, { id = 8, score = 1 } } }
+                expect(base()._ValidResult(result)).to.beTrue()
+                local actor = { IsPlayer = function() return true end, UserID = function() return 7 end }
+                stub(_G, "isentity").with(function(value) return value == actor end)
+                result.standings[2].id = actor
+                expect(base()._ValidResult(result)).to.beFalse()
+                for _, id in ipairs({ 0, -1, 1.5, math.huge, 0 / 0 }) do
+                    local malformed = { reason = "roundlimit", teams = false, draw = false, winner = id,
+                        standings = { { id = id, score = 1 } } }
+                    expect(base()._ValidResult(malformed)).to.beFalse()
                 end
             end
         },
