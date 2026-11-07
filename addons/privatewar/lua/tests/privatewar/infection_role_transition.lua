@@ -17,6 +17,7 @@ local function bot(id)
         IsValid = function() return true end, IsPlayer = function() return true end,
         IsBot = function() return true end, UserID = function() return id end,
         Alive = function() return true end, Team = function() return 1 end,
+        GetPos = function() return Vector() end,
         EyeAngles = function() return Angle() end, GetActiveWeapon = function() return NULL end
     } --[[@as Player]]
 end
@@ -60,6 +61,8 @@ return {
     beforeEach = function(state)
         state.boards, state.brains = PW._BotsManager.boards, PW._BotBrain.states
         state.perception = must(PW.BotPerception).States
+        state.goals = PW._BotGoal.states
+        PW._BotGoal.states = {}
         state.mode, state.ended, state.endedTeams = PW.ActiveMode, 0, {} --[[@as integer[] ]]
         PW._BotsManager.boards, PW._BotBrain.states, must(PW.BotPerception).States = {}, {}, {}
         state.team = 2
@@ -71,10 +74,83 @@ return {
     afterEach = function(state)
         hook.Remove("PW_CanRunBotBehavior", listener)
         for _, ply in ipairs(state.bots --[[@as Player[] ]]) do must(must(PW.BotInput).SetScripted)(ply, nil) end
+        for ply in pairs(PW._BotGoal.states) do must(PW.BotGoal)._Drop(ply) end
+        PW._BotGoal.states = state.goals
         PW._BotsManager.boards, PW._BotBrain.states = state.boards, state.brains
         must(PW.BotPerception).States, PW.ActiveMode = state.perception, state.mode
     end,
     cases = {
+        {
+            name = "Async reset: delayed path completion cannot restore an old goal or path after role change",
+            func = function(state)
+                local ply = bot(9010)
+                local board = { bot = ply } --[[@as PW.BotBoard]]
+                PW._BotsManager.boards[ply] = board
+                state.bots = { ply }
+                ---@type fun(handle: PW.NavHandle)
+                local callback = function() end
+                local cancelled = 0
+                local handle = { status = "queued", done = false, path = {}, partial = false,
+                    cached = false, iterations = 0, slices = 0 } --[[@as PW.NavHandle]]
+                local nav, goal = must(PW.BotNav), must(PW.BotGoal)
+                stub(goal, "Project").with(function(point) return point end)
+                stub(nav, "Service").with(function() return {} end)
+                stub(nav, "RequestPath").with(function(_, _, fn) callback = fn return handle end)
+                stub(nav, "Cancel").with(function() cancelled = cancelled + 1 end)
+                expect(goal.SetGoal(ply, Vector(500, 0, 0), 32, "hunt")).to.beTrue()
+                PW.Notify("PW_PlayerTeamChanged", state.human, 2, 1, "role_change")
+                expect(cancelled).to.equal(1)
+                handle.status, handle.done = "found", true
+                callback(handle)
+                expect(board.goal).to.beNil()
+                expect(board.path).to.beNil()
+                expect(PW._BotGoal.states[ply]).to.beNil()
+            end
+        },
+        {
+            name = "Async reset: queued reaction and delayed sharing cannot recreate contacts after round preparation",
+            func = function(state)
+                local lib, ply = must(PW.BotPerception), bot(9011)
+                local old = lib.NewState()
+                lib.States[ply] = old
+                local sender = lib.NewState()
+                lib.QueuePush(old.queue, 0, { [state.human] = { pos = Vector(1, 2, 3), vel = Vector() } })
+                local params = lib.ParamsFor(nil, "regular")
+                lib.Share({ state = sender, team = 1, pos = Vector() },
+                    { { state = old, team = 1, pos = Vector(), params = params } },
+                    { ent = state.human, pos = Vector(1, 2, 3), vel = Vector(), time = 0 }, 0)
+                expect(#old.pending).to.equal(1)
+                PW.Notify("PW_RoundPrepared", 2, false)
+                lib.Think(old, { params = params, seen = {}, random = function() return 0 end }, 100)
+                expect(old.contacts).to.deepEqual({})
+                expect(old.memory).to.deepEqual({})
+                expect(old.pending).to.deepEqual({})
+            end
+        },
+        {
+            name = "Behavior admission: denial arising inside child Update prevents suspended parent OnResume",
+            func = function()
+                local brain, denied, resumed = must(PW.BotBrain), false, 0
+                local parent = { ClassName = "parent", IsValid = function() return true end,
+                    Rank = function() return 30 end, Weight = function() return 1 end,
+                    Update = function() return brain.SuspendFor("child") end,
+                    OnResume = function() resumed = resumed + 1 end }
+                local child = { ClassName = "child", IsValid = function() return true end,
+                    Rank = function() return 0 end, Weight = function() return 0 end,
+                    Update = function() denied = true return brain.Done() end }
+                hook.Add("PW_CanRunBotBehavior", listener, function(_, id)
+                    if denied and id == "parent" then return false end
+                end)
+                local bs, ply = brain.NewState(), bot(9012)
+                local env = { bot = ply, board = { bot = ply }, behaviors = { parent, child },
+                    random = function() return 0 end }
+                brain.Think(bs, env, 0)
+                expect(brain.StackIds(bs)).to.deepEqual({ "parent", "child" })
+                brain.Think(bs, env, 0.1)
+                expect(resumed).to.equal(0)
+                expect(brain.StackIds(bs)).to.deepEqual({})
+            end
+        },
         {
             name = "Role transition: all brains stop before a HUMAN changes team; owners clear synchronously",
             func = function(state)
