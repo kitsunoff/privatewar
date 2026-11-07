@@ -39,6 +39,7 @@ end
 
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 function botLib.AddStimulus(botOrTeam, kind, data)
     return lib.Dispatch(botOrTeam, kind, data)

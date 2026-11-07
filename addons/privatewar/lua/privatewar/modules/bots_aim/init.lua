@@ -303,5 +303,6 @@ end
 
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 include("privatewar/modules/bots_aim/sv_command.lua")
