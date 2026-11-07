@@ -141,6 +141,7 @@ function lib.Resolve(ctx, facts, currentId, botId)
     if order ~= nil and istable(order.objective) and commander ~= nil then
         local obj = order.objective --[[@as PW.BotObjective]]
         local copy = commander.Sanitize({ obj })[1]
+        if copy ~= nil then copy.action = order.type or copy.action end
         if copy ~= nil and commander.Eligible(copy, botId) then
             return copy, copy.weight, true
         end
