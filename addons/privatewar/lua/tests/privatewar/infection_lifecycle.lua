@@ -21,18 +21,26 @@ local function absent() return not file.Exists("privatewar/types/pw_infection.lu
 ---@field model string
 ---@field spawns integer
 ---@field resolved? PW.Loadout
+---@field observer integer
+---@field observing Entity
 
 ---@param id integer
 ---@param isBot boolean
 ---@return Player, PW.InfectionActorFixture
 local function actor(id, isBot)
+    ---@type PW.InfectionActorFixture
     local d = { team = id % 2 + 1, hp = 100, max = 100, walk = 200, run = 400, jump = 200,
-        alive = true, model = "models/player/kleiner.mdl", spawns = 0 } --[[@as PW.InfectionActorFixture]]
+        alive = true, model = "models/player/kleiner.mdl", spawns = 0, observer = OBS_MODE_NONE, observing = NULL }
     return { IsValid = function() return true end, IsPlayer = function() return true end,
         IsBot = function() return isBot end, UserID = function() return id end,
         SteamID64 = function() return "76561198000000" .. id end, Nick = function() return "actor" .. id end,
         Team = function() return d.team end, SetTeam = function(_, n) d.team = n end,
         Alive = function() return d.alive end, Health = function() return d.hp end,
+        GetObserverMode = function() return d.observer end, GetObserverTarget = function() return d.observing end,
+        Spectate = function(_, mode) d.observer = mode end,
+        SpectateEntity = function(_, target) d.observing = target end,
+        UnSpectate = function() d.observer, d.observing = OBS_MODE_NONE, NULL end,
+        Deaths = function() return 0 end,
         SetHealth = function(_, n) d.hp = n end, GetMaxHealth = function() return d.max end,
         SetMaxHealth = function(_, n) d.max = n end,
         GetWalkSpeed = function() return d.walk end, SetWalkSpeed = function(_, n) d.walk = n end,
