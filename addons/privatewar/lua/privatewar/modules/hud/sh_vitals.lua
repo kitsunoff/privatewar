@@ -44,6 +44,7 @@ function lib._FitText(text, width, measure)
     local suffix = "..."
     if measure(suffix) > width then return "" end
     local count = utf8.len(text) or 0
+    ---@type number, number, string
     local low, high, best = 0, count, ""
     while low <= high do
         local middle = math.floor((low + high) / 2)
