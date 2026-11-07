@@ -1,8 +1,10 @@
 # Hardpoint API
 
-Status: **frozen by orchestrator review of phase 1**. Declarations and tests only;
-no production mode, module, settings, map layout or codec is implemented. Runtime RED is still pending
-the explicit Hardpoint Deck slot. No production logic before observed RED.
+Status: **frozen by orchestrator review; runtime implemented** in `modes/hardpoint.lua`,
+`modules/hardpoint/` and `hud/hardpoint.lua`. Authored `gm_construct` data is included.
+Shared commander containment/invalidation integration and normal-input smoke acceptance remain separate gates.
+Observed test-first RED: 1396 passed / 12 failed / 0 skipped before implementation; activation/wire RED:
+1396 / 15 / 0. First runtime GREEN (before lifecycle/smoke additions): 1411 / 0 / 0.
 
 User-approved configurable preset (recorded during phase 1):
 
@@ -41,7 +43,7 @@ The additional mode scope is authorized separately; this draft does not modify `
 ## Typed seams
 
 Declarations: `addons/privatewar/lua/privatewar/types/hardpoint.lua`.
-`PW.Hardpoint` is optional and deliberately absent until observed RED and subsequent implementation.
+`PW.Hardpoint` is optional, supplied by module `hardpoint`.
 
 | Surface | Contract |
 | --- | --- |
@@ -57,7 +59,9 @@ Each has unique nonempty `id` (at most 32 bytes), finite `pos`, finite `0 < radi
 finite `above > 0`, finite `below >= 0`, total vertical extent `above + below <= 2048`.
 Reject gaps, duplicate ids, malformed/non-finite dimensions/coordinates and bound violations.
 At activation on the loaded map, also validate usable floor, hull clearance and bot nav reachability.
-Remote structural validity does not prove playable geometry. No map file changes in this tests-only phase.
+Remote structural validity does not prove playable geometry. `ValidateActivation(layout, probe)` checks each
+structurally valid zone through a supplied cold probe. `CheckActivation(layout)` performs loaded-world floor,
+standing-hull, projection and directed-nav checks, including routes from detected initial spawns.
 
 ## Observed occupancy and boundary order
 
@@ -82,10 +86,13 @@ and explicit gaps; no latest snapshot is retrospectively replayed over a stall.
 
 ## Shared bot integration and map ownership
 
-The S&D/shared owner supplies concrete APIs for a UserID eligibility set plus revision, sanitized typed cylinder
-containment, and generic objective id/revision invalidation releasing commander orders **and** goals through
-public `ClearGoal`. Arrival constraints survive navigation projection and fallback. Hardpoint waits for that
-owner's actual API/commit before consumption or new-seam tests; it never invents extra metadata fields.
+The S&D/shared owner supplies `PW.BotCommander.Sanitize`, `Eligible` and `InvalidateObjective(id, revision)`;
+the latter emits `PW_ObjectiveInvalidated(id, revision)`. Objectives carry a current UserID `eligible` allowset,
+`revision` and `zone = { pos, radius, above, below }`. Generic followers enforce projected **and actual**
+cylinder containment. Invalidating a visit releases commander orders **and** goals through public `ClearGoal`.
+Hardpoint emits one `hold` objective for the active visit, wants every eligible living bot of the requested team,
+and invalidates the previous identity on rotation, finish and cleanup. Without the shared invalidation API,
+`Objectives` fails closed with an empty list rather than claiming legacy metadata stripping is safe.
 The existing `want = 0` sticky-hold case is characterization only, **not** runtime acceptance of rotation.
 Do not access private bot stores, override generic defender/anti-dither policy or fabricate enemy contacts.
 
@@ -93,24 +100,51 @@ Requested central contract additions belong to the assigned shared owner, not th
 `docs/api/modes.md` (mode and public bot lifecycle seam), `map.md` (approved zone schema),
 `bots-blackboard.md` (generic invalidation and containment contract). No central contract is changed here.
 
-Hardpoint exclusively owns `maps/gm_construct.lua` across the mode lanes. Author three HP zones and the
-approved two S&D sites only after actual Deck floor/hull/nav observations, in a separate map commit preserving
-DOM flags verbatim. No automatic DOM conversion or assumed playable coordinates. The S&D schema is
+Hardpoint exclusively owns `maps/gm_construct.lua` across the mode lanes. Three ordered HP zones and two S&D
+sites were authored after locked Deck floor/hull/nav observations, preserving DOM flags verbatim.
+They are original authored points, not a DOM conversion. The S&D schema is
 `MAP.Modes.snd = { sites = { { id, pos, radius, above, below, approach }, ... }, bomb = Vector(...),
-spawns = { [side] = PW.SpawnPoint[] } }`; keep synthetic test positions until real geometry is observed.
+spawns = { [side] = PW.SpawnPoint[] } }`, with side keys `1` and `2`. Six nonoverlapping standing-hull-checked
+spawn points per side share the observed directed nav components. Human travel/vertical fairness is not certified.
+
+## Networking and lifecycle
+
+`Start(mode)`, `Think(mode)` and `Cleanup(mode)` back the ordinary mode lifecycle; `Objectives(mode, team)`
+backs `BotObjectives`. State and actor/sample buffers belong only to Hardpoint. Presence/effect buffers are reused;
+sampling uses `player.Iterator`, not entity searches. Kills retain TDM's normal score events, but HP points are
+independent whole-team counters (`pw_hp_score_1`, `pw_hp_score_2`). Holding never emits a personal reward.
+
+`pw_hp_state` is server-to-client only, written/read by `WriteSnapshot`/`ReadSnapshot`, in this exact order:
+
+1. Generation `UInt(32)`, revision `UInt(32)`, visit `UInt(16)`, active `Bool`.
+2. Active zone only: id `String` (authored 1..32 bytes), position `Vector`, radius/above/below `Float`.
+3. Absolute zone and match deadlines `Float`, control `UInt(2)`, contested `Bool`, two scores `UInt(10)`.
+
+The bounded message is below 1024 bits. It has no occupant list, actor/count data, next-zone index or geometry.
+Changed control/contest, whole scores, rotation and finish publish a new revision; clocks never send countdown ticks.
+Cleanup publishes one inactive higher-revision tombstone and repeated cleanup does nothing.
+The client retains the generation fence across phase changes and rejects stale visits/revisions.
+
+Late clients send empty `pw_hp_request` through `PW.Net.Receive`: any sender, `LIVE` only, twice per second,
+maximum zero payload bytes, owned by the enabled module. The handler also requires exactly zero bits and a running
+Hardpoint mode; it sends the current allowlisted snapshot only to the caller. Clients reject state above 1024 bits.
+HUD drawing uses the single HUD registry loop and only the active point marker plus labelled ZONE/MATCH clocks.
 
 ## Test-first evidence and remaining work
 
 `mode_hardpoint.lua` retains all five requested rule/map intent names, and adds approved settings/bounds,
 subsecond continuity, boundary departure/new-zone entry and deadline/draw cases.
 `hardpoint_presentation_bots.lua` retains the three pure bot/presentation intent names.
-Tests intentionally reference absent declared helpers. Map filters use synthetic data and existing Custom/vote/
-playlist callers. Real activation geometry, actual shared bot-seam release/containment and smoke await their owners.
-The snapshot case tests a pure allowlist, not an implemented wire codec, request validation or real late joining.
-The bot characterization does not prove immediate runtime hold/goal cancellation or legal-input movement.
+Map filters use synthetic data and existing Custom/vote/playlist callers. `hardpoint_integration.lua` covers
+activation rejection, the actual bounded wire codec and loaded-map authored geometry. `hardpoint_lifecycle.lua`
+characterizes start/cleanup idempotence, activation failure and reward separation; these glue cases were added
+after implementation, unlike the reducer and activation/wire test-first cases.
 
-`Hardpoint: bot holds then rotates through normal inputs` is recorded as a deferred smoke intent in the test file,
-not a fake passing or skipped case. Add the real shared-bot smoke after the shared API/map pass and Deck grant.
+`hardpoint_bot_smoke.lua` contains executable `Hardpoint: bot holds then rotates through normal inputs`.
+It uses a real player bot, actual scheduler/commander/objective/follower/input code and a public board-provider
+fixture, observing both cylinder occupancy and actual user commands. It fails if the shared seam is missing;
+it is neither a skipped placeholder nor evidence until its real run passes. No teleport, direct damage,
+fabricated contacts or foreign private-store access occurs in its asserted movement path.
 Preserve all 1395 baseline cases, especially T-2.4, T-2.9, T-5.10/11 and T-8.4, XP/streaks and health/ammo HUD.
 
 After implementation: run full game gates, then stop for the human checkpoint: vertical/outnumbered contest,
