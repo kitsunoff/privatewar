@@ -9,9 +9,18 @@
 ---@field id string
 ---@field pos Vector
 ---@field radius number
----@field action string "capture" | "defend" | "collect" | "deny" | "hold"
+---@field action string "capture" | "defend" | "collect" | "deny" | "hold" | "plant" | "defuse"
 ---@field weight number 0..1
 ---@field want integer desired number of bots
+---@field eligible? table<integer, boolean> UserID allow-set; nil all, empty none
+---@field revision? integer nonnegative visit identity, changed revision releases orders
+---@field zone? PW.BotObjectiveZone authoritative containment, including projected nav arrival
+
+---@class PW.BotObjectiveZone
+---@field pos Vector
+---@field radius number positive finite horizontal radius
+---@field above number nonnegative finite vertical extent
+---@field below number nonnegative finite vertical extent
 
 ---A Domination flag as plain data (from PW.DomFlags.GetAll()).
 ---@class PW.BotFlagInfo
@@ -72,7 +81,7 @@
 ---@alias PW.BotDeriveFn fun(mode: string?, own: PW.BotObjective[]?, flags: PW.BotFlagInfo[],
 ---    tags: PW.BotTagInfo[], team: integer?): PW.BotObjective[]
 ---@alias PW.BotPickObjectiveFn fun(objectives: PW.BotObjective[], pos: Vector, mates: Vector[],
----    currentId: string?): PW.BotObjective?, number
+---    currentId: string?, botId?: integer): PW.BotObjective?, number
 ---@alias PW.BotPickHotSpotFn fun(spots: PW.BotHotSpot[], pos: Vector, checked: { pos: Vector, time: number }[]?,
 ---    now: number): PW.BotHotSpot?, number
 ---@alias PW.BotPickRoamFn fun(pos: Vector, candidates: Vector[], recent: Vector[], mates: Vector[],
@@ -99,7 +108,8 @@
 ---Pure: the local fallback assignment: the best objective by weight, closeness and crowding; currentId is sticky.
 ---@field PickObjective PW.BotPickObjectiveFn
 ---The objective a bot works on: the commander's order, else the local pick; nil when there is none.
----@field Resolve fun(ctx: PW.BotBrainCtx, facts: PW.BotFacts, currentId: string?): PW.BotObjective?, number, boolean
+---@field Resolve fun(ctx: PW.BotBrainCtx, facts: PW.BotFacts, currentId: string?, botId?: integer): PW.BotObjective?,
+---    number, boolean
 ---Pure: hot spots from the contact memory (lost or heard contacts) and the teammates' deaths.
 ---@field HotSpots fun(memory: table<any, PW.BotContact>, deaths: PW.BotDeathInfo[], now: number): PW.BotHotSpot[]
 ---Pure: the best hot spot by freshness and closeness, skipping spots already checked; nil and 0 when there is none.

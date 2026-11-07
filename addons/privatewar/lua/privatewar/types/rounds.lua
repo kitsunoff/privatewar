@@ -5,6 +5,7 @@
 ---@class PW.RoundState
 ---@field n integer team count
 ---@field toWin integer rounds a team needs to win the match
+---@field roundLimit? integer fixed total including draws; nil/0 keeps toWin semantics
 ---@field swapEvery integer swap the sides after every N completed rounds, 0 = never
 ---@field roundTime number seconds, 0 = no round time limit
 ---@field intermission number seconds between rounds
@@ -32,10 +33,20 @@
 ---@field Name string
 ---@field RoundsToWin integer
 ---@field SwapSidesEvery integer
+---@field RoundLimit? integer fixed total completed rounds, replaces first-to-wins when positive
+---Once before initial spawns, later after swaps and before respawns; absent is a no-op.
+---@field PrepareRound? fun(self: PW.RoundBase, round: integer, swapped: boolean)
+---Only explicit second-return true defers the base timeout draw for this step.
+---@field RoundWinner fun(self: PW.RoundBase, timedOut: boolean): integer|false|nil, boolean?
+---@field FinalizeRounds? fun(self: PW.RoundBase, defaultResult: PW.MatchResult): PW.MatchResult?
+---@field _Prepare fun(self: PW.RoundBase, round: integer, swapped: boolean): boolean internal, preparation succeeded
+---@field _ValidResult fun(result: any): boolean internal, validates a transformed existing result shape
+---@field _Finalize fun(self: PW.RoundBase, defaultResult: PW.MatchResult): PW.MatchResult internal, validated transform
 ---Internal, pure: a fresh state at phase "starting".
----@field _NewState fun(n: integer, toWin: integer, swapEvery: integer, time: number, pause: number): PW.RoundState
+---@field _NewState fun(n: integer, toWin: integer, swapEvery: integer, time: number, pause: number,
+---    roundLimit?: integer): PW.RoundState
 ---Internal, pure: one step of the loop at time now with the verdict of RoundWinner (nil: undecided).
----@field _Step fun(state: PW.RoundState, now: number, verdict: any): PW.RoundAction[]
+---@field _Step fun(state: PW.RoundState, now: number, verdict: any, deferTimeout?: boolean): PW.RoundAction[]
 ---Internal, pure: the round time is up at now.
 ---@field _TimedOut fun(state: PW.RoundState, now: number): boolean
 ---Internal, pure: the last team alive (index), false when none is left, nil while the round goes on.
@@ -45,3 +56,6 @@
 ---Internal, pure: the match result when a team has the rounds needed, else nil.
 ---@field _Result fun(state: PW.RoundState): PW.MatchResult?
 ---@field PW_CanRespawn fun(): boolean
+
+---@alias PW.RoundPreparingHook fun(round: integer, swapped: boolean)
+---@alias PW.RoundPreparedHook fun(round: integer, swapped: boolean)
