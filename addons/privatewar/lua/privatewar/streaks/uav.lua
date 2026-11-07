@@ -11,7 +11,7 @@ STREAK.Sweep = 3
 function STREAK:RevealEnemies(owner)
     local streaks = PW.Streaks
     if streaks == nil or streaks.Enemies == nil or PW.Reveal == nil or self.Side == nil then return end
-    PW.Reveal(self.Side, streaks.Enemies(owner), self.Sweep + 0.5)
+    PW.Reveal(self.Side, streaks.Enemies(owner), self.Sweep + 0.5, owner)
 end
 
 function STREAK:OnEquip(owner)

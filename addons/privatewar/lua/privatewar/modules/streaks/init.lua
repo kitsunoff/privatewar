@@ -183,12 +183,7 @@ function lib.EndEffects(ply)
     for inst in pairs(lib._Instances) do
         if inst._Owner == ply then finish(inst) end
     end
-    local reveal = PW._Reveal
-    if reveal ~= nil then
-        for i = #reveal.jams, 1, -1 do
-            if reveal.jams[i].owner == ply then table.remove(reveal.jams, i) end
-        end
-    end
+    lib._RemoveEffects(ply)
 end
 
 function lib.Revoke(ply)
@@ -275,8 +270,10 @@ end
 
 function MODULE:PW_RoundPreparing()
     for inst in pairs(lib._Instances) do finish(inst) end
-    if PW._Reveal ~= nil then PW._Reveal.jams = {} end
+    lib._ResetEffects()
 end
+
+function MODULE:PW_PlayerTeamChanged() lib._ResetEffects() end
 
 PW.HookFor(MODULE, "PlayerSpawn", function(_, ply)
     lib._OnSpawn(ply)

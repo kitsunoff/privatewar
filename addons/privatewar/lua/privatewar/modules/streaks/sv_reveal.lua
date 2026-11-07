@@ -6,6 +6,7 @@
 local lib = PW.Streaks --[[@as PW.StreaksLib]]
 
 util.AddNetworkString(lib.RevealNet)
+util.AddNetworkString("pw_reveal_reset")
 
 ---@param list any[]
 ---@return Player[]
@@ -48,6 +49,14 @@ local function defaultJamSend(recipients, duration)
     net.Send(to)
 end
 
+---@param recipients any[]
+local function defaultReset(recipients)
+    local to = humans(recipients)
+    if #to == 0 then return end
+    net.Start("pw_reveal_reset")
+    net.Send(to)
+end
+
 ---@param a any
 ---@param b any
 ---@return boolean
@@ -84,7 +93,9 @@ function lib._NewRevealStore(opts)
         players = opts.players or player.GetAll,
         send = opts.send or defaultSend,
         jamSend = opts.jamSend or defaultJamSend,
-        stimulus = opts.stimulus or defaultStimulus
+        stimulus = opts.stimulus or defaultStimulus,
+        reset = opts.reset or defaultReset,
+        pulses = {}
     }
 end
 
@@ -98,8 +109,9 @@ end
 ---@param viewer integer|Player
 ---@param targets Player[]
 ---@param duration number
+---@param owner? Player
 ---@return integer
-function PW.Reveal(viewer, targets, duration)
+function PW.Reveal(viewer, targets, duration, owner)
     local s = store()
     local now = s.clock()
     lib._Prune(s.jams, now)
@@ -114,9 +126,56 @@ function PW.Reveal(viewer, targets, duration)
         end
     end
     if #blips == 0 then return 0 end
+    local pulses = s.pulses or {}
+    s.pulses = pulses
+    for i = #pulses, 1, -1 do
+        if pulses[i].ends <= now then table.remove(pulses, i) end
+    end
+    if #pulses >= 128 then table.remove(pulses, 1) end
+    pulses[#pulses + 1] = { owner = owner, recipients = recipients, blips = blips, ends = now + duration }
     s.send(recipients, blips, duration)
     for i, blip in ipairs(blips) do s.stimulus(viewer, targets[i] ~= nil and Entity(blip.index) or nil, blip.pos) end
     return #blips
+end
+
+-- Rebuild only derived radar data; unrelated owned instances/inventory are not touched.
+---@param s PW.RevealStore
+local function replay(s)
+    local now = s.clock()
+    lib._Prune(s.jams, now)
+    local reset = s.reset or defaultReset
+    reset(s.players())
+    for _, pulse in ipairs(s.pulses or {}) do
+        if pulse.ends > now then s.send(pulse.recipients, pulse.blips, pulse.ends - now) end
+    end
+    for _, jam in ipairs(s.jams) do
+        ---@type Player[]
+        local hostile = {}
+        for _, ply in ipairs(s.players()) do
+            if s.isEnemy(jam.owner, ply) then hostile[#hostile + 1] = ply end
+        end
+        s.jamSend(hostile, jam.ends - now)
+    end
+end
+
+function lib._RemoveEffects(owner)
+    local s = store()
+    for i = #s.jams, 1, -1 do
+        if s.jams[i].owner == owner then table.remove(s.jams, i) end
+    end
+    local pulses = s.pulses or {}
+    for i = #pulses, 1, -1 do
+        if pulses[i].owner == owner or pulses[i].ends <= s.clock() then table.remove(pulses, i) end
+    end
+    s.pulses = pulses
+    replay(s)
+end
+
+function lib._ResetEffects()
+    local s = store()
+    s.jams, s.pulses = {}, {}
+    local reset = s.reset or defaultReset
+    reset(s.players())
 end
 
 function lib.Jam(owner, duration)
