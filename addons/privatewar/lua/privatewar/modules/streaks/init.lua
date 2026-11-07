@@ -240,6 +240,10 @@ function lib.Ready(bot)
     return nil
 end
 
+function lib.IsDamage()
+    return store().depth > 0
+end
+
 function lib.StreakDamage(fn, ...)
     local s = store()
     s.depth = s.depth + 1

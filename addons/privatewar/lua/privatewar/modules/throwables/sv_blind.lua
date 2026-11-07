@@ -12,6 +12,7 @@ end
 function lib.ClearBlind(ply)
     if blinded[ply] == nil then return end
     blinded[ply] = nil
+    timer.Remove("PW.Blind." .. tostring(ply))
     if not IsValid(ply) then return end
     ply:SetDSP(0, false)
     if not ply:IsBot() then
@@ -31,7 +32,11 @@ function lib.Blind(ply, strength)
     if resolved ~= resolved or resolved < lib.Flash.minStrength then return false end
     resolved = lib._DecodeStrength(lib._EncodeStrength(math.Clamp(resolved, 0, 1)))
     local seconds = lib._BlindTime(resolved)
-    blinded[ply] = { strength = resolved, at = CurTime() }
+    local now = CurTime()
+    local previous = blinded[ply]
+    if previous ~= nil and previous.at + lib._BlindTime(previous.strength) >= now + seconds
+        and lib.Impairment(ply, now) >= resolved then return true end
+    blinded[ply] = { strength = resolved, at = now }
     if not ply:IsBot() then
         net.Start("pw_blind")
         net.WriteUInt(lib._EncodeStrength(resolved), 8)

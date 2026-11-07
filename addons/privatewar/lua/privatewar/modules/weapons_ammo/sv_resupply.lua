@@ -42,6 +42,8 @@ function lib.Resupply(ply, weapons, opts)
 end
 
 function lib.DamageWeapon(owner, dmg)
+    local streaks = rawget(PW, "Streaks") --[[@as PW.StreaksLib?]]
+    if streaks ~= nil and streaks.IsDamage ~= nil and streaks.IsDamage() then return nil, false end
     if not IsValid(owner) or not owner:IsPlayer() or dmg == nil then return nil, false end
     local inflictor = dmg:GetInflictor()
     local weapon = inflictor ~= owner and IsValid(inflictor) and inflictor:IsWeapon()
