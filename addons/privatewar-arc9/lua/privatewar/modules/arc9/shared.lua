@@ -244,7 +244,9 @@ lib._TreeOf = treeOf
 ---@param path integer[]
 ---@return PW.Arc9Node?
 local function nodeAt(tree, path)
+    ---@type PW.Arc9Tree
     local list = tree
+    ---@type PW.Arc9Node?
     local node = nil
     for depth, index in ipairs(path) do
         if depth == 1 then
