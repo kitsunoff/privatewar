@@ -2,10 +2,12 @@
 MODULE.Name = "Hardpoint"
 PW.Hardpoint = PW.Hardpoint or {}
 if SERVER then
-    AddCSLuaFile("sh_geometry.lua")
-    AddCSLuaFile("sh_state.lua")
-    AddCSLuaFile("sh_presentation.lua")
+    AddCSLuaFile("privatewar/modules/hardpoint/sh_geometry.lua")
+    AddCSLuaFile("privatewar/modules/hardpoint/sh_state.lua")
+    AddCSLuaFile("privatewar/modules/hardpoint/sh_presentation.lua")
+    AddCSLuaFile("privatewar/modules/hardpoint/sh_wire.lua")
 end
-include("sh_geometry.lua")
-include("sh_state.lua")
-include("sh_presentation.lua")
+include("privatewar/modules/hardpoint/sh_geometry.lua")
+include("privatewar/modules/hardpoint/sh_state.lua")
+include("privatewar/modules/hardpoint/sh_presentation.lua")
+include("privatewar/modules/hardpoint/sh_wire.lua")

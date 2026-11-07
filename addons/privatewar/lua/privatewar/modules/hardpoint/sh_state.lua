@@ -9,7 +9,7 @@ function hp.NewState(layout, rules, startedAt, generation)
     return { layout = layout, rules = rules, startedAt = startedAt, generation = generation,
         index = 1, visit = 1, zoneEndsAt = startedAt + rules.pointTime,
         matchEndsAt = startedAt + rules.matchTime, scores = { 0, 0 }, finished = false,
-        control = 0, contested = false, fraction = 0 }
+        control = 0, contested = false, fraction = 0, presence = { control = 0, contested = false } }
 end
 
 ---@param state PW.HardpointState
@@ -53,7 +53,7 @@ function hp.Step(state, sample)
     local at = sample.at
     if state.finished or (state.lastAt ~= nil and at <= state.lastAt) then return effects end
     -- Observe the previous visit first; endpoint presence cannot backfill a missing interval.
-    local presence = hp.Presence(state.layout.zones[state.index], sample.actors)
+    local presence = hp.Presence(state.layout.zones[state.index], sample.actors, state.presence)
     credit(state, presence, at)
     state.control, state.contested, state.lastAt = presence.control, presence.contested, at
     if at >= state.matchEndsAt then
@@ -69,7 +69,7 @@ function hp.Step(state, sample)
     local index, visit, endsAt = hp.VisitAt(state.startedAt, at, state.rules.pointTime, #state.layout.zones)
     if visit ~= state.visit then
         state.index, state.visit, state.zoneEndsAt, state.fraction = index, visit, endsAt, 0
-        presence = hp.Presence(state.layout.zones[index], sample.actors)
+        presence = hp.Presence(state.layout.zones[index], sample.actors, state.presence)
         state.control, state.contested = presence.control, presence.contested
         effects.rotated = true
     end

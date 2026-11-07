@@ -38,6 +38,7 @@
 ---@field control integer
 ---@field contested boolean
 ---@field effects? PW.HardpointEffects
+---@field presence PW.HardpointPresence
 ---@field generation integer match generation
 ---@field visit integer monotonic visit, not merely the repeating zone id
 ---@field index integer active authored zone index
@@ -72,7 +73,8 @@
 
 ---@class PW.HardpointLib
 ---@field Inside fun(zone: PW.HardpointZone, pos: Vector): boolean
----@field Presence fun(zone: PW.HardpointZone, actors: PW.HardpointActor[]): PW.HardpointPresence
+---@field Presence fun(zone: PW.HardpointZone, actors: PW.HardpointActor[],
+---    out?: PW.HardpointPresence): PW.HardpointPresence
 ---@field ScoreDelta fun(presence: PW.HardpointPresence, points: integer): table<integer, integer>
 ---@field ValidateLayout fun(data: any): boolean, string?
 ---@field VisitAt fun(startedAt: number, now: number, pointTime: number, count: integer): integer, integer, number
@@ -88,6 +90,34 @@
 ---@field CheckActivation fun(layout: PW.HardpointLayout): boolean, string?
 ---@field WriteSnapshot fun(snapshot: PW.HardpointSnapshot)
 ---@field ReadSnapshot fun(): PW.HardpointSnapshot
+---@field Start fun(mode: PW.HardpointMode)
+---@field Think fun(mode: PW.HardpointMode)
+---@field Cleanup fun(mode: PW.HardpointMode)
+---@field Objectives fun(mode: PW.HardpointMode, side: integer): PW.BotObjective[]
+---@field Send fun(snapshot: PW.HardpointSnapshot, recipient?: Player)
+---@field ClientSnapshot? PW.HardpointSnapshot
+
+---@class PW.HardpointMode : PW.Mode
+---@field _Hardpoint? PW.HardpointRuntime
+---@field _ScoreKey string
+
+---@class PW.HardpointRuntime
+---@field state PW.HardpointState
+---@field revision integer
+---@field nextSample number
+---@field actors PW.HardpointActor[]
+---@field sample PW.HardpointSample
+---@field objectiveId string
+---@field objectiveRevision integer
+---@field lastControl integer
+---@field lastContested boolean
+---@field lastFirst integer
+---@field lastSecond integer
+
+---@class PW.HardpointObjective : PW.BotObjective
+---@field revision integer
+---@field eligible table<integer, boolean>
+---@field zone PW.HardpointZone
 
 ---@class PW
 ---@field Hardpoint? PW.HardpointLib optional module; deliberately absent until observed RED
