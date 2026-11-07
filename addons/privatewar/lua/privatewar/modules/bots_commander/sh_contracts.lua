@@ -82,3 +82,13 @@ function lib.Inside(objective, pos)
     return delta.x * delta.x + delta.y * delta.y <= zone.radius * zone.radius
         and delta.z >= -zone.below and delta.z <= zone.above
 end
+
+function lib.ArrivalFits(objective, projected, radius)
+    local zone = objective.zone
+    if zone == nil then return true end
+    if not finite(radius) or radius < 0 or radius > zone.radius or not lib.Inside(objective, projected) then
+        return false
+    end
+    local delta = projected - zone.pos
+    return delta.x * delta.x + delta.y * delta.y <= (zone.radius - radius) ^ 2
+end

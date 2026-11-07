@@ -19,6 +19,19 @@ local function releaseUse(ctx)
     intent.buttons = bit.band(intent.buttons or 0, bit.bnot(IN_USE))
 end
 
+---@param ctx PW.BotBrainCtx
+---@param target PW.BotObjective
+---@return boolean
+local function validateGoal(ctx, target)
+    local goal, commander = ctx.board.goal, PW.BotCommander
+    if target.zone == nil or goal == nil then return true end
+    if commander ~= nil and goal.projected ~= nil and commander.ArrivalFits(target, goal.projected, goal.radius) then
+        return true
+    end
+    ctx:ClearGoal()
+    return false
+end
+
 ---@return PW.BotObjectivesLib
 local function lib()
     return PW.BotObjectives --[[@as PW.BotObjectivesLib]]
@@ -76,6 +89,7 @@ end
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnSuspend(_, ctx)
     releaseUse(ctx)
+    lib().LookAt(ctx, nil)
 end
 
 ---Starts the next leg of an action: approach the objective, or (arrived) move to the next point inside or around it.
@@ -95,12 +109,14 @@ local function nextLeg(ctx, st, target, arrived)
     elseif inZone[target.action] then
         radius, wait = target.radius * 0.5, 0
     end
+    if target.zone ~= nil then radius = math.min(radius, target.zone.radius * 0.25) end
     st.id, st.action, st.anchor, st.point, st.next = target.id, target.action, target.pos, point, ctx.now + wait
     st.revision = target.revision
     lib().LookAt(ctx, nil)
     local current = ctx.board.goal
     if current ~= nil and current.priority ~= priority then ctx:ClearGoal() end
     ctx:SetGoal(point, radius, priority --[[@as string]])
+    if not validateGoal(ctx, target) then return end
     local tactics = rawget(PW, "BotTactics") --[[@as PW.BotTacticsLib?]]
     if tactics == nil then return end
     if arrived or guard[target.action] then
@@ -142,17 +158,16 @@ local function use(ctx, target)
         return PW.BotBrain.Done("interaction unavailable")
     end
     local goal = ctx.board.goal
-    if target.zone ~= nil and goal ~= nil and goal.projected ~= nil
-        and not commander.Inside(target, goal.projected) then
-        ctx:ClearGoal()
+    if goal ~= nil and not validateGoal(ctx, target) then
         return PW.BotBrain.Done("projected outside interaction zone")
     end
     if not commander.Inside(target, lib().Facts(ctx).pos) then
         ctx:SetGoal(target.pos, math.min(target.radius * 0.25, 16), "objective")
+        validateGoal(ctx, target)
         return PW.BotBrain.Continue()
     end
     ctx:ClearGoal()
-    ctx:SetTarget(nil)
+    lib().LookAt(ctx, target.pos + Vector(0, 0, 16))
     local intent = ctx:Intent()
     intent.sprint, intent.drive = false, nil
     intent.buttons = bit.bor(intent.buttons or 0, IN_USE)
@@ -173,9 +188,7 @@ function BEHAVIOR:Update(_, ctx)
     ctx.lastObjective = target.id
     local status = ctx:GoalStatus()
     local commander, goal = PW.BotCommander, ctx.board.goal
-    if target.zone ~= nil and commander ~= nil and goal ~= nil and goal.projected ~= nil
-        and not commander.Inside(target, goal.projected) then
-        ctx:ClearGoal()
+    if goal ~= nil and not validateGoal(ctx, target) then
         return PW.BotBrain.Done("projected outside objective zone")
     end
     if target.zone ~= nil and commander ~= nil and not commander.Inside(target, lib().Facts(ctx).pos) then

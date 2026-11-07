@@ -1,4 +1,5 @@
 ---@meta
+---@alias PW.CanTakeDamageHook fun(victim: Player, attacker: Entity, damage: CTakeDamageInfo): boolean?
 -- Types of the match_rules module (T-2.2; 02-modes.md d.5, d.7; 00-core.md d.3, d.5). Source:
 -- lua/privatewar/modules/match_rules/ (shared.lua: API, pure rules and reading; init.lua: server glue) and the
 -- modes tdm and ffa (lua/privatewar/modes/).

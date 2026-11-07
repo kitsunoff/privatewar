@@ -74,6 +74,48 @@
 ---@field Admit fun(state: PW.SNDState, id: string, userId: integer): boolean
 ---@field Snapshot fun(state: PW.SNDState, viewerTeam: integer, viewerId: string, now: number): PW.SNDSnapshot
 ---@field Objectives fun(state: PW.SNDState, team: integer): PW.BotObjective[]
+---@field Identity fun(ply: Player): string server: stable human/session bot identity
+---@field NextGeneration fun(): integer server: fresh monotonic round identity
+---@field Roster fun(): PW.SNDActor[] server: next-round admitted participants and planned sides
+---@field AdmitRoster fun(state: PW.SNDState) server: release held participants and request owner placement
+---@field Actors fun(state: PW.SNDState): PW.SNDActor[] server: authoritative current input/geometry samples
+---@field Activate fun(map: PW.SNDMapData) server: validate current-world floor, hull and mutual nav routes
+---@field Invalidate fun(state: PW.SNDState) server: synchronously release old objective inputs/orders
+---@field DropPoint fun(state: PW.SNDState, ply: Player): Vector server: usable ground or authored recovery
+---@field Physical fun(state: PW.SNDState) server: one ordinary-sight bomb prop
+---@field Clear fun() server: remove owned prop and clear presentation
+---@field Publish fun(state: PW.SNDState?, force?: boolean) server: recipient-specific bounded snapshots
+---@field View fun(): PW.SNDSnapshot? client: current active snapshot only
+---@field Display fun(): PW.SNDDisplay? client: cached draw-ready model, no HUDPaint allocations
+---@field HudText fun(view: PW.SNDSnapshot, now: number): string, string shared: draw-independent labels
+
+---@class PW.SNDMarker
+---@field x number
+---@field y number
+---@field text string
+---@field visible boolean
+
+---@class PW.SNDDisplay
+---@field title string
+---@field line string
+---@field progress number
+---@field markers PW.SNDMarker[]
+
+---@class PW.SNDStore
+---@field generation integer
+---@field serial integer
+---@field nextSnapshot number
+---@field bomb? Entity
 
 ---@class PW
 ---@field SND? PW.SNDLib
+---@field _SND PW.SNDStore internal server-only S&D engine resources
+
+---@class PW.SNDMode: PW.Mode
+---@field _SND? PW.SNDState
+---@field _Rounds? PW.RoundState
+---@field PW_CanJoinInProgress fun(self: PW.SNDMode): boolean
+---@field PW_CanRespawn fun(self: PW.SNDMode): boolean
+---@field PW_CanTakeDamage fun(self: PW.SNDMode, victim?: Player, attacker?: Entity): boolean?
+---@field PW_CanRunBotBehavior fun(self: PW.SNDMode): boolean
+---@field PW_CanUseLoadoutKind fun(self: PW.SNDMode): boolean
