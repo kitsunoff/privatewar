@@ -121,6 +121,39 @@ local suite = {
     end,
     cases = {
         {
+            name = "Infection disable: actual owner disable clears roles stats and snapshots,"
+                .. " unrelated disable does not",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3)
+                start(f)
+                local lib, saved = must(PW.Infection), must(PW.Infection).State
+                local owners = { "medals", "pw_infection_rules" }
+                ---@type table<string, string>
+                local reasons = {}
+                for _, id in ipairs(owners) do reasons[id] = PW.Modules._DisabledReason(id) end
+                local ok, err = pcall(function()
+                    PW.Modules._Disable("medals", "unrelated disable fixture")
+                    expect(lib.State).to.equal(saved)
+                    PW.Modules._Disable("pw_infection_rules", "addon owner disable fixture")
+                    expect(lib.State).to.beNil()
+                    expect(lib.Snapshot(f.players[1])).to.beNil()
+                    for _, ply in ipairs(f.players) do
+                        expect(lib.Role(ply)).to.beNil()
+                        expect({ f.data[ply].max, f.data[ply].walk, f.data[ply].run })
+                            .to.deepEqual({ 100, 200, 400 })
+                    end
+                    local revision = lib.Revision
+                    PW.Modules._Disable("pw_infection_rules", "duplicate disable fixture")
+                    expect(lib.Revision).to.equal(revision)
+                end)
+                for _, id in ipairs(owners) do
+                    if reasons[id] ~= nil then PW.Modules._Disable(id, reasons[id]) else PW.Modules._Enable(id) end
+                end
+                if not ok then error(err) end
+            end
+        },
+        {
             name = "Infection lifecycle: intermission ends active effects and live equipment"
                 .. " without consuming unused streaks",
             skip = absent,
