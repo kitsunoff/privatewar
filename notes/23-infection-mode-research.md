@@ -112,7 +112,7 @@ changes require the orchestrator and gameplay decisions require the user.
 | --- | --- | --- |
 | Lifecycle | `modes/tdm.lua:17–46`, `modes/ffa.lua:5–11`; `Start`, `Think`, `Cleanup`, `PW.Match.Finish` | Own only `LIVE`; retain core lobby, preparation, postmatch and vote. No independent engine Think loop. |
 | Rounds | `modes/round_base.lua:135–156, 167–230, 246–252` | Reuse the abstract round machinery, but override elimination and respawn rules. Default last-team-alive logic and no respawn are wrong for renewable infected lives. |
-| Start order | `modules/match_rules/init.lua:135–146`; `round_base.lua:180–182` | Match-start listeners spawn everyone before mode `Start`; later rounds respawn before `PW_RoundStart`. Role setup in those mode callbacks alone is too late for the first loadout/spawn. |
+| Start order | `addons/privatewar/gamemodes/privatewar/gamemode/core/sv_match.lua:128–132`; `modules/match_rules/init.lua:135–146`; `round_base.lua:180–182` | Mode `Start` runs before `PW_MatchStart`, whose `match_rules` listener spawns everyone: initial role setup can happen in `Start`. Later rounds respawn before `PW_RoundStart`, so that notification is too late for role setup needed by the spawn. |
 | Teams | `modules/teams/init.lua:33–44, 97–104, 124–130`; `design/02-modes.md` d.6 | Normal assignment is balanced across humans and bots. One infected versus many survivors needs explicit approval of a mode-specific exception and a public placement/transition contract, not a silent replacement of balancing. |
 | Relationships | `PW.IsEnemy`, `PW_IsEnemy` in `docs/api/teams.md` | Keep all friendly/enemy checks on that surface. Independent role flags without matching team consumers would desynchronise HUD, spawn and AI assumptions. |
 | Death/respawn | `modules/match_rules/init.lua:144–176`; `PW_PlayerKilled`, `PW_CanRespawn`, `PW_RespawnDelay` | Let the existing respawner drive both humans and dead bots. Gate by round phase and pending conversion; never immediately `Spawn()` inside the death notification. |
@@ -123,8 +123,8 @@ changes require the orchestrator and gameplay decisions require the user.
 | Join replacement | `docs/api/modes.md`, “Join in progress”; `bots-blackboard.md`, manager rules | Default late placement and smallest-team bot replacement do not preserve asymmetric infected/survivor counts. Resolve the policy before enabling join-in-progress. |
 
 **Proposal:** start with a single round per match (`RoundsToWin = 1`, no side swap), using
-`round_base` only after the setup-order gap is addressed. This avoids inventing aggregate cohort
-wins while players change sides. Multiple rounds need role reset **before** respawn, not merely
+`MODE:Start` for initial role setup before the match-start spawn. This avoids inventing aggregate cohort
+wins while players change sides. Multiple rounds still need role reset **before** respawn, not merely
 an after-respawn `PW_RoundStart` reaction. No proposed new hook name is an existing API.
 
 ## 5. Recommended minimum rules, subject to approval
