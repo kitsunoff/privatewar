@@ -250,23 +250,28 @@ local function targetFor(store, humans)
 end
 
 ---@param entries PW.BotsEntry[]
+---@param includeWaiting? boolean
 ---@return integer
-local function countHumans(entries)
+local function countHumans(entries, includeWaiting)
     local humans = 0
     for _, entry in ipairs(entries) do
-        if not entry.bot and not entry.spectating then humans = humans + 1 end
+        if not entry.bot and (includeWaiting or not entry.spectating) then humans = humans + 1 end
     end
     return humans
 end
 
-function lib._Step(store, prefer)
+function lib._Step(store, prefer, boundary)
     if idleReason(store) ~= nil then return 0, 0 end
     local entries = livePlayers(store)
     local n = store.teams()
     for _, entry in ipairs(entries) do
         if entry.bot then refreshBoard(store, entry, n) end
     end
-    local plan = lib._Plan(targetFor(store, countHumans(entries)), entries, n, prefer)
+    local mode = PW.ActiveMode
+    local rounds = mode ~= nil and (mode.BotQuotaPolicy == "rounds"
+        or (mode.BotQuotaPolicy == nil and mode.TeamPolicy == "managed"))
+    if rounds and store.phase() == "LIVE" and not boundary then return 0, 0 end
+    local plan = lib._Plan(targetFor(store, countHumans(entries, boundary)), entries, n, prefer)
     for _, ent in ipairs(plan.kick) do kickBot(store, ent, "bot quota") end
     return createBots(store, plan.create), #plan.kick
 end
@@ -351,6 +356,10 @@ end
 
 function MODULE:PW_PlayerTeamChanged() mirrorTeams() end
 function MODULE:PW_RoundPrepared() mirrorTeams() end
+
+function MODULE:PW_RoundPreparing()
+    lib._Step(PW._BotsManager, nil, true)
+end
 
 ---@param phase PW.PhaseName
 function MODULE:PW_PhaseChange(phase)

@@ -89,11 +89,21 @@ PW._Jip.unspawn = PW._Jip.unspawn or engineUnspawn
 
 function lib._OnJoin(store, ply)
     local decision = lib._Decide({ phase = store.phase(), enabled = store.enabled(), human = store.isHuman(ply) })
+    if store.phase() == "LIVE" and PW.Ask("PW_CanJoinInProgress", ply) == false then decision = "spectate" end
     if decision == "spectate" then
         store.spectators[ply] = true
         store.mark(ply, true)
     end
     return decision
+end
+
+function lib.Admit(ply)
+    local s = PW._Jip
+    if not IsValid(ply) or s.spectators[ply] == nil then return false end
+    s.spectators[ply] = nil
+    s.mark(ply, false)
+    s.unpark(ply)
+    return true
 end
 
 function lib._OnSpawn(store, ply)

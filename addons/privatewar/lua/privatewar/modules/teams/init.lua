@@ -100,6 +100,13 @@ function lib._PlaceLate(ply, players)
     return team
 end
 
+function lib.PlaceLate(ply)
+    local match = PW.Match
+    if not module:IsValid() or not IsValid(ply) or not ply:IsPlayer()
+        or match == nil or match.GetPhase() ~= "LIVE" then return nil end
+    return lib._PlaceLate(ply, player.GetAll())
+end
+
 ---@param n integer
 ---@param players Player[]
 ---@return integer moved
