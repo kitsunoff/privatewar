@@ -3,6 +3,8 @@
 
 local lib = PW.WeaponAmmo --[[@as PW.WeaponAmmoLib]]
 
+include("privatewar/modules/weapons_ammo/sv_resupply.lua")
+
 function lib.Give(ply, class, opts)
     if not IsValid(ply) or not isstring(class) or ply:HasWeapon(class) then return nil end
     -- bNoAmmo: the engine gives no default ammo; the adapter then stops what the base gives on its own.

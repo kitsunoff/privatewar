@@ -120,9 +120,12 @@ function PW.Reveal(viewer, targets, duration, owner)
     if ref == nil then return 0 end
     ---@type PW.RevealBlip[]
     local blips = {}
+    ---@type Player[]
+    local disclosed = {}
     for _, target in ipairs(lib._Filter(targets, ref, s.jams, now, s.isEnemy)) do
-        if IsValid(target) and #blips < lib.MaxBlips then
+        if IsValid(target) and #blips < lib.MaxBlips and PW.Ask("PW_CanReveal", viewer, target, owner) ~= false then
             blips[#blips + 1] = { index = target:EntIndex(), pos = target:GetPos() }
+            disclosed[#disclosed + 1] = target
         end
     end
     if #blips == 0 then return 0 end
@@ -134,7 +137,7 @@ function PW.Reveal(viewer, targets, duration, owner)
     if #pulses >= 128 then table.remove(pulses, 1) end
     pulses[#pulses + 1] = { owner = owner, recipients = recipients, blips = blips, ends = now + duration }
     s.send(recipients, blips, duration)
-    for i, blip in ipairs(blips) do s.stimulus(viewer, targets[i] ~= nil and Entity(blip.index) or nil, blip.pos) end
+    for i, blip in ipairs(blips) do s.stimulus(viewer, disclosed[i], blip.pos) end
     return #blips
 end
 

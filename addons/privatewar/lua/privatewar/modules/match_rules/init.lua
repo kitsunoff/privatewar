@@ -52,10 +52,10 @@ end
 ---@param dmg CTakeDamageInfo
 ---@return Weapon?
 local function weaponOf(attacker, dmg)
+    local ammo = rawget(PW, "WeaponAmmo") --[[@as PW.WeaponAmmoLib?]]
+    if ammo ~= nil and ammo.DamageWeapon ~= nil then return (ammo.DamageWeapon(attacker, dmg)) end
     local inflictor = dmg:GetInflictor()
     if IsValid(inflictor) and inflictor:IsWeapon() then return inflictor --[[@as Weapon]] end
-    local active = attacker:GetActiveWeapon()
-    if IsValid(active) then return active end
     return nil
 end
 

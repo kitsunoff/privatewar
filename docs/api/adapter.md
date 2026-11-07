@@ -492,10 +492,10 @@ Setting (full id `weapons_ammo.magazines`, scope `match`, the default scope):
 The setting is read when `Give` runs, as a non-negative integer (a non-number reads as 3). Internal: `_ReserveFor`,
 `_Magazines`.
 
-### Planned ordinary-reserve resupply extension
+### Ordinary-reserve resupply extension
 
 Approved consumer requirements: `design/05-loadout.md` d.16 and support-streak cache.
-The following contract is test-first; it is **not implemented or mounted-verified yet**.
+The following contract is implemented after observed GLuaTest RED; mounted verification is pending.
 Spawn-only `Give` and delayed base-default-ammo suppression remain unchanged.
 
 - `PW.WeaponAmmo.Resupply(ply, weapons, opts?) -> table<integer, integer>`: server-authoritative
