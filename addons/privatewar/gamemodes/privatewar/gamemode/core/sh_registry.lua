@@ -213,6 +213,22 @@ local function unsubscribe(s, id)
     s.subscriptions[id] = nil
 end
 
+---Disables before cleanup/notification, so ordinary entity hooks cannot receive their own disable event.
+---@param s PW.RegistryState
+---@param id string
+---@param reason? string
+local function disable(s, id, reason)
+    local entity = usable(s, id)
+    local wasEnabled = entity ~= nil and entityValid(s, entity)
+    local message = reason or "disabled"
+    s.disabled[id] = message
+    unsubscribe(s, id)
+    if not wasEnabled or entity == nil then return end
+    local endInstances = rawget(PW, "_EndDefinitionInstances") --[[@as (fun(definition: table))?]]
+    if endInstances ~= nil then endInstances(entity) end
+    PW.Notify("PW_EntityDisabled", s.kind, id, entity, message)
+end
+
 ---The hooks of an entity by name: its PW_* methods when the kind subscribes, then its PW.HookFor hooks.
 ---@param s PW.RegistryState
 ---@param entity PW.Entity
@@ -355,10 +371,7 @@ function PW.Registry.New(kind, opts)
     local s = newState(kind, opts or {})
     local registry = s.registry
     registry.ResolveAll = function() resolveAll(s) end
-    registry._Disable = function(id, reason)
-        s.disabled[id] = reason or "disabled"
-        unsubscribe(s, id)
-    end
+    registry._Disable = function(id, reason) disable(s, id, reason) end
     registry._Enable = function(id)
         s.disabled[id] = nil
         if s.loaded then subscribeEntity(s, id) end
