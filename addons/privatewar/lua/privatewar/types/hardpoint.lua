@@ -1,5 +1,5 @@
 ---@meta
--- Frozen Hardpoint contract declarations only; no runtime implementation or observed runtime RED yet.
+-- Hardpoint contract; implementation lives in modules/hardpoint and modes/hardpoint.
 -- Contract and approved preset: docs/api/hardpoint.md.
 
 ---@class PW.HardpointZone
@@ -120,4 +120,4 @@
 ---@field zone PW.HardpointZone
 
 ---@class PW
----@field Hardpoint? PW.HardpointLib optional module; deliberately absent until observed RED
+---@field Hardpoint? PW.HardpointLib optional module

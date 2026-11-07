@@ -1,4 +1,4 @@
--- Phase 1 TEST-FIRST scaffold. Helpers do not exist yet; runtime RED is pending Deck authorization.
+-- TEST-FIRST rules: observed RED before the runtime implementation; synthetic positions are not map content.
 -- Approved preset: 60-second zones, one point per verified second, 250 points or 600 seconds, tied score draw.
 -- Positions are synthetic fixtures, never authored/playable map coordinates. No alternative boundary policies.
 
@@ -6,7 +6,7 @@
 ---@param value T?
 ---@return T
 local function must(value)
-    assert(value ~= nil, "Hardpoint dependency is absent; implementation and runtime RED are pending")
+    assert(value ~= nil, "Hardpoint dependency is absent")
     return value
 end
 
