@@ -72,6 +72,11 @@ lib.Throw = throw
 function lib.Blind(ply, strength)
     if not IsValid(ply) or strength < lib.Flash.minStrength then return false end
     local seconds = lib._BlindTime(strength)
+    local store = assert(PW._Throwables)
+    store.blind = store.blind or setmetatable({}, { __mode = "k" })
+    local previous = store.blind[ply]
+    store.blind[ply] = { untilTime = CurTime() + seconds,
+        dsp = strength >= 0.5 or (previous ~= nil and previous.dsp and previous.untilTime > CurTime()) }
     if not ply:IsBot() then
         net.Start("pw_blind")
         net.WriteUInt(lib._EncodeStrength(strength), 8)
@@ -117,10 +122,29 @@ function lib._RemoveAll()
     end
 end
 
+---Only this owner's active flash is cancelled; already expired DSP or unrelated players are not reset.
+local function clearBlind()
+    local store = assert(PW._Throwables)
+    local blind = store.blind or {}
+    store.blind = setmetatable({}, { __mode = "k" })
+    for ply, effect in pairs(blind) do
+        if IsValid(ply) then
+            if effect.dsp and effect.untilTime > CurTime() then ply:SetDSP(0, false) end
+            if not ply:IsBot() then
+                net.Start("pw_blind")
+                net.WriteUInt(0, 8)
+                net.Send(ply)
+            end
+        end
+    end
+end
+
 function MODULE:PW_MatchEnd()
     lib._RemoveAll()
+    clearBlind()
 end
 
 function MODULE:PW_RoundEnd()
     lib._RemoveAll()
+    clearBlind()
 end

@@ -29,10 +29,28 @@ local function validSite(site)
         and finite(site.below) and site.below >= 0 and lib.Inside(site --[[@as PW.SNDSite]], site.approach)
 end
 
+---@param value any
+---@param size? integer
+---@return boolean
+local function dense(value, size)
+    if not istable(value) then return false end
+    ---@cast value table<any, any>
+    local length, count = #value, 0
+    if length < 1 or length > 64 or (size ~= nil and length ~= size) then return false end
+    for key in pairs(value) do
+        if not isnumber(key) or key < 1 or key > length or key ~= math.floor(key) then return false end
+        count = count + 1
+    end
+    return count == length
+end
+
 function lib.Validate(data)
     ---@cast data table<string, any>
-    if not istable(data) or not istable(data.sites) or #data.sites ~= 2 or not vector(data.bomb)
+    if not istable(data) or not dense(data.sites, 2) or not vector(data.bomb)
         or not istable(data.spawns) then return false, "S&D needs two sites, a bomb point and side spawns" end
+    for side in pairs(data.spawns --[[@as table<any, any>]]) do
+        if side ~= 1 and side ~= 2 then return false, "S&D spawns must use side 1 or 2 only" end
+    end
     ---@type table<string, boolean>
     local ids = {}
     for _, site in ipairs(data.sites --[[@as table<string, any>[] ]]) do
@@ -41,7 +59,7 @@ function lib.Validate(data)
     end
     for side = 1, 2 do
         local spawns = data.spawns[side] --[[@as table<string, any>[]?]]
-        if not istable(spawns) or #spawns < 1 or #spawns > 64 then return false, "Missing S&D side spawns" end
+        if not dense(spawns) then return false, "Missing or sparse S&D side spawns" end
         for _, spawn in ipairs(assert(spawns)) do
             if not istable(spawn) or not vector(spawn.pos) or not finite(spawn.yaw) then
                 return false, "Invalid S&D spawn"

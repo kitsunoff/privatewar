@@ -26,6 +26,11 @@
 ---Internal (server): live projectiles, removed without detonating at the end of a match.
 ---@class PW.ThrowablesStore
 ---@field live table<Entity, true>
+---@field blind? table<Player, PW.ThrowablesBlind> owned active flash state; absent in older stores
+
+---@class PW.ThrowablesBlind
+---@field untilTime number
+---@field dsp boolean this owner applied the active DSP effect
 
 ---Throwables module. Wire: server to client "pw_blind", one UInt(8): the blind strength times 255.
 ---@class PW.ThrowablesLib
