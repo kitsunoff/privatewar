@@ -18,6 +18,9 @@ end
 
 local markerPos, markerAngle = Vector(), Angle()
 local neutral, warning = Color(232, 237, 233), Color(255, 181, 71)
+---@type table<string, Color>
+local controls = { text = neutral, warning = warning,
+    team_friendly = Color(79, 195, 247), team_enemy = Color(255, 77, 77) }
 local glow = Material("sprites/light_glow02_add")
 local font = ""
 PW.HookFor(module, "PostDrawTranslucentRenderables", function(_, depth, skybox)
@@ -28,7 +31,10 @@ PW.HookFor(module, "PostDrawTranslucentRenderables", function(_, depth, skybox)
     markerPos:Set(snapshot.zone.pos)
     markerPos.z = markerPos.z + 80
     markerAngle:SetUnpacked(0, EyeAngles().y - 90, 90)
-    local color = snapshot.contested and warning or snapshot.control > 0 and team.GetColor(snapshot.control) or neutral
+    local me = LocalPlayer()
+    local token = hp.ControlToken(snapshot.control, snapshot.contested, IsValid(me) and me:Team() or 0)
+    local palette = (PW.UI ~= nil and PW.UI.Style or controls) --[[@as table<string, Color>]]
+    local color = palette[token] or neutral
     render.SetMaterial(glow)
     render.DrawSprite(markerPos, 36, 36, color)
     cam.Start3D2D(markerPos, markerAngle, 0.6)
