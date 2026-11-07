@@ -21,3 +21,20 @@
 
 ---@class PW.Mode
 ---@field BotQuotaPolicy? "continuous"|"rounds" nil: managed teams use rounds; other modes continuous
+
+---@class PW.RevealStoreOptions
+---@field reset? fun(recipients: any[]) clear derived client radar before replaying still-active sources
+
+---@class PW.RevealPulse
+---@field owner? Player source owner, nil for an unowned public reveal
+---@field recipients any[]
+---@field blips PW.RevealBlip[]
+---@field ends number
+
+---@class PW.RevealStore
+---@field reset? fun(recipients: any[]) absent only in a store retained from an older reload
+---@field pulses? PW.RevealPulse[] absent only in a store retained from an older reload
+
+---@class PW.StreaksLib
+---@field _RemoveEffects? fun(owner: Player) internal owning-module radar/jam cleanup
+---@field _ResetEffects? fun() internal clear derived radar/jam state for relationship or round reset

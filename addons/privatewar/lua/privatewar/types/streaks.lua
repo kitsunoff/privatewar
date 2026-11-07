@@ -112,7 +112,7 @@
 ---Server. The deliberate reveal (DESIGN.md net rule): shows the positions of `targets` to `viewer` (a team index
 ---or a player) for `duration` seconds. Targets hidden by a hostile Counter-UAV are skipped. Sends the radar data
 ---to the viewer's human players and feeds the positions to its bots. Returns how many targets were revealed.
----@field Reveal? fun(viewer: integer|Player, targets: Player[], duration: number): integer
+---@field Reveal? fun(viewer: integer|Player, targets: Player[], duration: number, owner?: Player): integer
 ---@field _Streaks? PW.StreaksStore
 ---@field _Reveal? PW.RevealStore
 
