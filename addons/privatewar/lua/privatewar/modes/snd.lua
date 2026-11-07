@@ -27,6 +27,8 @@ local function playing(self)
 end
 
 function MODE:Start()
+    local lobby = assert(PW.Modules.Get("lobby"), "S&D needs the spectator policy owner")
+    assert(lobby:IsValid() and assert(PW.Jip).RefreshSpectator ~= nil, "S&D needs the spectator policy owner")
     local data = assert(PW.Map).GetModeData(self.ClassName)
     local valid, reason = lib().Validate(data)
     if not valid then error(reason or "invalid S&D map") end
@@ -98,6 +100,26 @@ function MODE:PW_CanJoinInProgress() return false end
 function MODE:PW_CanRespawn() return false end
 
 ---@param ply Player
+---@return PW.SpectatorPolicy?
+function MODE:PW_SpectatorPolicy(ply)
+    local state = self._SND --[[@as PW.SNDState?]]
+    if state == nil then return nil end
+    local member = state.roster[lib().Identity(ply)]
+    ---@type PW.SpectatorPolicy
+    local policy = { restricted = true, eligible = {} }
+    if member == nil or member.userId ~= ply:UserID() or not member.connected then return policy end
+    if member.alive and ply:Alive() and ply:GetObserverMode() == OBS_MODE_NONE then return nil end
+    for _, target in ipairs(player.GetAll()) do
+        local other = state.roster[lib().Identity(target)]
+        if target ~= ply and IsValid(target) and target:Alive() and other ~= nil and other.connected and other.alive
+            and other.userId == target:UserID() and other.team == member.team and target:Team() == member.team then
+            policy.eligible[target:UserID()] = true
+        end
+    end
+    return policy
+end
+
+---@param ply Player
 ---@return PW.SpawnPoint?
 function MODE:PW_SelectSpawn(ply)
     local state = self._SND --[[@as PW.SNDState?]]
@@ -119,9 +141,9 @@ function MODE:PW_CanTakeDamage(victim, attacker)
         if member == nil or not member.alive or member.userId ~= victim:UserID() then return false end
     end
     if attacker ~= nil and IsValid(attacker) and attacker:IsPlayer() then
-        local player = attacker --[[@as Player]]
-        local member = state.roster[lib().Identity(player)]
-        if member == nil or not member.alive or member.userId ~= player:UserID() then return false end
+        local shooter = attacker --[[@as Player]]
+        local member = state.roster[lib().Identity(shooter)]
+        if member == nil or not member.alive or member.userId ~= shooter:UserID() then return false end
     end
 end
 

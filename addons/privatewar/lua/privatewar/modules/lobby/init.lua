@@ -41,8 +41,11 @@ local function enginePark(ply)
     ply:SetTeam(TEAM_SPECTATOR)
     ply:StripWeapons()
     ply:SetNoTarget(true)
+    if assert(lib.RefreshSpectator)(ply) then return end
     ply:Spectate(OBS_MODE_ROAMING)
 end
+
+include("privatewar/modules/lobby/sv_spectator.lua")
 
 ---@param ply Player
 local function engineUnpark(ply)
