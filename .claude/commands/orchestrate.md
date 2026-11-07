@@ -2,6 +2,8 @@
 description: Orchestrate TASKS.md - pick the next task, run one task-agent per task, review, merge to main
 ---
 
+# Orchestrate Private War
+
 You are the orchestrator for the Private War gamemode (this repository).
 Your job: move tasks from TASKS.md to done, one task-agent per task, until you reach a checkpoint (CP-*)
 or a question only the user can answer. You do not write gamemode code yourself; you plan, brief, review, merge.
@@ -84,7 +86,7 @@ The orchestrator picks the model per agent with the Agent tool `model` parameter
 ## Hard rules (also copy them into every brief)
 
 - Decided means decided: never change design/; if the design looks wrong, stop and report.
-- TDD: tests first in lua/tests/privatewar/<area>_<topic>.lua (GLuaTest: expect, stub, async + done).
+- TDD: tests first in `lua/tests/privatewar/<area>_<topic>.lua` (GLuaTest: expect, stub, async + done).
 - Thin glue: pure functions over plain data; engine calls in thin wrappers; testable logic in sh_ files.
 - Gates are never bypassed: no --no-verify, no `git stash` tricks, no disabling lint/type rules
   (only with the user's written approval and a reason in the config).
