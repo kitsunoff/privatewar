@@ -3,7 +3,6 @@ HUDELEMENT.Order = 12
 HUDELEMENT.Phases = { "LIVE" }
 local hp = assert(PW.Hardpoint)
 local hud = assert(PW.HUD)
-local module = PW.Modules.Get("hardpoint")
 local neutral = Color(232, 237, 233)
 local background = Color(11, 15, 12, 220)
 local warning = Color(255, 181, 71)
@@ -14,7 +13,7 @@ local shownSecond, shownMatch, shownRevision = -1, -1, -1
 
 function HUDELEMENT:ShouldDraw()
     local snapshot = hp.ClientSnapshot
-    return IsValid(module) and snapshot ~= nil and snapshot.active
+    return IsValid(PW.Modules.Get("hardpoint")) and snapshot ~= nil and snapshot.active
 end
 
 function HUDELEMENT:Draw()

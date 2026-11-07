@@ -2,7 +2,7 @@
 -- Hardpoint contract; implementation lives in modules/hardpoint and modes/hardpoint.
 -- Contract and approved preset: docs/api/hardpoint.md.
 
----@class PW.HardpointZone
+---@class PW.HardpointZone : PW.BotObjectiveZone
 ---@field id string unique nonempty authored id, at most 32 bytes; array order is the rotation order
 ---@field pos Vector finite centre; synthetic positions in tests are not map content
 ---@field radius number finite, positive horizontal radius, at most 4096
