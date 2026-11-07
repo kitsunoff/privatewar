@@ -276,8 +276,11 @@ return {
             func = function(state)
                 local mode = child(state)
                 mode.RoundsToWin = 1
+                local first = { IsPlayer = function() return true end }
+                local second = { IsPlayer = function() return true end }
+                stub(_G, "isentity").with(function(value) return value == first or value == second end)
                 local result = { reason = "roundlimit", teams = false, draw = true,
-                    standings = { { id = "participant_one", score = 1 }, { id = "participant_two", score = 1 } } }
+                    standings = { { id = first, score = 1 }, { id = second, score = 1 } } }
                 mode.FinalizeRounds = function() return result end
                 local received, finishes = nil, 0
                 rawset(must(PW.Match), "Finish", function(value)
@@ -304,6 +307,47 @@ return {
                         if throws then error("expected terminal transform failure") end
                         return { draw = false }
                     end
+                    local finishes, aborts = 0, 0
+                    rawset(must(PW.Match), "Finish", function() finishes = finishes + 1 return true end)
+                    rawset(must(PW.Match), "Abort", function() aborts = aborts + 1 return true end)
+                    mode:Start()
+                    local s = must(mode._Rounds --[[@as PW.RoundState?]])
+                    mode:_Run(base()._Step(s, 0, nil))
+                    mode:_Run(base()._Step(s, 1, 1))
+                    mode:_Run(base()._Step(s, 100, 1))
+                    expect({ finishes, aborts }).to.deepEqual({ 0, 1 })
+                    expect(s.phase).to.equal("over")
+                    mode:Cleanup()
+                end
+            end
+        },
+        {
+            name = "Round objective: malformed terminal standings ids scores and winner membership abort once",
+            func = function(state)
+                local invalid = {
+                    { reason = "roundlimit", teams = true, draw = false, winner = 99,
+                        standings = { { id = 1, score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = false, winner = 1,
+                        standings = { { id = 1, score = 1.5 } } },
+                    { reason = "roundlimit", teams = true, draw = true,
+                        standings = { [2] = { id = 1, score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = true,
+                        standings = { hidden = { id = 1, score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = false, winner = "one",
+                        standings = { { id = "one", score = 1 } } },
+                    { reason = "roundlimit", teams = false, draw = false, winner = "not-a-player",
+                        standings = { { id = "not-a-player", score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = true, winner = 1,
+                        standings = { { id = 1, score = 1 }, { id = 2, score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = false, winner = 1,
+                        standings = { { id = 1, score = 1 }, { id = 1, score = 1 } } },
+                    { reason = "roundlimit", teams = true, draw = false, winner = 1,
+                        standings = { { id = 1, score = 1 }, { id = 2, score = math.huge } } }
+                }
+                for _, result in ipairs(invalid) do
+                    local mode = child(state)
+                    mode.RoundsToWin = 1
+                    mode.FinalizeRounds = function() return result end
                     local finishes, aborts = 0, 0
                     rawset(must(PW.Match), "Finish", function() finishes = finishes + 1 return true end)
                     rawset(must(PW.Match), "Abort", function() aborts = aborts + 1 return true end)
