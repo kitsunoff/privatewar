@@ -51,7 +51,7 @@ return {
                 stub(hp, "Send").with(function() end)
                 PW.ActiveMode = mode
                 bot:SetTeam(1)
-                bot:Spawn() -- Initial setup only. Every asserted journey below uses normal user commands.
+                assert(PW.MatchRules).Spawn(bot) -- Initial setup only; asserted journeys use normal user commands.
                 hp.Start(mode)
                 local runtime = assert(mode._Hardpoint)
                 local start = bot:GetPos()
