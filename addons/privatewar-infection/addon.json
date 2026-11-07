@@ -1,0 +1,13 @@
+{
+	"title": "Private War: Infection",
+	"type": "servercontent",
+	"tags": ["fun"],
+	"ignore": [
+		".*",
+		"**/.*",
+		"lua/tests/*",
+		"*.md",
+		"*.sh",
+		"*.nix"
+	]
+}
