@@ -777,6 +777,35 @@ Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decision
 | T-11.13 Hardpoint. Branch `feat/mode-hardpoint`; exclusive authored `gm_construct` map owner | `modes` / mode HUD | shared objective API freeze; serialized S&D map schema | Pure + input smoke + human checkpoint | user-approved `02` d.8 | independent preparation; preset approved, not implemented/verified by this row |
 | T-11.14 Infection, separate optional addon. Branch `feat/addon-infection`; owns role transition and bot invalidation outside commander | `modes` / role lifecycle / mode HUD | shared round/role API freeze | Pure + input smoke + human checkpoint | user-approved `02` d.8 | in progress: exact preset, full rollback and personal round-win standings approved; bots are full participants; no new XP/money |
 
+### Queued documentation requests (not authorized for tonight's runtime implementation)
+
+| Task | Lane | Depends | Tests first | Source decision | Status |
+| --- | --- | --- | --- | --- | --- |
+| T-11.15 Class-list separation and hidden technical presets | `ui` / `loadout` | T-4.7, T-4.8, T-7.4; future class visibility/API contract | Pure + human checkpoint | user request 2026-11-08; `05` d.1, d.12–14; `docs/api/loadout.md` Classes and `docs/api/bots-blackboard.md` Bot loadouts | QUEUED, NOT IMPLEMENTED; no overnight implementation authorization |
+| T-11.16 Shared offline scheduled events | shared manager / `playlists` / `progression` | future schedule kind/lifecycle and consumer contracts; open calendar and XP questions | Pure + lifecycle/client agreement | user request 2026-11-08; accepted direction in `notes/26-scheduled-events.md`, not a frozen API | FUTURE QUEUED, NOT IMPLEMENTED; no overnight implementation authorization |
+
+**T-11.15 deliverable:** customization/class editor lists only player-created custom classes, never standard/code
+presets. Respawn selectors list visible custom classes first, followed by visible code-defined presets. Add an
+optional code-class hidden flag (`Hidden: boolean` suggested by kind conventions; exact contract is future work),
+default false for legacy visibility. Hidden definitions remain registered/resolvable for explicitly authorized
+bot/technical callers, but absent from every relevant human selection/customization picker. Human selection/save
+validation must not offer an alternate route to a hidden technical preset. Do not silently add hidden definitions
+to random bot class pools or change bot pool policy. Preserve approved class application/spawn timing, saved
+custom data and progression validation. This is future queue work, not scheduling/timer implementation.
+
+Mandatory planned GLuaTest cases (not written/run or passed by this queue entry): editor custom-only; respawn
+custom-first then visible presets; legacy code classes default visible; `Hidden = true` absent from every relevant
+human picker; hidden technical definition remains registered/resolvable and available to explicitly authorized
+bot/technical use; stable/nonmutating filtering and sorting; empty lists; selection/save authorization cannot
+bypass hiding. Retain all existing class tests. Human checkpoint: editor, respawn and controller-navigation lists.
+
+**T-11.16 deliverable:** the shared `schedules/` / `SCHEDULE` direction of `notes/26-scheduled-events.md`, consumed
+by playlists and progression, with deterministic UTC/offline evaluation and instance-owned reversible effects.
+Exact API/schema, simultaneous playlist availability versus featured-slot priorities, player/weapon XP scope,
+multiplier stacking, dates/anchor, running-match expiry, clock jumps and changelevel persistence remain open.
+Future tests cover pure boundaries, biweekly/year-wrap calendars, offline startup, idempotence, cleanup, ownership
+and host/client agreement as listed in that note. This row neither freezes these questions nor authorizes runtime.
+
 ### Known follow-ups (not scheduled; some need a user decision)
 
 1. Remaining hot spots of `docs/perf-report.md`:
