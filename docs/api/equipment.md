@@ -111,6 +111,25 @@ grenade SWEPs are first given, after the perks and wildcards of the loadout are 
 order). A perk answers it from its instance: `self:Hook("PW_EquipmentCount", function(perk, ply, slot, id, count) ...
 end)`.
 
+### Planned deterministic additive count sources
+
+Approved by `design/05-loadout.md` d.16; test-first, **not implemented or mounted-verified yet**.
+The legacy question above retains its first-answer meaning. It is not converted into a chain.
+
+- `PW.Equipment.CountSource(ply, id, fn?)`: register/replace an owner-local additive source;
+  nil removes it. `fn(ply, slot, itemId)` returns an additional count, not a replacement.
+  Sources run in sorted id order, after the single legacy answer has been resolved.
+- Ignore failed, negative, non-number and nonfinite source answers; floor finite nonnegative
+  additions. `_ComposeCount(base, legacyAnswer, sources, ply, slot, itemId)` is the pure seam.
+- Resolve exactly once on the first grant of each life after perks/wildcards equip. Stockpile
+  contributes +1 to lethal and tactical only. Repeated grants, weapon switches or selecting a
+  different class midlife do not refill spent counts. Cached count and grenade ammo remain
+  authoritative. Removing a source does not take back already-granted uses or grant more.
+- A perk unregisters its source on unequip. Source ownership is separate from equipment
+  instance lifetime, so spawn hook order cannot accidentally discard an equipped source.
+
+Tests: `equipment_count_sources.lua`; the existing grenade inventory/cooking cases are unchanged.
+
 ## Keys
 
 No net message: the use message `pw_equipment_use` of T-4.5 is gone, so the release of the grenade SWEP is the only way

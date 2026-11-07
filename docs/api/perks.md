@@ -95,6 +95,45 @@ empty weapon mods. Hooks and timers made through `self:Hook` and `self:Timer` en
 Presets: Assault `flak_jacket`, `sleight_of_hand`, `adrenaline`; Close quarters and Run and gun `ready_up`,
 `sleight_of_hand`, `adrenaline` (see `loadout.md`).
 
+## Approved expansion contract (test-first)
+
+`design/05-loadout.md` d.16 freezes all twelve additional perks, groups, costs, unlocks,
+strengths and information boundaries. This section describes the pending integration contract,
+**not an implementation or mounted-test pass**. The existing four remain unchanged.
+
+- New player stat consumers: `move_speed` through `PW.PlayerOverrides`, `fall_damage` once
+  against the ordinary fall baseline, and `flash_strength` before flash duration/network/DSP
+  and ordinary bot impairment. Arbitrary `PW.Stat` keys still do nothing without a consumer.
+- `SilentFootsteps` on a perk definition is owner-local state resolved at perk refresh.
+  `PW.Perks.FootstepsAudible(ply)` is the shared reader for both the predicted stock footstep
+  hook and bot hearing, including direct public footstep stimuli. The resolved flag uses
+  `pw_silent_steps`, changes sparsely, and resets on removal. It never filters other sounds,
+  visual contacts or memory. No per-frame aggregation or player search is added.
+- `PW_CanReveal(viewer, target, sourceOwner?) -> boolean?`: server question. Exactly false
+  vetoes a target before any position read, packet or bot stimulus. Every `PW.Reveal` call
+  follows it, not merely UAV content. Existing CUAV filtering remains independent. Ghost
+  supplies an owner-only veto; disappearing from a new pulse does not delete old contacts.
+- Retaliation uses direct weapon provenance from `PW.WeaponAmmo.DamageWeapon`, enemy/living
+  eligibility, one event-time LOS test, a five-second cooldown and the ordinary scoped
+  1.5-second `PW.Reveal` pulse. `_RetaliationEligible(facts)` is the pure eligibility seam.
+- Death persistence must be sampled before either owner's cleanup runs. Streaks keep a
+  per-life snapshot until the next spawn, so either `PostPlayerDeath` listener order works;
+  duplicate cleanup cannot change it. Normal next-life persistence and inventory semantics
+  remain unchanged. Role revocation never becomes death persistence.
+- Content/module disable must synchronously revoke owned hooks, cached/replicated state and
+  player effects. Re-enable alone does not re-equip an old life. The registry currently lacks
+  a disable notification; the core owner must supply a generic lifecycle seam before this
+  requirement can be implemented without wrapping another module or relying on polling.
+- `PW.LoadoutUI.PerkDescription(definition, selectedWeaponClasses)` uses each selected
+  adapter's `SupportedStatMods` to append an unsupported-key warning. Picks stay valid;
+  unsupported bases do not silently become compatible. Stock-footstep/custom-sound and
+  movement limitations are part of the ordinary descriptions.
+
+Equipment contribution and ordinary reserve contracts are in [equipment](equipment.md) and
+[adapter](adapter.md). New tests: `perk_candidates.lua`, `perk_knowledge.lua`,
+`perk_lifecycle.lua`, `perk_player_effects.lua`, `perk_rewards.lua`, `perk_support_ui.lua`.
+Existing T-4.4 and grenade/cooking, bot loadout and progression cases remain mandatory.
+
 ## Mandatory cases
 
 `TASKS.md` T-4.4 (tests in `lua/tests/privatewar/perks.lua`): the group rule, the multiplier chain, owner-only events,
