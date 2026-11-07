@@ -97,6 +97,10 @@ net.Receive(lib.RevealNet, function()
     end
 end)
 
+net.Receive("pw_reveal_reset", function()
+    lib.Radar = { blips = {}, jammedUntil = 0 }
+end)
+
 function MODULE:PW_PhaseChanged(phase)
     if phase == "LIVE" then return end
     lib.Radar = { blips = {}, jammedUntil = 0 }

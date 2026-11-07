@@ -14,6 +14,11 @@ Types: `lua/privatewar/types/role_policy.lua`. Regression tests: `role_policy.lu
   weapons/ammo and previous-weapon state. Delayed grants and switch callbacks cannot cross generations.
 - Server `PW.Streaks.EndEffects(ply)`: end only the owner's active instances/effects; keep unused inventory.
 - Server `PW.Streaks.Revoke(ply)`: end effects and clear only this owner's progress, inventory and set.
+- `PW.Reveal(viewer, targets, duration, owner?)` retains at most 128 unexpired pulses for effect cleanup.
+  Built-in UAV supplies its owner. Revocation clears the derived client radar and replays only surviving
+  sources for their remaining lifetime. Relationship reset clears all old-side radar/jam caches; remaining
+  active sources acquire new information normally. Server-to-client `pw_reveal_reset` has no payload and
+  no client request handler. No new enemy coordinates are disclosed by a reset.
 - `PW_RoundPreparing`: equipment revokes current life items, streaks end active effects but retain unused
   earned inventory. This never globally clears unused streaks between ordinary rounds.
 
