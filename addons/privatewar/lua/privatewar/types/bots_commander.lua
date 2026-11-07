@@ -102,6 +102,7 @@
 ---@field Sanitize fun(raw: any): PW.BotObjective[]
 ---Role/roster/carrier eligibility; a present empty set allows nobody.
 ---@field Eligible fun(objective: PW.BotObjective, botId: integer): boolean
+---@field Inside fun(objective: PW.BotObjective, pos: Vector): boolean cylinder or legacy sphere containment
 ---Server: clear only commander-owned orders/hunt/retained state; goals through the public goal API.
 ---@field Clear? fun()
 ---Server: release a specific old visit and its goal; other visits/objectives stay intact.

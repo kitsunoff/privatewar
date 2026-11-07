@@ -121,28 +121,31 @@ local function scoreOf(obj, pos, mates, currentId)
     return score
 end
 
-function lib.PickObjective(objectives, pos, mates, currentId)
+function lib.PickObjective(objectives, pos, mates, currentId, botId)
     ---@type PW.BotObjective?
     local best, bestScore = nil, 0
     for _, obj in ipairs(objectives) do
-        local score = scoreOf(obj, pos, mates, currentId)
+        local commander = PW.BotCommander
+        local allowed = commander ~= nil and commander.Eligible(obj, botId or 0)
+            or (commander == nil and obj.eligible == nil and obj.action ~= "plant" and obj.action ~= "defuse")
+        local score = allowed and scoreOf(obj, pos, mates, currentId) or 0
         if score > bestScore then best, bestScore = obj, score end
     end
     return best, bestScore
 end
 
-function lib.Resolve(ctx, facts, currentId)
+function lib.Resolve(ctx, facts, currentId, botId)
+    botId = botId or (IsValid(ctx.bot) and ctx.bot:UserID() or 0)
     local order = ctx.order
-    if order ~= nil and istable(order.objective) then
+    local commander = PW.BotCommander
+    if order ~= nil and istable(order.objective) and commander ~= nil then
         local obj = order.objective --[[@as PW.BotObjective]]
-        if isvector(obj.pos) then
-            ---@type PW.BotObjective
-            local copy = { id = tostring(obj.id), pos = obj.pos, radius = tonumber(obj.radius) or flagRadius,
-                action = order.type or obj.action, weight = tonumber(obj.weight) or 0.5, want = obj.want or 1 }
+        local copy = commander.Sanitize({ obj })[1]
+        if copy ~= nil and commander.Eligible(copy, botId) then
             return copy, copy.weight, true
         end
     end
-    local best, score = lib.PickObjective(facts.objectives, facts.pos, facts.mates, currentId)
+    local best, score = lib.PickObjective(facts.objectives, facts.pos, facts.mates, currentId, botId)
     return best, score, false
 end
 
