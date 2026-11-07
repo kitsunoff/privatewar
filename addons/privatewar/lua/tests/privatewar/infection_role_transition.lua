@@ -81,6 +81,45 @@ return {
     end,
     cases = {
         {
+            name = "Objective invalidation: matching running or suspended visit ends once and releases owned use",
+            func = function()
+                local brain = must(PW.BotBrain)
+                for _, suspend in ipairs({ false, true }) do
+                    local ply = bot(suspend and 9014 or 9013)
+                    local board = { bot = ply } --[[@as PW.BotBoard]]
+                    PW._BotsManager.boards[ply] = board
+                    local bs, ended = brain.NewState(), 0
+                    PW._BotBrain.states[ply] = bs
+                    ---@type PW.BotBehavior
+                    local objective = { ClassName = "objective", IsValid = function() return true end,
+                        Rank = function() return 20 end, Weight = function() return 1 end,
+                        OnStart = function(_, _, ctx)
+                            local frame = must(ctx.state)
+                            frame.id, frame.revision = "site", 3
+                            ctx:Intent().buttons = IN_USE
+                        end,
+                        Update = function() return suspend and brain.SuspendFor("combat") or brain.Continue() end,
+                        OnEnd = function(_, _, ctx)
+                            ended = ended + 1
+                            ctx:Intent().buttons = bit.band(ctx:Intent().buttons, bit.bnot(IN_USE))
+                        end }
+                    local combat = { ClassName = "combat", IsValid = function() return true end,
+                        Rank = function() return 0 end, Weight = function() return 0 end,
+                        Update = function() return brain.Continue() end }
+                    brain.Think(bs, { bot = ply, board = board, behaviors = { objective, combat },
+                        random = function() return 0 end }, 0)
+                    PW.Notify("PW_ObjectiveInvalidated", "site", 2)
+                    expect(ended).to.equal(0)
+                    PW.Notify("PW_ObjectiveInvalidated", "site", 3)
+                    expect(ended).to.equal(1)
+                    expect(bit.band(must(board.intent).buttons, IN_USE)).to.equal(0)
+                    expect(brain.StackIds(bs)).to.deepEqual(suspend and { "combat" } or {})
+                    PW.Notify("PW_ObjectiveInvalidated", "site", 3)
+                    expect(ended).to.equal(1)
+                end
+            end
+        },
+        {
             name = "Async reset: delayed path completion cannot restore an old goal or path after role change",
             func = function(state)
                 local ply = bot(9010)
