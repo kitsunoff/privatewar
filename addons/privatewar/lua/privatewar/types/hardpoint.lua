@@ -83,6 +83,11 @@
 ---@field PublicSnapshot fun(state: PW.HardpointState, revision: integer): PW.HardpointSnapshot
 ---@field AcceptSnapshot fun(current: PW.HardpointSnapshot?, incoming: PW.HardpointSnapshot): PW.HardpointSnapshot
 ---@field View fun(snapshot: PW.HardpointSnapshot, now: number, out: PW.HardpointView): PW.HardpointView
+---@field ValidateActivation fun(layout: PW.HardpointLayout,
+---    probe: fun(zone: PW.HardpointZone): boolean): boolean, string?
+---@field CheckActivation fun(layout: PW.HardpointLayout): boolean, string?
+---@field WriteSnapshot fun(snapshot: PW.HardpointSnapshot)
+---@field ReadSnapshot fun(): PW.HardpointSnapshot
 
 ---@class PW
 ---@field Hardpoint? PW.HardpointLib optional module; deliberately absent until observed RED
