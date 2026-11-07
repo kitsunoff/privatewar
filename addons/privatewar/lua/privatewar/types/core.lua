@@ -6,6 +6,10 @@
 ---Listener of PW_PreRegister: edit tbl in place, or return false to cancel the registration.
 ---@alias PW.PreRegisterFn fun(kind: string, id: string, tbl: table): boolean?
 
+---PW_EntityDisabled notification, after invalidation, unsubscription and exact-definition instance cleanup.
+---Cleanup-only listeners must return nothing, never error, and never regrant or perform gameplay.
+---@alias PW.EntityDisabledFn fun(kind: string, id: string, definition: table, reason: string)
+
 ---When the entities of a kind are auto-subscribed to PW_* hooks (01-extensibility.md d.18).
 ---"always": every PW_* method of every enabled, non-abstract entity; "never": not at all (the default).
 ---@alias PW.SubscribeMode "always"|"never"
@@ -76,6 +80,7 @@
 ---@field ResolveAll fun() resolve Base for every entry; later registrations resolve immediately
 ---Internal: disables an entity (IsValid false, subscriptions removed) until _Enable. Survives re-registration
 ---and Base resolution. Used by enable ConVars (T-1.4) and disable-after-error (T-1.8).
+---On an actual enabled-to-disabled transition, removes exact-definition instances then notifies PW_EntityDisabled.
 ---@field _Disable fun(id: string, reason: string)
 ---Internal: clears a disable; the entity is subscribed again (its PW_* methods if its kind subscribes, and its
 ---PW.HookFor hooks).
@@ -180,7 +185,8 @@
 ---lives on it. Its callbacks run through PW.Call: an error disables (and ends) this instance only.
 ---@class PW.Instance
 ---@field _Owner any internal: the owner given to PW.Instance (passed to OnEquip and OnUnequip)
----False once the instance was removed (Remove, PW_MatchEnd) or one of its callbacks errored.
+---@field _Definition table internal: own exact source-table reference, never inferred from ClassName
+---False once removal starts, a callback errored, or the source definition's IsValid returns false.
 ---@field IsValid fun(self: PW.Instance): boolean
 ---hook.Add(name, self, fn) through PW.Call: fn receives the instance and the hook arguments, and its results
 ---are returned to the hook. One callback per hook name; dropped when the instance ends.
@@ -188,13 +194,14 @@
 ---Uniquely named timer.Create(delay, reps, ...) through PW.Call; fn receives the instance. Removed when the
 ---instance ends.
 ---@field Timer fun(self: PW.Instance, delay: number, reps: integer, fn: fun(self: PW.Instance))
----Ends the instance: calls OnUnequip(owner) through PW.Call once, marks it invalid, removes its hooks and
----timers. Repeated calls do nothing.
+---Ends the instance: blocks gameplay, invokes OnUnequip(owner) once through protected cleanup-only pcall even
+---after failure/definition disable, then removes hooks, timers and the live entry regardless of cleanup errors.
+---Reentrant/repeated calls do nothing. Cleanup never disables the definition or resumes ordinary PW.Call.
 ---@field Remove fun(self: PW.Instance)
 ---@field _Hooks table<string, true> internal: hook names the instance listens to
 ---@field _Timers table<string, true> internal: names of the instance's timers
 ---@field _Ended? boolean internal: Remove has started
----@field _Dead? boolean internal: Remove has finished; IsValid is false
+---@field _Dead? boolean internal: the instance is dead; IsValid is false
 ---@field [string] any fields of the definition and per-owner state
 
 ---Internal (00-core.md d.11): live instances, ended by the core on PW_MatchEnd.
@@ -407,6 +414,8 @@
 ---@field _Instances PW.InstanceStore internal
 ---Internal: removes every live instance (server: on PW_MatchEnd; client: when the phase leaves LIVE).
 ---@field _EndInstances fun()
+---Internal: synchronously removes live instances whose own _Definition is exactly definition; no id matching.
+---@field _EndDefinitionInstances fun(definition: table)
 PW = {}
 
 ---Class table inside a kinds/ file.
