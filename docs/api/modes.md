@@ -286,8 +286,9 @@ Settings (match scope, declared on `round_base`, inherited by the children as `<
 
 The loop (the state machine is pure data: `MODE._NewState`, `MODE._Step`; `Think` and `_Run` are thin glue):
 
-1. `MODE:Start` builds the state; the match start (`match_rules`) has already spawned everyone. Round 1 starts on the
-   first `Think` of `LIVE`: no respawn, `PW_RoundStart(1, false)`.
+1. `MODE:Start` builds the state before `PW_MatchStart`; the `match_rules` listener then spawns everyone
+   (`core/sv_match.lua`, `enterPhase`). Round 1 starts on the first `Think` of `LIVE`: no respawn,
+   `PW_RoundStart(1, false)`.
 2. During a round every `Think` asks `MODE:RoundWinner(timedOut)`; `timedOut` is `true` once `roundtime` has passed
    (`roundtime = 0`: never). The answer: an integer team index `1..Teams` ends the round for that team; `false`
    ends it as a draw; `nil` goes on. Any other non-`nil` value counts as `false`. When the time is up and the answer
