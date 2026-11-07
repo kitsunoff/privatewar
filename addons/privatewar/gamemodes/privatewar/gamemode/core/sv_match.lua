@@ -128,6 +128,8 @@ local function enterPhase(store, from, to)
     elseif to == "LIVE" then
         store.modeStarted = true
         if store.mode ~= nil then PW.Call(store.mode, "Start") end
+        -- Start can queue Abort/Finish while this transition is busy. Never spawn a match that already ended.
+        if store.abortReason ~= nil or #store.queue > 0 then return end
         store.matchStarted = true
         PW.Notify("PW_MatchStart")
     end

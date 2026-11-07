@@ -41,7 +41,7 @@
 ---@field FinalizeRounds? fun(self: PW.RoundBase, defaultResult: PW.MatchResult): PW.MatchResult?
 ---@field _Prepare fun(self: PW.RoundBase, round: integer, swapped: boolean): boolean internal, preparation succeeded
 ---@field _ValidResult fun(result: any): boolean internal, validates a transformed existing result shape
----@field _Finalize fun(self: PW.RoundBase, defaultResult: PW.MatchResult): PW.MatchResult internal, validated transform
+---@field _Finalize fun(self: PW.RoundBase, defaultResult: PW.MatchResult): PW.MatchResult?
 ---Internal, pure: a fresh state at phase "starting".
 ---@field _NewState fun(n: integer, toWin: integer, swapEvery: integer, time: number, pause: number,
 ---    roundLimit?: integer): PW.RoundState
