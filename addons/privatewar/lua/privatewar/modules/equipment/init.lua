@@ -84,6 +84,7 @@ end
 
 function lib.Revoke(ply)
     local s = store()
+    if PW.Throwables ~= nil and PW.Throwables.Revoke ~= nil then PW.Throwables.Revoke(ply) end
     for _, entry in pairs(s.players[ply] or {}) do
         local class = entry.weapon
         if class ~= nil and IsValid(ply) then

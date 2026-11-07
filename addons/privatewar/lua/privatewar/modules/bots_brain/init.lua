@@ -105,6 +105,11 @@ function MODULE:PW_RoundPreparing() stopAll() end
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
 
+function MODULE:PW_MatchEnd()
+    stopAll()
+    clearAll()
+end
+
 ---@param id string
 ---@param revision integer
 function MODULE:PW_ObjectiveInvalidated(id, revision)

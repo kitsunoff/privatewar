@@ -27,7 +27,9 @@ end
 ---@param ent Entity
 ---@param owner Player
 ---@param opts PW.ThrowOptions
-local function detonate(ent, owner, opts)
+---@param token PW.ThrowableGeneration
+local function detonate(ent, owner, opts, token)
+    if PW._Throwables.live[ent] ~= token then return end
     PW._Throwables.live[ent] = nil
     if not IsValid(ent) then return end
     if opts.detonate ~= nil then opts.detonate(ent, owner) end
@@ -61,13 +63,26 @@ local function throw(ply, entClass, options)
         phys:SetVelocity(vel)
         phys:AddAngleVelocity(Vector(0, 600, 0))
     end
-    PW._Throwables.live[ent] = true
-    timer.Simple(lib._Fuse(opts), function() detonate(ent, ply, opts) end)
+    local token = { owner = ply }
+    PW._Throwables.live[ent] = token
+    timer.Simple(lib._Fuse(opts), function() detonate(ent, ply, opts, token) end)
     return ent
 end
 
 PW.Throw = throw
 lib.Throw = throw
+
+function lib.Revoke(owner)
+    local live = PW._Throwables.live
+    for ent, token in pairs(live) do
+        local matches = istable(token) and token.owner == owner
+            or (token == true and IsValid(ent) and ent:GetOwner() == owner)
+        if matches then
+            live[ent] = nil
+            if IsValid(ent) then ent:Remove() end
+        end
+    end
+end
 
 function lib.Blind(ply, strength)
     if not IsValid(ply) or strength < lib.Flash.minStrength then return false end

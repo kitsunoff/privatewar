@@ -100,12 +100,12 @@ suite.cases[#suite.cases + 1] = {
             ---@type fun()[]
             local queued = {}
             local searches = 0
-            stub(must(PW.Bot), "Get").with(function(who) if who == ply then return board end end)
-            stub(player, "GetBots").with(function() return { ply } end)
-            stub(must(PW.BotScheduler), "Enqueue").with(function(job) queued[#queued + 1] = job end)
-            stub(navmesh, "Find").with(function() searches = searches + 1 return {} end)
+            local get = stub(must(PW.Bot), "Get").with(function(who) if who == ply then return board end end)
+            local bots = stub(player, "GetBots").with(function() return { ply } end)
+            local enqueue = stub(must(PW.BotScheduler), "Enqueue").with(function(job) queued[#queued + 1] = job end)
+            local find = stub(navmesh, "Find").with(function() searches = searches + 1 return {} end)
             local found = facts().cover
-            stub(lib(), "PickCover").with(function() return found end)
+            local pick = stub(lib(), "PickCover").with(function() return found end)
             must(lib()._QueueCover)(ply, board, must(board.tactics))
             expect(#queued).to.equal(1)
             PW.Call(owner(), event, NULL, 1, 2, "role_change")
@@ -122,6 +122,11 @@ suite.cases[#suite.cases + 1] = {
             expect(searches).to.equal(1)
             expect(must(board.tactics).cover).to.equal(found)
             expect(PW._BotTactics.pending[ply]).to.beNil()
+            pick:Restore()
+            find:Restore()
+            enqueue:Restore()
+            bots:Restore()
+            get:Restore()
         end
     end
 }
@@ -136,9 +141,9 @@ suite.cases[#suite.cases + 1] = {
             ---@type fun()?
             local queued
             local searches = 0
-            stub(must(PW.Bot), "Get").with(function() return current end)
-            stub(must(PW.BotScheduler), "Enqueue").with(function(job) queued = job end)
-            stub(navmesh, "Find").with(function() searches = searches + 1 return {} end)
+            local get = stub(must(PW.Bot), "Get").with(function() return current end)
+            local enqueue = stub(must(PW.BotScheduler), "Enqueue").with(function(job) queued = job end)
+            local find = stub(navmesh, "Find").with(function() searches = searches + 1 return {} end)
             must(lib()._QueueCover)(ply, board, must(board.tactics))
             if replaceBoard then current = boardOf(ply) else board.tactics = facts() end
             local fresh = current.tactics
@@ -146,6 +151,9 @@ suite.cases[#suite.cases + 1] = {
             expect(searches).to.equal(0)
             expect(current.tactics).to.equal(fresh)
             expect(PW._BotTactics.pending[ply]).to.beNil()
+            find:Restore()
+            enqueue:Restore()
+            get:Restore()
         end
     end
 }

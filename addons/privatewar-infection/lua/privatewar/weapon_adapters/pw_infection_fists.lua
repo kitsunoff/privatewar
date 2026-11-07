@@ -2,6 +2,8 @@
 ADAPTER.Name = "Native fists input"
 ADAPTER.Priority = 50
 
+function ADAPTER:IsAvailable() return weapons.GetStored("weapon_fists") ~= nil end
+
 function ADAPTER:Claims(class) return class == "weapon_fists" end
 
 function ADAPTER:GetInputRules()

@@ -43,6 +43,7 @@ function MODULE:PW_PlayerTeamChanging() resetOwned() end
 function MODULE:PW_PlayerTeamChanged() resetOwned() end
 function MODULE:PW_RoundPreparing() resetOwned() end
 function MODULE:PW_RoundPrepared() resetOwned() end
+function MODULE:PW_MatchEnd() resetOwned() end
 
 ---@param bot Player
 ---@param f PW.BotCombatFacts

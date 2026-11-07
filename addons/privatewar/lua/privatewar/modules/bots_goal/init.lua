@@ -407,6 +407,7 @@ end
 
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 local botLib = (rawget(PW, "Bot") or {}) --[[@as PW.BotLib]]
 PW.Bot = botLib

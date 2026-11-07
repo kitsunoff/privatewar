@@ -88,7 +88,8 @@ tier per bot for `mix`) at creation, and a personality as soon as the bot's team
 ### Tactics relationship reset
 
 The `bots_tactics` owner consumes `PW_PlayerTeamChanging`, `PW_PlayerTeamChanged`, `PW_RoundPreparing`
-and `PW_RoundPrepared`. Each notification synchronously forgets its own hurt/attacker history and
+and `PW_RoundPrepared`, and clears the same owned state on `PW_MatchEnd`.
+Each notification synchronously forgets its own hurt/attacker history and
 cached `board.tactics` for **all managed bots**, including when a human changes team. Repeated reset
 is harmless; it does not produce contacts, start goals, change roles or write another layer's fields.
 Scheduler registrations remain intact, and ordinary ticks rebuild fresh facts normally.

@@ -50,7 +50,7 @@ end
 ---@param bots Player[]
 local function begin(mode, bots)
     mode:Start()
-    expect(must(PW.Infection).State).to.exist()
+    assert(must(PW.Infection).State ~= nil, "Infection failed to start")
     for _, bot in ipairs(bots) do must(PW.MatchRules).Spawn(bot) end
     mode:Think()
 end

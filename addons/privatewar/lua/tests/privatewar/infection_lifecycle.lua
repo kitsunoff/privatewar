@@ -53,6 +53,7 @@ end
 ---@field now number
 ---@field results PW.MatchResult[]
 ---@field aborts string[]
+---@field stubs { Restore: fun(self: table) }[]
 
 ---@param stubber fun(tbl: table, key: string): any
 ---@param rounds integer
@@ -64,22 +65,25 @@ local function fixture(stubber, rounds, count)
         return key == "rounds" and rounds or (key == "intermission" and 1 or 120)
     end }, { __index = source }) --[[@as PW.InfectionMode]]
     ---@type PW.InfectionLifecycleFixture
-    local f = { mode = mode, players = {}, data = {}, now = 100, results = {}, aborts = {} }
+    local f = { mode = mode, players = {}, data = {}, now = 100, results = {}, aborts = {}, stubs = {} }
+    local function bind(tbl, key, callback)
+        f.stubs[#f.stubs + 1] = stubber(tbl, key).with(callback)
+    end
     for id = 1, count or 2 do
         local ply, data = actor(id, id > 1)
         f.players[#f.players + 1], f.data[ply] = ply, data
     end
     PW.ActiveMode = f.mode
-    stubber(player, "GetAll").with(function() return f.players end)
-    stubber(player, "GetHumans").with(function() return {} end) -- no fake entity is ever a net recipient
-    stubber(must(PW.Match), "GetPhase").with(function() return "LIVE" end)
-    stubber(must(PW.Match), "Abort").with(function(reason) f.aborts[#f.aborts + 1] = reason end)
-    stubber(must(PW.Match), "Finish").with(function(result) f.results[#f.results + 1] = result end)
-    stubber(_G, "CurTime").with(function() return f.now end)
-    stubber(math, "random").with(function() return 0 end)
-    stubber(must(PW.MatchRules), "Spawn").with(function(ply)
+    bind(player, "GetAll", function() return f.players end)
+    bind(player, "GetHumans", function() return {} end) -- no fake entity is ever a net recipient
+    bind(must(PW.Match), "GetPhase", function() return "LIVE" end)
+    bind(must(PW.Match), "Abort", function(reason) f.aborts[#f.aborts + 1] = reason end)
+    bind(must(PW.Match), "Finish", function(result) f.results[#f.results + 1] = result end)
+    bind(_G, "CurTime", function() return f.now end)
+    bind(math, "random", function() return 0 end)
+    bind(must(PW.MatchRules), "Spawn", function(ply)
         local d = must(f.data[ply])
-        expect(must(PW.Infection).Role(ply)).to.exist() -- roles must precede every initial/later playable spawn
+        assert(must(PW.Infection).Role(ply) ~= nil, "a playable spawn preceded its role")
         d.hp, d.max, d.walk, d.run, d.alive, d.spawns = 100, 100, 200, 400, true, d.spawns + 1
         d.resolved = must(PW.Loadout).Resolve(ply)
         must(must(PW.Operators).Refresh)(ply)
@@ -91,7 +95,7 @@ end
 ---@param f PW.InfectionLifecycleFixture
 local function start(f)
     f.mode:Start()
-    expect(f.aborts).to.deepEqual({})
+    assert(#f.aborts == 0, table.concat(f.aborts, "; "))
     for _, ply in ipairs(f.players) do must(PW.MatchRules).Spawn(ply) end
     f.mode:Think()
 end
@@ -337,6 +341,7 @@ local suite = {
                     expect(#f.results).to.equal(1)
                     for _, ply in ipairs(f.players) do expect(f.data[ply].spawns).to.equal(total) end
                     f.mode:Cleanup()
+                    for i = #f.stubs, 1, -1 do f.stubs[i]:Restore() end
                 end
             end
         },
