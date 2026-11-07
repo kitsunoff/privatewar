@@ -5,7 +5,7 @@
 ---@param value T?
 ---@return T
 local function must(value)
-    assert(value ~= nil, "Hardpoint draft dependency is absent; implementation and runtime RED are pending")
+    assert(value ~= nil, "Hardpoint dependency is absent; implementation and runtime RED are pending")
     return value
 end
 
@@ -33,7 +33,7 @@ local function snapshot(generation, visit, revision)
 end
 
 return {
-    groupName = "PW Hardpoint draft presentation and bot seams",
+    groupName = "PW Hardpoint presentation and bot seams",
     cases = {
         {
             name = "Hardpoint: rotation releases sticky holds including tiny teams",
@@ -58,7 +58,8 @@ return {
                         expect(must(rotated[id]).since).to.equal(1)
                     end
                 end
-                -- Immediate between-pass order/goal invalidation still needs a generic owner-provided seam.
+                -- Characterization only, NOT runtime acceptance. Add actual order AND public ClearGoal release
+                -- assertions once the shared owner supplies the concrete id/revision invalidation API.
             end
         },
         {
@@ -94,11 +95,9 @@ return {
                 expect(view.matchRemaining).to.equal(93)
                 -- PublicSnapshot must be tested against a real private state, not merely this public fixture.
                 -- The production codec's explicit field allowlist/length bound remains a phase 2 assertion.
-                local state = lib().NewState({ zones = { snapshot(1, 1, 1).zone } }, {
-                    pointTime = 10, tickInterval = 1, tickPoints = 1, scoreLimit = 99, matchTime = 100,
-                    maxSampleGap = 1, rotationBoundary = "exclude", deadlineBoundary = "exclude",
-                    limitPrecedence = "score", tieWinner = function() return nil end
-                }, 0, 1)
+                local state = lib().NewState({ zones = { snapshot(1, 1, 1).zone,
+                    { id = "synthetic_b", pos = Vector(80, 0, 0), radius = 20, above = 12, below = 4 }
+                } }, { pointTime = 60, scoreLimit = 250, matchTime = 600 }, 0, 1)
                 lib().Step(state, { at = 0, actors = {
                     { team = 2, pos = Vector(1, 0, 0), alive = true, observer = false, eligible = true }
                 } })
