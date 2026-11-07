@@ -411,6 +411,25 @@ teams; defenders get no hidden carrier/drop objective coordinates. The physical 
 The client rejects stale generation/serial values; draw-independent labels are shared, draw-ready data is cached
 outside HUDPaint. Implementation/gate evidence does not pass visual, spectator/P2P or human mode checkpoints.
 
+### Restricted spectator policy (frozen, tests first)
+
+Server question `PW_SpectatorPolicy(ply) -> PW.SpectatorPolicy?`, with
+`{ restricted = true, eligible = { [currentUserID] = true } }`. Nil preserves ordinary roaming parking. Any
+malformed non-nil policy fails closed to a fixed neutral view with no followed entity; an empty allow-set does
+the same. Only positive integer UserIDs whose value is exactly true are admitted, bounded to 128 entries.
+
+The lobby owner applies the policy synchronously before choosing a roaming camera in `enginePark`, through
+public `PW.Jip.RefreshSpectator(ply) -> handled`. It changes only camera state, not teams, bodies, admission,
+weapons or classes. A living valid eligible target is followed in-eye; an authorized current target is retained,
+otherwise the lowest eligible live UserID is selected. No caller/client target argument is accepted. Unexpected
+fields such as a forged `target` do not bypass the allow-set. Pure choice: `PW.Jip.SpectatorChoice`.
+
+Death, disconnect, team-changing/changed and round-preparing/prepared events refresh restrictions through the
+same owner; the visibility boundary rejects unauthorized observer targets before using them. The S&D provider
+derives eligibility only from its current own-team roster, current connection identities and living bodies,
+excluding enemies, dead/disconnected members and unknown JIP/replacement identities. No foreign private store
+or timer-based overwrite of a roaming camera is used. This completes an approved privacy rule, not a new mode.
+
 ## Domination
 
 Mode `dom` (modes lane, T-2.4; `lua/privatewar/modes/dom.lua`) and module `dom_flags` (`lua/privatewar/modules/dom_flags/`).
