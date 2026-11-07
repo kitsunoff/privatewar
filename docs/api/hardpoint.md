@@ -2,9 +2,14 @@
 
 Status: **frozen by orchestrator review; runtime implemented** in `modes/hardpoint.lua`,
 `modules/hardpoint/` and `hud/hardpoint.lua`. Authored `gm_construct` data is included.
-Shared commander containment/invalidation integration and normal-input smoke acceptance remain separate gates.
+Shared generic follower containment/frame identity remains a merge blocker, not a missing API-name decision.
 Observed test-first RED: 1396 passed / 12 failed / 0 skipped before implementation; activation/wire RED:
 1396 / 15 / 0. First runtime GREEN (before lifecycle/smoke additions): 1411 / 0 / 0.
+Normal-input bot target: 1 / 0 / 0. Historical pre-mount combined run: 1472 / 1 / 9.
+Latest mounted-source combined run: **1474 / 10 / 0** (passed / failed / skipped), 1484 cases / 125 groups.
+Nine failures are mounted Infection rules/presentation with no runtime implementation; one is the generic projected
+cylinder/frame-identity seam. Hardpoint itself is **24 / 1 / 0**, 25 cases. No mounted failure is disguised as a skip.
+The original 1395 baseline cases remain passing and unchanged.
 
 User-approved configurable preset (recorded during phase 1):
 
@@ -53,6 +58,7 @@ Declarations: `addons/privatewar/lua/privatewar/types/hardpoint.lua`.
 | `NewState(layout, rules, start, generation)`, `Step(state, sample)` | Pure mutable reducer and explicit effects. Rules contain only `pointTime`, `scoreLimit`, `matchTime`; the single boundary policy below is mandatory. |
 | `ArrivalFits(zone, projected, radius)` | Necessary containment check on the whole horizontal arrival disc and projected height, after navigation projection. Does not itself implement shared follower enforcement. |
 | `PublicSnapshot`, `AcceptSnapshot`, `View` | Allowlisted public state, ordered generation/visit/revision, cleanup tombstone, separate zone and match clocks. No occupants, counts, actor positions or actor identities. Reuse presentation output outside paint. |
+| `ControlToken(control, contested, ownTeam)` | Pure relative style token: neutral `text`, contested `warning`, otherwise `team_friendly` / `team_enemy`; no dark engine team colours. |
 
 `MAP.Modes.hardpoint = { zones = { ... } }`: a dense ordered array of 2..16 zone records.
 Each has unique nonempty `id` (at most 32 bytes), finite `pos`, finite `0 < radius <= 4096`,
@@ -91,6 +97,10 @@ Hardpoint emits `PW_ObjectiveInvalidated(id, revision)`; the commander consumes 
 brain can end the old frame. Objectives carry a current UserID `eligible` allowset,
 `revision` and `zone = { pos, radius, above, below }`. Generic followers enforce projected **and actual**
 cylinder containment. Invalidating a visit releases commander orders **and** goals through public `ClearGoal`.
+The shared follower must record `frame.state.id` and `frame.state.revision` for matching running/suspended
+brain invalidation. Through the integrated commander/brain commits, that S&D-owned follower implementation is
+still missing: its legacy path accepts an outside projected goal and does not record the revision. The executable
+HP seam case stays RED rather than silently accepting metadata declarations as enforcement.
 Hardpoint emits one `hold` objective for the active visit, wants every eligible living bot of the requested team,
 and invalidates the previous identity on rotation, finish and cleanup. Without the shared invalidation API,
 `Objectives` fails closed with an empty list rather than claiming legacy metadata stripping is safe.
@@ -114,6 +124,9 @@ spawn points per side share the observed directed nav components. Human travel/v
 backs `BotObjectives`. State and actor/sample buffers belong only to Hardpoint. Presence/effect buffers are reused;
 sampling uses `player.Iterator`, not entity searches. Kills retain TDM's normal score events, but HP points are
 independent whole-team counters (`pw_hp_score_1`, `pw_hp_score_2`). Holding never emits a personal reward.
+`MODE.HudScoreKey = "pw_hp_score_"` explicitly selects those objective counters for generic match status instead
+of inherited TDM kills. The matching presentation regressions were observed RED (3/2/0 across the five-case group)
+before the score-prefix and shared relative-palette runtime fix.
 
 `pw_hp_state` is server-to-client only, written/read by `WriteSnapshot`/`ReadSnapshot`, in this exact order:
 
@@ -130,6 +143,9 @@ Late clients send empty `pw_hp_request` through `PW.Net.Receive`: any sender, `L
 maximum zero payload bytes, owned by the enabled module. The handler also requires exactly zero bits and a running
 Hardpoint mode; it sends the current allowlisted snapshot only to the caller. Clients reject state above 1024 bits.
 HUD drawing uses the single HUD registry loop and only the active point marker plus labelled ZONE/MATCH clocks.
+Fresh-client 1280x720 evidence was inspected after the prefix/palette fix: the active marker and both clocks are
+readable, and match status shows HP 7/0 rather than team kills 0/0. This is agent visual evidence, not the user's
+manual checkpoint. Human-only stationary camera staging is not used as bot-movement evidence.
 
 ## Test-first evidence and remaining work
 
@@ -144,8 +160,23 @@ after implementation, unlike the reducer and activation/wire test-first cases.
 `hardpoint_bot_smoke.lua` contains executable `Hardpoint: bot holds then rotates through normal inputs`.
 It uses a real player bot, actual scheduler/commander/objective/follower/input code and a public board-provider
 fixture, observing both cylinder occupancy and actual user commands. It fails if the shared seam is missing;
-it is neither a skipped placeholder nor evidence until its real run passes. No teleport, direct damage,
+it is neither a skipped placeholder nor evidence for general projection safety. The real target passed with
+5.9 / 2.1 seconds of occupancy at visits 1 / 2, 1291 movement commands and 2977 units of travel in 29.689 seconds.
+The latest full run also passes it: 9.3 / 2.1 seconds, 933 movement commands, 2566 units of travel, visit 2 reached.
+No teleport, direct damage,
 fabricated contacts or foreign private-store access occurs in its asserted movement path.
+
+Latest executable case map:
+
+| Test file (`lua/tests/privatewar/`) | Cases | Latest result |
+| --- | --- | --- |
+| `mode_hardpoint.lua` | 10 | pass: preset, occupancy, height, ordered rotation, boundaries, stalls, continuity, deadline/draw, schema and filtering |
+| `hardpoint_presentation_bots.lua` | 5 | pass: score prefix, relative palette, legacy sticky-hold characterization, arrival geometry, allowlisted/stale snapshots and two clocks |
+| `hardpoint_integration.lua` | 3 | pass: activation rejection, actual codec, real authored-map activation / preserved DOM |
+| `hardpoint_lifecycle.lua` | 5 | pass: cleanup, once-only invalidation, request rejection, activation failure, no hold rewards |
+| `hardpoint_bot_smoke.lua` | 1 | pass: real normal-input hold then rotation |
+| `hardpoint_shared_seam.lua` | 1 | **fail**: generic follower accepts an out-of-cylinder projected arrival disc; also requires frame id/revision |
+
 Preserve all 1395 baseline cases, especially T-2.4, T-2.9, T-5.10/11 and T-8.4, XP/streaks and health/ammo HUD.
 
 After implementation: run full game gates, then stop for the human checkpoint: vertical/outnumbered contest,
