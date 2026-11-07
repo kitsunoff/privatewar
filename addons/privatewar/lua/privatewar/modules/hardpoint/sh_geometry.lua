@@ -17,15 +17,17 @@ function hp.Inside(zone, pos)
     return dx * dx + dy * dy <= zone.radius * zone.radius and dz >= -zone.below and dz <= zone.above
 end
 
-function hp.Presence(zone, actors)
+function hp.Presence(zone, actors, out)
     local first, second = false, false
     for _, actor in ipairs(actors) do
         if actor.alive and actor.eligible and not actor.observer and hp.Inside(zone, actor.pos) then
             if actor.team == 1 then first = true elseif actor.team == 2 then second = true end
         end
     end
-    return { control = first and not second and 1 or second and not first and 2 or 0,
-        contested = first and second }
+    out = out or { control = 0, contested = false }
+    out.control = first and not second and 1 or second and not first and 2 or 0
+    out.contested = first and second
+    return out
 end
 
 function hp.ScoreDelta(presence, points)
@@ -65,4 +67,13 @@ function hp.ArrivalFits(zone, projected, arrivalRadius)
     if not finite(arrivalRadius) or arrivalRadius < 0 or arrivalRadius > zone.radius then return false end
     local dx, dy = projected.x - zone.pos.x, projected.y - zone.pos.y
     return hp.Inside(zone, projected) and dx * dx + dy * dy <= (zone.radius - arrivalRadius) ^ 2
+end
+
+function hp.ValidateActivation(layout, probe)
+    local valid, reason = hp.ValidateLayout(layout)
+    if not valid then return false, reason end
+    for _, zone in ipairs(layout.zones) do
+        if not probe(zone) then return false, "Hardpoint zone " .. zone.id .. " has no usable floor, hull or route" end
+    end
+    return true
 end
