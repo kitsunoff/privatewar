@@ -85,6 +85,20 @@ tier per bot for `mix`) at creation, and a personality as soon as the bot's team
 | `danger` | per-area cost table reference | nav (baked about once per second) | nav | design (`07 d.6`). **Not on the board**: the baked table is one per navigation service, shared by all bots (`service.GetCostTable()`, "Goal API") |
 | `debug` | table (counters, ms per layer) | every writer adds its own counters | overlay | design (`07 d.11`). Written today: `debug.perception = { candidates, traces }`, `debug.aim = { focus, err, tolerance, fire, part, blockedSince }` |
 
+### Tactics relationship reset
+
+The `bots_tactics` owner consumes `PW_PlayerTeamChanging`, `PW_PlayerTeamChanged`, `PW_RoundPreparing`
+and `PW_RoundPrepared`. Each notification synchronously forgets its own hurt/attacker history and
+cached `board.tactics` for **all managed bots**, including when a human changes team. Repeated reset
+is harmless; it does not produce contacts, start goals, change roles or write another layer's fields.
+Scheduler registrations remain intact, and ordinary ticks rebuild fresh facts normally.
+
+Queued cover searches carry unique request tokens. Reset invalidates them without removing another
+owner's FIFO jobs. An obsolete callback cannot trace old threat positions, restore cached cover,
+consume a newer pending request or write to a replaced board/facts generation. Only the matching live
+request writes its owner's `tactics.cover`. This is not a bot teleport or an alternative damage path.
+Tests: `bots_tactics_reset.lua`; no optional addon is required for these cases.
+
 Types (the field lists of the rows marked "contract"; names the design does not give are in "Open in design"):
 
 ```lua

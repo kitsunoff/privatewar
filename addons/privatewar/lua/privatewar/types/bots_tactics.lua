@@ -168,7 +168,7 @@
 ---@class PW.BotTacticsStore
 ---@field hurt table<Player, { at: number, attacker: Entity }> weak keys
 ---@field registered table<Player, string> scheduler id per bot (weak keys)
----@field pending table<Player, boolean> a cover search is queued (weak keys)
+---@field pending table<Player, table|boolean> unique queued-job tokens; boolean only in an older retained store
 
 ---@class PW
 ---@field BotTactics? PW.BotTacticsLib

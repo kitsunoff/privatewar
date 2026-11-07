@@ -1,0 +1,48 @@
+local lib = PW.Infection --[[@as PW.InfectionLib]]
+include("privatewar/modules/pw_infection_rules/sv_round.lua")
+include("privatewar/modules/pw_infection_rules/sv_snapshot.lua")
+
+---@param phase PW.PhaseName
+function MODULE:PW_PhaseChange(phase)
+    if phase == "LOBBY" or phase == "PREMATCH" then SetGlobal2Bool("pw_infection_results", false) end
+end
+
+PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
+    if lib.Active() then lib.Disconnect(ply) end
+end)
+
+PW.HookFor(MODULE, "PlayerInitialSpawn", function(_, ply)
+    local generation = lib.State
+    timer.Simple(1, function()
+        if IsValid(ply) and lib.Active() and lib.State == generation then lib.Publish() end
+    end)
+end)
+
+PW.HookFor(MODULE, "PlayerCanPickupWeapon", function(_, ply, wep)
+    if not lib.Active() then return end
+    if lib.Role(ply) == nil then return false end
+    if lib.Role(ply) == "infected" and wep:GetClass() ~= "weapon_fists" then return false end
+end)
+
+PW.HookFor(MODULE, "PlayerCanPickupItem", function(_, ply)
+    if lib.Active() and lib.Role(ply) ~= "survivor" then return false end
+end)
+
+---@param target Entity
+---@param damage CTakeDamageInfo
+PW.HookFor(MODULE, "EntityTakeDamage", function(_, target, damage)
+    if not lib.Active() or not target:IsPlayer() then return end
+    local ply = target --[[@as Player]]
+    local s = assert(lib.State)
+    if not s.playing or lib.Role(ply) == nil then return true end
+    local attacker = damage:GetAttacker()
+    if IsValid(attacker) and attacker:IsPlayer() and attacker ~= ply
+        and (lib.Role(attacker --[[@as Player]]) == nil
+            or not assert(PW.IsEnemy)(ply, attacker --[[@as Player]])) then return true end
+end)
+
+-- Only human commands here; bots retain the sole generic bots_input writer.
+PW.HookFor(MODULE, "StartCommand", function(_, ply, cmd)
+    if ply:IsBot() or not lib.Active() then return end
+    if not assert(lib.State).playing or lib.Role(ply) == nil then cmd:ClearButtons() cmd:ClearMovement() end
+end)
