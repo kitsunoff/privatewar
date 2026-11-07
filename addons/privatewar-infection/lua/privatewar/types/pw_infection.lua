@@ -1,6 +1,5 @@
 ---@meta
--- Optional addon scaffold only: no mode, module, hook, timer or runtime API is registered here.
--- Gameplay implementation waits for the orchestrator's shared-contract freeze and approved rule preset.
+-- Optional addon API. Source files, not successful API registration, establish installation in tests.
 
 ---Either a human player or a managed player bot can hold either role.
 ---@alias PW.InfectionRole "survivor"|"infected"
@@ -16,11 +15,25 @@
 ---@field initial boolean
 ---@field present boolean
 ---@field converted boolean
+---@field alive boolean
+---@field deadLife? integer death callback deduplication, independent of actor type
+---@field won? boolean sealed at the round outcome, never retroactive for converted players
 
 ---@class PW.InfectionRound
 ---@field players table<string, PW.InfectionLife>
 ---@field deadline number
 ---@field winner? PW.InfectionRole immutable once decided
+
+---@class PW.InfectionStanding
+---@field id string
+---@field score integer
+
+---@class PW.InfectionSummary
+---@field reason string
+---@field teams boolean
+---@field draw boolean
+---@field winner? string
+---@field standings PW.InfectionStanding[]
 
 ---@class PW.InfectionRulesLib
 ---@field PickSeed fun(players: PW.InfectionParticipant[], previous: string?, rng: fun(): number): string?
@@ -29,7 +42,7 @@
 ---@field Disconnect fun(round: PW.InfectionRound, id: string, now: number)
 ---@field Admit fun(round: PW.InfectionRound, player: PW.InfectionParticipant): boolean
 ---@field Winner fun(round: PW.InfectionRound, now: number): PW.InfectionRole?
----@field Summary fun(rounds: PW.InfectionRound[]): PW.MatchResult
+---@field Summary fun(rounds: PW.InfectionRound[]): PW.InfectionSummary
 
 ---@class PW
 ---@field InfectionRules? PW.InfectionRulesLib optional addon; declaration is not an implementation
@@ -40,12 +53,87 @@
 ---@field survivors integer
 ---@field infected integer
 ---@field deadline number
----@field role PW.InfectionRole
+---@field role PW.InfectionRole|"waiting"
 ---@field personalWins integer
+---@field active? boolean false is a revisioned cleanup tombstone
+---@field intermission? boolean
+---@field infections? integer informational only
 
 ---@class PW.InfectionPresentationLib
 ---@field Accept fun(current: PW.InfectionSnapshot?, incoming: table<string, any>): PW.InfectionSnapshot?
 ---@field Model fun(snapshot: PW.InfectionSnapshot, now: number): table<string, any>
+---@field Encode fun(writer: PW.InfectionWriter, incoming: table<string, any>): boolean validate before any write
+---@field Decode fun(reader: PW.InfectionReader): table<string, any>
+
+---@class PW.InfectionWriter
+---@field uint fun(value: integer, bits: integer)
+---@field bool fun(value: boolean)
+---@field float fun(value: number)
+
+---@class PW.InfectionReader
+---@field uint fun(bits: integer): integer
+---@field bool fun(): boolean
+---@field float fun(): number
 
 ---@class PW
 ---@field InfectionPresentation? PW.InfectionPresentationLib optional addon presentation reducer
+
+---@class PW.InfectionPursuitPlan
+---@field sprint boolean
+---@field forward number
+---@field point? Vector only a legal contact's last observed point
+---@field target? Entity
+
+---@class PW.InfectionAILib
+---@field Contact fun(contacts: PW.BotContact[]): PW.BotContact?
+---@field Plan fun(pos: Vector, contact: PW.BotContact, walkSpeed: number): PW.InfectionPursuitPlan
+
+---@class PW.InfectionState
+---@field mode PW.RoundBase
+---@field current? PW.InfectionRound
+---@field completed PW.InfectionRound[]
+---@field actors table<string, Player> current admitted identity -> entity
+---@field identities table<Player, string> entity -> admitted identity, weak keys
+---@field lives table<Player, integer> per-entity new-life generation, weak keys
+---@field history table<string, Player> last entity of each participant for final standings
+---@field userIds table<string, integer> safe result identity for departed participants
+---@field infections table<string, integer> informational counters, never score events
+---@field previous? string previous seed identity
+---@field round integer
+---@field playing boolean
+---@field credited boolean round was added to completed once
+---@field zombie boolean false after an installed animation compatibility failure
+
+---@class PW.InfectionMode : PW.RoundBase
+---@field Start fun(self: PW.InfectionMode)
+---@field Think fun(self: PW.InfectionMode)
+---@field Cleanup fun(self: PW.InfectionMode)
+---@field _Rounds? PW.RoundState
+---@field PW_CanRespawn fun(self: PW.InfectionMode, ply: Player): boolean
+---@field PW_CanRunBotInput fun(self: PW.InfectionMode, ply: Player): boolean
+---@field PW_PlayerLoadout fun(self: PW.InfectionMode, ply: Player): PW.Loadout?
+---@field PW_PlayerOverrides fun(self: PW.InfectionMode, ply: Player): PW.PlayerOverrideProfile?
+---@field PW_PlayerModelOverride fun(self: PW.InfectionMode, ply: Player): string?
+---@field PW_PhaseChange fun(self: PW.InfectionMode, phase: PW.PhaseName)
+
+---@class PW.InfectionLib
+---@field State? PW.InfectionState server-owned, read-only to consumers
+---@field View? PW.InfectionSnapshot client-owned accepted snapshot
+---@field Revision integer persistent monotonic outgoing revision
+---@field Identity fun(ply: Player): string
+---@field Role fun(ply: Player): PW.InfectionRole?
+---@field Active fun(): boolean
+---@field Start fun(mode: PW.RoundBase): boolean
+---@field Prepare fun(round: integer)
+---@field Spawned fun(ply: Player)
+---@field Death fun(victim: Player, attacker: Entity)
+---@field Disconnect fun(ply: Player)
+---@field EndRound fun()
+---@field Clear fun()
+---@field Snapshot fun(ply: Player): PW.InfectionSnapshot?
+---@field Publish fun()
+---@field Result fun(): PW.MatchResult
+
+---@class PW
+---@field InfectionAI? PW.InfectionAILib
+---@field Infection? PW.InfectionLib

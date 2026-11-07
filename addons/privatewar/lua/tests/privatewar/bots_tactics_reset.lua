@@ -151,6 +151,31 @@ suite.cases[#suite.cases + 1] = {
 }
 
 suite.cases[#suite.cases + 1] = {
+    name = "Tactics match end: owner forgets hurt cover and queued work without losing scheduler registration",
+    func = function()
+        local ply = bot()
+        local board = boardOf(ply)
+        ---@type fun()?
+        local queued
+        local searches = 0
+        stub(must(PW.Bot), "Get").with(function(who) if who == ply then return board end end)
+        stub(player, "GetBots").with(function() return { ply } end)
+        stub(must(PW.BotScheduler), "Enqueue").with(function(job) queued = job end)
+        stub(navmesh, "Find").with(function() searches = searches + 1 return {} end)
+        PW._BotTactics.hurt[ply] = { at = 1, attacker = NULL }
+        PW._BotTactics.registered[ply] = "tactics:test"
+        must(lib()._QueueCover)(ply, board, must(board.tactics))
+        PW.Call(owner(), "PW_MatchEnd", {})
+        expect(board.tactics).to.beNil()
+        expect(PW._BotTactics.hurt).to.deepEqual({})
+        expect(PW._BotTactics.pending).to.deepEqual({})
+        expect(PW._BotTactics.registered[ply]).to.equal("tactics:test")
+        must(queued)()
+        expect(searches).to.equal(0)
+    end
+}
+
+suite.cases[#suite.cases + 1] = {
     name = "Tactics queue: ordinary live work runs once, writes only cover and preserves pending suppression",
     func = function()
         local ply = bot()

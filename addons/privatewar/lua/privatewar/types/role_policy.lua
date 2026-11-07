@@ -2,6 +2,13 @@
 -- Optional generic policies; absent questions preserve ordinary modes.
 ---@alias PW.LoadoutKindPolicy fun(ply: Player, kind: string): boolean?
 ---@alias PW.JoinInProgressPolicy fun(ply: Player): boolean?
+---@alias PW.BotInputPolicy fun(bot: Player): boolean?
+
+---@class PW.BotsManagerLib
+---@field IsLeaving? fun(ply: Player): boolean manager-owned pending departure, excludes quota-kicked roster entries
+
+---@class PW.ThrowablesLib
+---@field Revoke? fun(owner: Player) remove only this owner's live projectiles without detonation
 
 ---@class PW.PerksLib
 ---@field Revoke? fun(ply: Player) remove owned instances and cached modifiers
