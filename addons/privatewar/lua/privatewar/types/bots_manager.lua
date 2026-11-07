@@ -120,7 +120,7 @@
 ---Internal (server): a fresh store (tests use their own; the real one is PW._BotsManager).
 ---@field _NewStore? fun(opts?: PW.BotsStoreOptions): PW.BotsStore
 ---Internal (server): one reconciliation step; returns the created and the kicked count.
----@field _Step? fun(store: PW.BotsStore, prefer?: integer): integer, integer
+---@field _Step? fun(store: PW.BotsStore, prefer?: integer, boundary?: boolean): integer, integer
 ---Internal (server): kicks every bot (entering LOBBY, a map that stays in LOBBY); returns the kicked count.
 ---@field _KickAll? fun(store: PW.BotsStore, reason: string): integer
 ---Internal (server): a human joined: one step that kicks a bot of the team the human will get.

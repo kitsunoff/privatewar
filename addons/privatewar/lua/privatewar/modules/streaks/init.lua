@@ -101,6 +101,7 @@ local function refreshSet(s, ply, st)
 end
 
 function lib._OnSpawn(ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.phase() ~= "LIVE" then return false end
     local st = stateOf(s, ply)
@@ -111,6 +112,7 @@ end
 
 function lib._OnScore(ply, eventId, points)
     local s = store()
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return {} end
     if s.phase() ~= "LIVE" then return {} end
     if not lib._Counts(s.setting("chain") == true, s.depth > 0) then return {} end
     local gain = lib._Gain(s.setting("earn") == "score" and "score" or "kills", eventId, points)
@@ -162,6 +164,7 @@ function lib.Set(ply)
 end
 
 function lib.Give(ply, id)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.lookup(id) == nil then return false end
     local st = stateOf(s, ply)
@@ -176,6 +179,23 @@ local function finish(inst)
     inst:Remove()
 end
 
+function lib.EndEffects(ply)
+    for inst in pairs(lib._Instances) do
+        if inst._Owner == ply then finish(inst) end
+    end
+    local reveal = PW._Reveal
+    if reveal ~= nil then
+        for i = #reveal.jams, 1, -1 do
+            if reveal.jams[i].owner == ply then table.remove(reveal.jams, i) end
+        end
+    end
+end
+
+function lib.Revoke(ply)
+    lib.EndEffects(ply)
+    lib._Clear(ply)
+end
+
 ---Makes the activation instance and ends it after Duration.
 ---@param ply Player
 ---@param def PW.Streak
@@ -187,6 +207,7 @@ local function activate(ply, def)
 end
 
 function lib.Use(ply, id)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.phase() ~= "LIVE" or not s.alive(ply) then return false end
     local st = s.players[ply]
@@ -201,6 +222,7 @@ function lib.Use(ply, id)
 end
 
 function lib.Ready(bot)
+    if PW.Ask("PW_CanUseLoadoutKind", bot, "streaks") == false then return nil end
     local s = store()
     local st = s.players[bot]
     if st == nil then return nil end
@@ -251,6 +273,11 @@ function MODULE:PW_MatchEnd()
     if reveal ~= nil then reveal.jams = {} end
 end
 
+function MODULE:PW_RoundPreparing()
+    for inst in pairs(lib._Instances) do finish(inst) end
+    if PW._Reveal ~= nil then PW._Reveal.jams = {} end
+end
+
 PW.HookFor(MODULE, "PlayerSpawn", function(_, ply)
     lib._OnSpawn(ply)
 end)
@@ -260,5 +287,5 @@ PW.HookFor(MODULE, "PostPlayerDeath", function(_, ply)
 end)
 
 PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
-    lib._Clear(ply)
+    lib.Revoke(ply)
 end)

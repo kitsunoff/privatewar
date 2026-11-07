@@ -54,6 +54,10 @@ end
 PW._Wildcards = PW._Wildcards or setmetatable({}, { __mode = "k" })
 
 function lib._EquipWildcards(ply, loadout, lookup)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "wildcards") == false then
+        PW._Wildcards[ply] = nil
+        return
+    end
     local ids = lib._Items(loadout[lib.WildcardSlot]) or {}
     ---@type string[]
     local equipped = {}

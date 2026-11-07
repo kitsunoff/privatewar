@@ -129,7 +129,12 @@ function lib._Clear(ply)
     s.sent[ply] = nil
 end
 
+function lib.Revoke(ply)
+    lib._Clear(ply)
+end
+
 function lib.Refresh(ply, loadout)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "perks") == false then return lib.Revoke(ply) end
     local s = store()
     endPerks(s, ply)
     local loadoutStore = rawget(PW, "_Loadout") --[[@as PW.LoadoutStore?]]

@@ -82,6 +82,22 @@ function lib._Clear(ply)
     endAll(store(), ply)
 end
 
+function lib.Revoke(ply)
+    local s = store()
+    for _, entry in pairs(s.players[ply] or {}) do
+        local class = entry.weapon
+        if class ~= nil and IsValid(ply) then
+            local wep = ply:GetWeapon(class)
+            if IsValid(wep) then wep:SetDTFloat(0, 0) end
+            ply:StripWeapon(class)
+            local ammo = lib._AmmoOf(class)
+            if ammo ~= nil then ply:SetAmmo(0, ammo) end
+        end
+    end
+    endAll(s, ply)
+    s.previous[ply] = nil
+end
+
 ---The first item id of a loadout value (a slot may hold a list).
 ---@param value any
 ---@return string?
@@ -94,6 +110,7 @@ end
 function lib._Equip(ply)
     local s = store()
     endAll(s, ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "equipment") == false then return end
     local loadout = s.resolve(ply)
     ---@type table<string, PW.EquipmentEntry>
     local slots = {}
@@ -136,6 +153,7 @@ end
 ---@return PW.EquipmentEntry?
 function lib._UsableEntry(ply, slot)
     local s = store()
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "equipment") == false then return nil end
     if s.phase() ~= "LIVE" or not s.alive(ply) then return nil end
     if s.players[ply] == nil then lib._Equip(ply) end
     return (s.players[ply] or {})[slot]
@@ -148,6 +166,7 @@ end
 ---@param opts PW.EquipmentUse?
 ---@return boolean
 function lib._Spend(ply, slot, entry, opts)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "equipment") == false then return false end
     local s = store()
     local now = s.clock()
     if not lib._CanUse(entry, now, lib.Cooldown) then return false end
@@ -183,9 +202,16 @@ end
 
 function MODULE:PW_LoadoutGiven(ply)
     -- A tick later: perks and wildcards are equipped on the same notification and may answer PW_EquipmentCount.
+    local s = store()
+    local generation = s.players[ply]
     timer.Simple(0, function()
-        if IsValid(ply) and ply:Alive() and store().phase() == "LIVE" then lib._GiveWeapons(ply) end
+        if store() == s and generation ~= nil and s.players[ply] == generation
+            and IsValid(ply) and ply:Alive() and s.phase() == "LIVE" then lib._GiveWeapons(ply) end
     end)
+end
+
+function MODULE:PW_RoundPreparing()
+    for ply in pairs(store().players) do lib.Revoke(ply) end
 end
 
 PW.HookFor(MODULE, "PlayerSwitchWeapon", function(_, ply, old, new)
