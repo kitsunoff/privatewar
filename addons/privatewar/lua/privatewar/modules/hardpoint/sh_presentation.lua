@@ -1,5 +1,12 @@
 local hp = assert(PW.Hardpoint)
 
+function hp.ControlToken(control, contested, ownTeam)
+    if contested then return "warning" end
+    if control ~= 1 and control ~= 2 then return "text" end
+    if ownTeam ~= 1 and ownTeam ~= 2 then return "text" end
+    return control == ownTeam and "team_friendly" or "team_enemy"
+end
+
 function hp.PublicSnapshot(state, revision)
     local zone = state.layout.zones[state.index]
     return { generation = state.generation, revision = revision, visit = state.visit, active = not state.finished,

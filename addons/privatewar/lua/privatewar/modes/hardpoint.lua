@@ -13,6 +13,7 @@ MODE.Settings = {
 
 local mode = MODE --[[@as PW.HardpointMode]]
 mode._ScoreKey = "pw_hp_score_"
+mode.HudScoreKey = mode._ScoreKey
 
 ---@param data any
 ---@return boolean, string?
