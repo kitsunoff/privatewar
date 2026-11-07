@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "LuaJIT",
+  "runtime.special": {
+    "include": "dofile",
+    "IncludeCS": "dofile"
+  },
+  "runtime.nonstandardSymbol": ["!", "!=", "&&", "||", "//", "/**/", "continue"],
+  "workspace.library": [".nix/glua-api/library", ".nix/gluatest/lua/gluatest"],
+  "workspace.checkThirdParty": false,
+  "workspace.ignoreDir": [
+    ".git",
+    ".nix",
+    ".claude",
+    "private",
+    "dist",
+    "design",
+    "notes",
+    "tests/gates/fixtures",
+    "addons/privatewar/lua/privatewar_fixtures/gadgets/broken_syntax.lua"
+  ],
+  "diagnostics.severity": {},
+  "diagnostics.groupSeverity": {
+    "ambiguity": "Error",
+    "await": "Error",
+    "codestyle": "Error",
+    "conventions": "Error",
+    "duplicate": "Error",
+    "global": "Error",
+    "luadoc": "Error",
+    "redefined": "Error",
+    "strict": "Error",
+    "strong": "Error",
+    "type-check": "Error",
+    "unbalanced": "Error",
+    "unused": "Error"
+  },
+  "diagnostics.groupFileStatus": {
+    "strict": "Opened",
+    "strong": "Opened",
+    "type-check": "Opened"
+  },
+  "type.weakUnionCheck": false,
+  "type.weakNilCheck": false
+}

@@ -1,0 +1,107 @@
+---@meta
+-- Types of the progression module (T-4.9, 06-progression.md d.1, d.2, d.4). Source: lua/privatewar/modules/progression/
+-- (shared.lua, sh_curves.lua, sh_unlocks.lua: pure rules; init.lua: the server session state) and
+-- lua/privatewar/hud/progression.lua (the XP bar).
+
+---The curve and switch values in force. Read from the settings by PW.Progression._Params.
+---@class PW.ProgressionParams
+---@field maxLevel integer player level cap (default 55)
+---@field xpBase number XP to next player level L is floor(xpBase * L ^ xpExp)
+---@field xpExp number
+---@field maxWeaponLevel integer weapon level cap (default 30)
+---@field weaponBase number XP to next weapon level L is floor(weaponBase * L ^ weaponExp)
+---@field weaponExp number
+---@field xpScale number multiplier of every XP gain (double XP without unlockall)
+---@field unlockAll boolean
+
+---The shape of one player's progression. T-4.10 stores and sends exactly this.
+---@class PW.ProgressionState
+---@field xp number total player XP
+---@field weapons table<string, number> total XP per weapon class
+
+---What the unlock rules read about one player. Injected in tests.
+---@class PW.ProgressionView
+---@field level integer player level
+---@field weaponLevel fun(weaponId: string): integer
+---@field lookup PW.LoadoutLookup catalogue lookup (kind, id)
+---@field unlockAll boolean
+---@field maxAttachments integer loadout.maxattachments
+
+---Internal (server): sessions and the injectable engine edges. T-4.10 adds the batching and match records
+---(types/progression_storage.lua).
+---@class PW.ProgressionStore
+---@field players table<Player, PW.ProgressionState> weak keys
+---@field read fun(id: string): any settings reader
+---@field publish fun(ply: Player, level: integer, into: integer, need: integer) NW2 publisher
+---@field notify fun(name: string, ...: any) notification dispatch
+
+---@class PW.ProgressionStoreOpts
+---@field read? fun(id: string): any
+---@field publish? fun(ply: Player, level: integer, into: integer, need: integer)
+---@field notify? fun(name: string, ...: any)
+
+---Progression module. Server state is per player and lives for the session; persistence and the 10 s deltas are
+---T-4.10. Notifications (no return value): PW_ProgressionXP(ply, xp, weaponClass?) after every gain (scaled XP),
+---PW_ProgressionLevelUp(ply, level, oldLevel), PW_ProgressionWeaponLevelUp(ply, weaponClass, level, oldLevel).
+---NW2 on the player (read by the HUD): Int "pw_level", "pw_xpin" (XP into the level), "pw_xpneed" (0 at the cap).
+---@class PW.ProgressionLib
+---The design defaults.
+---@field Defaults PW.ProgressionParams
+---Server. The state of a player (a copy): total XP and XP per weapon class.
+---@field GetState fun(ply: Player): PW.ProgressionState
+---Server. Replaces the state (sanitised: finite, non-negative); T-4.10 calls it with the loaded file.
+---@field SetState fun(ply: Player, state: PW.ProgressionState)
+---Server. Adds XP (times progression.xpscale) to the player, and to the weapon class when given.
+---@field AddXP fun(ply: Player, amount: number, weaponClass?: string)
+---Level of the player: the server state, a client the NW2 value of its own HUD.
+---@field GetLevel fun(ply: Player): integer
+---Client and server: XP into the level and XP needed for the next one (0 at the cap), from NW2.
+---@field GetProgress fun(ply: Player): integer, integer
+---Shared. Level of the player's weapon class (1 when unknown); a client answers for the local player from the levels
+---the server sent (T-4.10).
+---@field GetWeaponLevel fun(ply: Player, weaponClass: string): integer
+---Shared. Is the item unlocked for the player (see sh_unlocks.lua for the rules). kind is a registry kind
+---("weapons", "perks", "equipment", "streaks", "wildcards") or "attachments" / "camos" with id "<weapon>:<option>".
+---With the setting progression.unlockall everything but Hidden options is open. The server is authoritative; a
+---client answers for the local player from the levels the server sent (T-4.10, pw_progression_levels).
+---@field IsUnlocked fun(ply: Player, kind: string, id: string): boolean
+---Shared (as IsUnlocked). The set of option ids of a build that the player has not unlocked.
+---@field LockedOptions fun(ply: Player, weaponId: string, build: table<string, string|false>): table<string, boolean>
+---Shared (as IsUnlocked). How many uncurated attachments the player may put on the weapon.
+---@field AttachmentLimit fun(ply: Player, weaponId: string): integer
+---Internal: the NW2 keys.
+---@field _KeyLevel string
+---@field _KeyInto string
+---@field _KeyNeed string
+---Internal, pure: parameters from a reader of setting ids.
+---@field _Params fun(read: fun(id: string): any): PW.ProgressionParams
+---Internal, pure: floor(base * level ^ exponent).
+---@field _XpToNext fun(level: number, base: number, exponent: number): integer
+---Internal, pure: total XP at which the level starts (level 1 is 0).
+---@field _XpForLevel fun(level: integer, base: number, exponent: number): integer
+---Internal, pure: level, XP into it and XP to the next (0 at the cap) for a total XP.
+---@field _LevelOf fun(xp: number, base: number, exponent: number, maxLevel: integer): integer, integer, integer
+---@field _PlayerLevel fun(params: PW.ProgressionParams, xp: number): integer, integer, integer
+---@field _WeaponLevel fun(params: PW.ProgressionParams, xp: number): integer, integer, integer
+---Internal, pure: bar fill 0..1 (full when there is no next level).
+---@field _Fraction fun(into: number, need: number): number
+---Internal, pure: the attachments a weapon level allows under the cap.
+---@field _AttachmentLimit fun(weaponLevel: integer, cap: integer): integer
+---Internal, pure: the unlock rules over a view.
+---@field _IsUnlocked fun(view: PW.ProgressionView, kind: string, id: string): boolean
+---@field _LockedOptions fun(view: PW.ProgressionView, weaponId: string, build: table<string, string|false>):
+---table<string, boolean>
+---Internal: a store over injected edges.
+---@field _NewStore fun(opts?: PW.ProgressionStoreOpts): PW.ProgressionStore
+---Internal: the score listener body (weapon XP only with a valid weapon; bots earn nothing).
+---@field _OnScoreEvent fun(store: PW.ProgressionStore, ply: Player, eventId: string, points: number, xp: number,
+---weapon?: Weapon)
+---@field _GetState fun(store: PW.ProgressionStore, ply: Player): PW.ProgressionState
+---@field _SetState fun(store: PW.ProgressionStore, ply: Player, state: PW.ProgressionState)
+---@field _Level fun(store: PW.ProgressionStore, ply: Player): integer
+---@field _WeaponLevelOf fun(store: PW.ProgressionStore, ply: Player, weaponClass: string): integer
+---@field _ViewOf fun(store: PW.ProgressionStore, ply: Player, lookup: PW.LoadoutLookup): PW.ProgressionView
+
+---@class PW
+---@field Progression? PW.ProgressionLib the progression module
+---@field _Progression? PW.ProgressionStore internal

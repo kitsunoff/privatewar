@@ -1,0 +1,125 @@
+---@meta
+-- Types of perks (T-4.4; 05-loadout.md d.4, d.8; 00-core.md d.11). Source: lua/privatewar/kinds/perks.lua (the kind),
+-- lua/privatewar/modules/perks/ (shared.lua: slots, group rule, multiplier chain, owner filter, PW.Stat; init.lua:
+-- per-player instances, recompute, event dispatch, hooks) and lua/privatewar/perks/ (the sample perks).
+
+---One perk, a file in lua/privatewar/perks/ with a PERK table. Data plus optional event methods; never
+---auto-subscribed. Each equipped perk is a per-player instance (PW.Instance) from spawn to death, loadout change or
+---match end, so the methods keep per-owner state on self and may use self:Hook / self:Timer, which end with it.
+---Event methods run through PW.Call and only for the owner.
+---@class PW.Perk : PW.Entity
+---Required. Display name.
+---@field Name string
+---Required. The perk group; a perk slot accepts only perks of its own group (05-loadout.md d.4).
+---@field Group number
+---Short text for the class screen.
+---@field Description? string
+---Pick X cost (05-loadout.md d.2); default 1.
+---@field Cost? number
+---Multipliers by stat id, read through PW.Stat. Weapon stats (reload_time, draw_time, ads_time, sprint_to_fire,
+---recoil, spread) also reach the weapon through PW.SetStatMods.
+---@field Stats? table<string, number>
+---The instance was created (spawn or loadout change).
+---@field OnEquip? fun(self: PW.Perk, owner: Player)
+---The instance ends (death, loadout change, match end, disconnect).
+---@field OnUnequip? fun(self: PW.Perk, owner: Player)
+---The owner killed another player.
+---@field OnKill? fun(self: PW.Perk, owner: Player, victim: Player, dmg: CTakeDamageInfo?)
+---The owner died (called before the instance ends).
+---@field OnDeath? fun(self: PW.Perk, owner: Player, attacker: Entity, dmg: CTakeDamageInfo?)
+---The owner took damage.
+---@field OnDamaged? fun(self: PW.Perk, owner: Player, attacker: Entity, dmg: CTakeDamageInfo?)
+---The owner damaged another player.
+---@field OnDealDamage? fun(self: PW.Perk, owner: Player, victim: Player, dmg: CTakeDamageInfo?)
+---Instance helpers (set on the instance by PW.Instance; see PW.Instance).
+---@field Hook? fun(self: PW.Perk, name: string, fn: fun(self: PW.Perk, ...: any): ...: any)
+---@field Timer? fun(self: PW.Perk, delay: number, reps: integer, fn: fun(self: PW.Perk))
+---@field Remove? fun(self: PW.Perk)
+
+---The equipped perks of one player (server).
+---@class PW.PerksEntry
+---@field ids string[] perk ids in slot order
+---@field instances PW.Instance[] one instance per perk, same order
+
+---One owner-only event call chosen by _Targets.
+---@class PW.PerkTarget
+---@field owner any the player whose perks are called
+---@field method string "OnKill", "OnDeath", "OnDamaged" or "OnDealDamage"
+---@field other any the other side (victim or attacker)
+
+---A stat source: the multiplier tables it contributes for a player (a wildcards module registers one).
+---@alias PW.PerkStatSource fun(ply: any): table<string, number>[]?
+
+---Internal (server): per-player state and injectable engine calls.
+---@class PW.PerksStore
+---@field players table<any, PW.PerksEntry> weak-keyed: player -> equipped perks
+---@field stats table<any, table<string, number>> weak-keyed: player -> cached multipliers (PW.Stat)
+---@field sent table<any, table<string, number>> weak-keyed: player -> the weapon mods last sent
+---@field lookup fun(id: string): PW.Perk? the perk definition; default the perks registry (valid only)
+---@field send fun(ply: any, mods: table<string, number>) default PW.SetStatMods
+---@field isPlayer fun(ent: any): boolean default IsValid(ent) and ent:IsPlayer()
+
+---Options of PW.Perks._NewStore; every field defaults to the engine.
+---@class PW.PerksStoreOptions
+---@field lookup? fun(id: string): PW.Perk?
+---@field send? fun(ply: any, mods: table<string, number>)
+---@field isPlayer? fun(ent: any): boolean
+
+---@class PW
+---@field Perks? PW.PerksLib the perks module (nil when the module is missing)
+---PW.Stat(ply, stat, base): base times the cached product of the player's perk, wildcard and mode multipliers for
+---the stat (05-loadout.md d.8). Recomputed only on spawn and loadout change; base unchanged without a multiplier
+---(and always on the client). nil when the perks module is missing.
+---@field Stat? fun(ply: Player, stat: string, base: number): number
+---@field _Perks? PW.PerksStore internal state of the module (server)
+---@field _PerkSources? table<string, PW.PerkStatSource> stat sources by id (survive a reload)
+
+---Perks module.
+---@class PW.PerksLib
+---Perk slot ids, one per group (the slot of group n is Slots[n]).
+---@field Slots string[]
+---Server: the perk ids the player has equipped now, in slot order (empty when none).
+---@field Get fun(ply: Player): string[]
+---Registers a stat source under an id (nil removes it). Sources run on every recompute, in sorted id order, between
+---the perks and the mode; the hook point of the wildcards module (T-4.3).
+---@field StatSource fun(id: string, fn: PW.PerkStatSource?)
+---Pure: nil when the perk fits the slot's group (a slot without a group accepts any), else a reason.
+---@field _GroupError fun(slot: PW.LoadoutSlot|table, def: PW.Perk|table): string?
+---Pure: the group rule over every perks-kind slot of a loadout; true, or false and a reason. Items not found by
+---lookup are left to the slot rules.
+---@field _CheckGroups fun(slots: table<string, PW.LoadoutSlot|table>, loadout: PW.Loadout,
+---lookup: fun(id: string): table?): boolean, string?
+---Pure: the perk ids of the perks-kind slots of a loadout, slots in the given order.
+---@field _PerkIds fun(order: string[], slots: table<string, PW.LoadoutSlot|table>, loadout: PW.Loadout): string[]
+---Pure: the product per stat over every table of every list; values that are not positive finite numbers are
+---skipped.
+---@field _Multiply fun(lists: table<string, number>[][]): table<string, number>
+---Pure: the subset of the combined multipliers whose keys are weapon stat keys.
+---@field _WeaponMods fun(stats: table<string, number>, keys: string[]): table<string, number>
+---Pure: the owner-only calls of an event ("kill" or "damage"): the attacker's OnKill / OnDealDamage when the attacker
+---is another player, the victim's OnDeath / OnDamaged when the victim is a player.
+---@field _Targets fun(event: string, victim: any, attacker: any, isPlayer: fun(ent: any): boolean): PW.PerkTarget[]
+---Declares the perk slots in the loadout module (when it exists). Runs at load and on PW_RegistriesLoaded.
+---@field _DeclareSlots fun()
+---The question body of PW_ValidateLoadout: a reason string when a perk sits in a slot of another group.
+---@field _Validate fun(loadout: PW.Loadout): string?
+---Server: a store over injected engine calls.
+---@field _NewStore? fun(opts?: PW.PerksStoreOptions): PW.PerksStore
+---Server: ends the player's perk instances and equips the perks of the loadout, then recomputes.
+---@field Refresh? fun(ply: Player, loadout: PW.Loadout)
+---Server: recomputes the cached multipliers and sends the weapon stats through PW.SetStatMods when they changed.
+---@field _Recompute? fun(ply: Player)
+---Server: ends the player's instances, forgets the cache and resets the weapon stats.
+---@field _Clear? fun(ply: Player)
+---Server: the PW_LoadoutGiven body (spawn in LIVE or a mode giving a new loadout).
+---@field _OnLoadoutGiven? fun(ply: Player, loadout: PW.Loadout)
+---Server: the PW_PlayerKilled body: OnKill for the attacker's perks, OnDeath for the victim's.
+---@field _OnKilled? fun(victim: Player, attacker: Entity, dmg: CTakeDamageInfo?)
+---Server: the damage body: OnDealDamage for the attacker's perks, OnDamaged for the victim's.
+---@field _OnDamaged? fun(victim: Entity, attacker: Entity, dmg: CTakeDamageInfo?)
+---Server: the death body (PostPlayerDeath): ends the player's perks.
+---@field _OnDeath? fun(ply: Player)
+
+---Class table inside a perks/ file.
+---@type PW.Perk
+PERK = nil

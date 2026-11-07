@@ -1,0 +1,148 @@
+---@meta
+-- Types of the HUD (T-6.1, 09-hud.md d.3; 01-extensibility.md d.12).
+-- Source: lua/privatewar/kinds/hud.lua, lua/privatewar/modules/hud/ (shared.lua: pure selection and the paint loop;
+-- cl_init.lua: HUDPaint, scaling, fonts), lua/privatewar/hud/ (built-in elements).
+
+---One element of the HUD, a file in lua/privatewar/hud/ with a HUDELEMENT table. Never auto-subscribed.
+---@class PW.HudElement : PW.Entity
+---Required. Draws the element. Runs through PW.Call inside the single HUDPaint, in 1920x1080 design units
+---(PW.HUD.X, Y, S map them to pixels). No allocations: cache fonts, materials and colours.
+---@field Draw fun(self: PW.HudElement)
+---Draw order, ascending; ties are broken by id. Default 100.
+---@field Order? number
+---Phases in which the element is drawn. Default (nil): every phase.
+---@field Phases? PW.PhaseName[]
+---Optional extra visibility check, run through PW.Call every frame the phase matches. A falsy result hides the
+---element for that frame; an error disables it like any PW.Call error.
+---@field ShouldDraw? fun(self: PW.HudElement): boolean
+
+---Switches of one selection.
+---@class PW.HudFlags
+---@field hidden? boolean nothing is visible (the player turned the overlay off)
+
+---State of one paint loop: the visible elements in draw order, cached until the phase, the registry or an
+---element's validity changes.
+---@class PW.HudState
+---@field list PW.HudElement[]
+---@field count integer
+---@field phase? PW.PhaseName
+---@field registry? PW.Registry
+---@field dirty boolean
+
+---One row of the score bars (T-11.5): a team, or a player in FFA (index into the score list).
+---@class PW.ScoreRow
+---@field index integer team index, or the position in the FFA score list
+---@field score number
+---@field own boolean drawn in the friendly colour: the local team or player (team 1 for a team-mode spectator)
+---@field fraction? number score / score limit clamped to 0..1; nil without a limit
+
+---Layout of the score bars in pixels for one resolution (PW.HUD._ScoreLayout).
+---@class PW.ScoreLayout
+---@field x number left edge of the bars, aligned with the radar
+---@field top number top of the first row, under the radar disc
+---@field barWidth number full bar length (the score limit)
+---@field barHeight number
+---@field pitch number row height
+---@field line number outline thickness
+---@field tick number how far the end tick rises above the bar
+---@field numberX number left edge of the score numbers
+---@field timerX number left edge of the timer
+---@field timerY number vertical centre of the timer
+---@field right number right edge of the block (timer included)
+---@field bottom number bottom edge of the rows
+
+---Rectangles of one bar in pixels (PW.HUD._ScoreBarRects): the fill, the bottom line and the end tick of the L
+---outline, and the vertical centre of the score number.
+---@class PW.ScoreBarRects
+---@field fillX number
+---@field fillY number
+---@field fillW number
+---@field fillH number
+---@field lineX number
+---@field lineY number
+---@field lineW number
+---@field lineH number
+---@field tickX number
+---@field tickY number
+---@field tickW number
+---@field tickH number
+---@field numberY number
+
+---Design values of the score bars (PW.HUD.ScoreBars), 1920x1080 units unless noted.
+---@class PW.ScoreBarsConfig
+---@field gap number space between the radar disc and the first row
+---@field width number full bar length
+---@field bar number bar thickness
+---@field pitch number row height
+---@field line number outline thickness
+---@field tick number end tick rise above the bar
+---@field outline number outline opacity 0..1
+---@field numberGap number
+---@field numberWidth number
+---@field timerGap number
+---@field timerWidth number
+---@field maxRows integer
+---@field ease number fill ease rate (1/s)
+
+---@class PW.HudLib
+---Pure: puts the elements visible in the phase into `out` ordered by Order then id, returns their count. Entries of
+---`out` past the count are cleared. Does not look at IsValid or ShouldDraw.
+---@field _Select fun(list: PW.HudElement[], phase: PW.PhaseName, flags: PW.HudFlags?, out: PW.HudElement[]): integer
+---Pure: design-unit scale factors for a screen size: x, y (stretch per axis) and s (uniform, the smaller one).
+---@field _Scale fun(width: number, height: number): number, number, number
+---@field _NewState fun(): PW.HudState
+---Runs one frame: selects when the cache is stale, then calls ShouldDraw and Draw of every visible element through
+---PW.Call. An element that errors is disabled; the others still draw.
+---@field _Paint fun(state: PW.HudState, registry: PW.Registry, phase: PW.PhaseName, flags?: PW.HudFlags)
+---Design resolution.
+---@field DesignWidth integer
+---@field DesignHeight integer
+---Client: design units to pixels, recomputed only when the resolution changes.
+---@field X? fun(value: number): number
+---@field Y? fun(value: number): number
+---@field S? fun(value: number): number
+---Client: recomputes the scale and the fonts when ScrW/ScrH changed; true when it did.
+---@field Refresh? fun(): boolean
+---Client: font name "PW_HUD_<id>" for a design-unit size, created once and re-created on a resolution change.
+---@field Font? fun(id: string, size: number, weight?: number): string
+---Pure (U-8, hud/match_status.lua): seconds left to an end time (CurTime based); nil without one (nil or <= 0),
+---never negative.
+---@field _Remaining fun(endsAt: number?, now: number): number?
+---Pure: "M:SS" of seconds, rounded up, no tenths, negative gives "0:00".
+---@field _FormatTime fun(seconds: number): string
+---Pure: the end time the timer counts to: LIVE the mode end (pw_mode_ends), any other phase the phase end.
+---@field _TimerEnd fun(phase: PW.PhaseName, phaseEnd: number, modeEnd: number): number
+---Pure: the local player's verdict on a finished match: "victory", "defeat", "draw", "over" (a spectator or a
+---player outside the teams) or nil (no result). Arguments: draw, winner (team index, or UserID in FFA; 0 none),
+---team count (0 FFA), the local team index, the local UserID.
+---@field _Verdict fun(draw: boolean, winner: integer, teams: integer, ownTeam: integer, ownId: integer): string?
+---Pure: score order. scores[1..count], own = the local entry (nil: none). Returns the first index (own, else the
+---best) and the second (the best of the others; ties go to the lower index; nil when there is none).
+---@field _Lead fun(scores: number[], count: integer, own: integer?): integer?, integer?
+---Design values of the score bars (T-11.5).
+---@field ScoreBars PW.ScoreBarsConfig
+---Pure: score / limit clamped to 0..1; nil when the limit is 0 or less (no limit).
+---@field _ScoreFraction fun(score: number, limit: number): number?
+---Pure: fills out[1..n] (PW.ScoreRow[]) with the rows to draw and returns n; entries past n are cleared, row
+---tables are reused. Team mode: the own team first, the others by score (ties to the lower index), at most
+---ScoreBars.maxRows; a spectator (own nil or out of range) sees the teams in index order. FFA: you and the leader,
+---or you and second place when you lead (PW.HUD._Lead); a spectator sees the top two.
+---@field _ScoreRows fun(scores: number[], n: integer, own: integer?, ffa: boolean, limit: integer, out: table): integer
+---Pure: one frame of the eased fill: moves current toward target by 1 - e^(-rate * dt), never past it, and snaps to
+---the target within 0.001.
+---@field _ScoreEase fun(current: number, target: number, dt: number, rate: number): number
+---Pure: the pixel layout of `count` rows (at least one) at a resolution, under the radar; limited false puts the
+---numbers at the left edge (no bars). Fills and returns out.
+---@field _ScoreLayout fun(width: number, height: number, count: integer, limited: boolean, out: table): PW.ScoreLayout
+---Pure: the fill, the L outline and the number centre of row `slot` with a fill fraction. Fills and returns out.
+---@field _ScoreBarRects fun(layout: PW.ScoreLayout, slot: integer, fraction: number, out: table): PW.ScoreBarRects
+---Client: HL2 HUD elements (HUDShouldDraw names) hidden while the module is on. Empty: 09 d.1 keeps the vanilla HUD.
+---@field Hidden? table<string, true>
+
+---@class PW
+---@field HUD? PW.HudLib the hud module (nil when the module is missing)
+---@field Hud? PW.Registry registry of the `hud` kind
+
+---Class table inside a hud/ file.
+---@type PW.HudElement
+HUDELEMENT = nil

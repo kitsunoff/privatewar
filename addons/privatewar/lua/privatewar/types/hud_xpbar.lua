@@ -1,0 +1,36 @@
+---@meta
+-- Types of the bottom XP bar and the level-up detection (09-hud.md d.2, 06-progression.md d.1). Source:
+-- lua/privatewar/modules/hud/sh_xpbar.lua (pure rules), lua/privatewar/hud/progression.lua (drawing, NW2 and the
+-- levels message as inputs). The LEVEL UP popup itself is the medal queue (types/hud_popups.lua).
+
+---The fill the bar shows; it eases toward the NW2 values.
+---@class PW.XpBar
+---@field level integer? the level the bar shows (nil before the first value)
+---@field fill number 0..1, the shown fill of that level
+
+---Level-up detection over the levels messages (pw_progression_levels) the client received.
+---@class PW.LevelWatch
+---@field source table? the last levels table seen (a new table per message)
+---@field level integer? the baseline level (nil before the first message)
+---@field armedAt number? CurTime of the first message (the baseline)
+
+---@class PW.HudLib
+---Ease rate of the fill (per second, exponential approach) and the least speed (fill per second), so it arrives.
+---@field XpBarRate number
+---@field XpBarMinSpeed number
+---Seconds after the first levels message before the bar animates level changes (the join upload snaps).
+---@field XpBarSettle number
+---Pure: a bar with no value yet.
+---@field _XpBarNew fun(): PW.XpBar
+---Pure: one frame of the bar toward `level` and `fraction`. The first value, a lower level, a lower fill at the same
+---level and any change while `animate` is false snap. A higher level fills the shown level to full, shows it full for
+---one frame, then wraps to the target level (skipping the levels between) at 0 and eases to `fraction`.
+---@field _XpBarStep fun(bar: PW.XpBar, level: integer, fraction: number, dt: number, animate: boolean)
+---Pure: whether the bar may animate: the watch has a baseline at least XpBarSettle old.
+---@field _XpBarAnimate fun(watch: PW.LevelWatch, now: number): boolean
+---Pure: an empty level watch.
+---@field _LevelWatchNew fun(): PW.LevelWatch
+---Pure: feeds the current levels table and its level. Returns the new level when a new table carries a higher level
+---than the baseline, nil otherwise. The first table is the baseline (no fire on join or the first sync); a lower
+---level moves the baseline down (a reset) without firing; the same table twice is one message.
+---@field _LevelWatch fun(watch: PW.LevelWatch, source: table?, level: integer, now: number): integer?

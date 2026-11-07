@@ -1,0 +1,135 @@
+-- Built-in behaviour: objective (T-5.10; 07-bots.md d.13, d.14). Objective bucket. Follows the commander's order
+-- (board.order) or, until the commander exists (T-5.11), the local pick of PW.BotObjectives.Resolve over the mode's
+-- objectives (MODE:BotObjectives, else the Domination flags or the Kill Confirmed tags). Actions:
+--   capture, hold: walk into the zone, then drift between points inside it so the bot does not stand like a post;
+--   defend: a guard point around the zone, watching outward, moving to another one every 6-12 s;
+--   collect, deny: walk onto the tag; the behaviour ends when the tag is gone.
+-- Weight: an order 0.55 + 0.45 * weight, scaled by teamwork (bots may ignore orders, 07 d.9); the local pick
+-- 0.3 + 0.6 * its score.
+BEHAVIOR.Interval = 0.5
+BEHAVIOR.MinRun = 2
+
+local inZone = { capture = true, hold = true }
+local guard = { defend = true }
+
+---@return PW.BotObjectivesLib
+local function lib()
+    return PW.BotObjectives --[[@as PW.BotObjectivesLib]]
+end
+
+---@param ctx PW.BotBrainCtx
+---@return PW.BotObjective?, number, boolean
+local function resolve(ctx)
+    local facts = lib().Facts(ctx)
+    local st = ctx.state
+    return lib().Resolve(ctx, facts, st ~= nil and st.id or ctx.lastObjective)
+end
+
+---@param _ Player
+---@param ctx PW.BotBrainCtx
+---@return PW.BotRank
+function BEHAVIOR:Rank(_, ctx)
+    if PW.BotObjectives == nil then return false end
+    local target = resolve(ctx)
+    return target ~= nil and "objective" or false
+end
+
+---@param _ Player
+---@param ctx PW.BotBrainCtx
+---@return number
+function BEHAVIOR:Weight(_, ctx)
+    local target, score, ordered = resolve(ctx)
+    if target == nil then return 0 end
+    if ordered then
+        local teamwork = math.Clamp(lib().Facts(ctx).teamwork, 0, 1)
+        return (0.55 + 0.45 * math.Clamp(target.weight, 0, 1)) * (0.5 + 0.5 * teamwork)
+    end
+    return 0.3 + 0.6 * math.min(score, 1)
+end
+
+---@param ctx PW.BotBrainCtx
+function BEHAVIOR:OnStart(_, ctx)
+    ctx:ClearGoal()
+end
+
+---@param ctx PW.BotBrainCtx
+function BEHAVIOR:OnResume(_, ctx)
+    local st = ctx.state
+    if st ~= nil then st.next = 0 end
+end
+
+---@param ctx PW.BotBrainCtx
+function BEHAVIOR:OnEnd(_, ctx)
+    lib().LookAt(ctx, nil)
+    ctx:Intent().stance = "stand"
+end
+
+---Starts the next leg of an action: approach the objective, or (arrived) move to the next point inside or around it.
+---@param ctx PW.BotBrainCtx
+---@param st table
+---@param target PW.BotObjective
+---@param arrived boolean
+local function nextLeg(ctx, st, target, arrived)
+    local random = function() return lib().Random(ctx) end
+    local point, radius, priority, wait = target.pos, 20, "objective", 0.5
+    if guard[target.action] then
+        point, radius, priority, wait = lib().PointIn(target.pos, target.radius * 1.5, random), 48, "guard",
+            6 + 6 * random()
+    elseif inZone[target.action] and arrived then
+        point, radius, wait = lib().PointIn(target.pos, target.radius * 0.6, random), 40, 3 + 3 * random()
+    elseif inZone[target.action] then
+        radius, wait = target.radius * 0.5, 0
+    end
+    st.id, st.action, st.anchor, st.point, st.next = target.id, target.action, target.pos, point, ctx.now + wait
+    lib().LookAt(ctx, nil)
+    local current = ctx.board.goal
+    if current ~= nil and current.priority ~= priority then ctx:ClearGoal() end
+    ctx:SetGoal(point, radius, priority --[[@as string]])
+    local tactics = rawget(PW, "BotTactics") --[[@as PW.BotTacticsLib?]]
+    if tactics == nil then return end
+    if arrived or guard[target.action] then
+        tactics.Run(ctx, false)
+    else
+        tactics.Travel(ctx, point)
+    end
+end
+
+---A defender that reached its spot watches outward from the zone.
+---@param ctx PW.BotBrainCtx
+---@param target PW.BotObjective
+---@param point Vector
+local function watch(ctx, target, point)
+    local out = point - target.pos
+    out.z = 0
+    if out:IsZero() then out = Vector(1, 0, 0) end
+    out:Normalize()
+    lib().LookAt(ctx, point + out * 600 + Vector(0, 0, 60))
+end
+
+---@param st table
+---@param target PW.BotObjective
+---@return boolean
+local function changed(st, target)
+    return st.id ~= target.id or st.action ~= target.action or not isvector(st.anchor)
+        or (st.anchor --[[@as Vector]]):Distance(target.pos) > 32
+end
+
+local retry = { failed = true, unreachable = true }
+
+---@param ctx PW.BotBrainCtx
+---@return PW.BotTransition
+function BEHAVIOR:Update(_, ctx)
+    local target = resolve(ctx)
+    if target == nil then return PW.BotBrain.Done("objective gone") end
+    local st = ctx.state or {}
+    ctx.lastObjective = target.id
+    local status = ctx:GoalStatus()
+    if changed(st, target) or status == nil or retry[status] then
+        nextLeg(ctx, st, target, false)
+    elseif status == "arrived" and ctx.now >= st.next then
+        nextLeg(ctx, st, target, true)
+    elseif status == "arrived" and guard[target.action] then
+        watch(ctx, target, st.point)
+    end
+    return PW.BotBrain.Continue()
+end

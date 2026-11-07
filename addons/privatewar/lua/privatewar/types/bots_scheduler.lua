@@ -1,0 +1,86 @@
+---@meta
+-- Types of the bots_scheduler module (T-5.3; 07-bots.md d.3). Code: lua/privatewar/modules/bots_scheduler/
+-- (shared.lua: the pure core and the API; init.lua: the Think hook).
+
+---Options of PW.BotScheduler.New. Everything is injectable so the core is testable with a fake clock.
+---@class PW.BotSchedulerOpts
+---@field clock? fun(): number seconds, default SysTime
+---Milliseconds per tick: a number or a function read every tick. Default 2 (the bots.tickbudget default).
+---@field budget? number|fun(): number
+---@field random? fun(): number a number in [0, 1) for the phase of a new bot, default math.random
+---@field onError? fun(err: string) called with the message of a failing bot tick or job, default ErrorNoHalt
+---@field state? PW.BotSchedulerState existing state to continue (survives a reload); default a fresh one
+
+---Options of Register.
+---@class PW.BotSchedulerRegisterOpts
+---@field period? number seconds between two ticks of the bot, default 0.1 (brain and perception, 10 Hz)
+
+---Perf counters (07 d.11 feeds the overlay of T-5.4 from these). Times are in the units of the field name.
+---@class PW.BotSchedulerCounters
+---@field ticks integer scheduler ticks run
+---@field lastTickMs number time of the last tick, ms
+---@field maxTickMs number longest tick, ms
+---@field brainRuns integer bot tick functions run
+---@field jobsRun integer expensive jobs run (one per tick at most)
+---@field errors integer bot ticks and jobs that raised an error
+---@field maxLateness number the largest delay of a bot tick behind its due time, seconds
+---@field deferred integer bots that were due but did not fit the budget in the last tick
+---@field stretchedTicks integer ticks that left due bots for later: their period was extended
+---@field overBudgetTicks integer ticks longer than the budget (only a single oversized bot or job does that)
+---@field bots integer registered bots (not reset by ResetCounters)
+---@field queued integer jobs waiting in the FIFO (not reset by ResetCounters)
+
+---Internal: a registered bot.
+---@class PW.BotSchedulerEntry
+---@field fn fun(id: any, now: number)
+---@field period number
+---@field phase number
+---@field due number the time the next tick is due
+---@field seq integer registration order, breaks ties of due
+---@field cost? number seconds the last tick took
+
+---Internal: state of a scheduler. The default scheduler keeps it in PW._BotSchedulerState across a reload.
+---@class PW.BotSchedulerState
+---@field entries table<any, PW.BotSchedulerEntry>
+---@field count integer
+---@field seq integer
+---@field jobs (fun())[]
+---@field jobHead integer index of the next job
+---@field jobTail integer index of the last job; the FIFO is empty when jobHead > jobTail
+---@field maxCost number seconds, the longest tick of any bot seen (estimate for a bot not yet measured)
+---@field counters PW.BotSchedulerCounters
+
+---A scheduler instance: closures over its state.
+---@class PW.BotScheduler
+---Adds a bot (id: any non-nil key, the player entity in practice) with its tick function fn(id, now). The first tick
+---is due after a random phase in [0, period). Registering an id again replaces the function and the period and keeps
+---the phase.
+---@field Register fun(id: any, fn: fun(id: any, now: number), opts?: PW.BotSchedulerRegisterOpts)
+---Removes a bot. Returns true when it was registered.
+---@field Unregister fun(id: any): boolean
+---Appends an expensive job (cover search, a long A* slice) to the global FIFO; one job runs per tick.
+---@field Enqueue fun(job: fun())
+---One scheduler tick: one queued job, then due bots, the most overdue first, until the budget is spent.
+---@field Tick fun()
+---A copy of the counters.
+---@field GetCounters fun(): PW.BotSchedulerCounters
+---Zeroes the counters except bots and queued.
+---@field ResetCounters fun()
+---The random phase of a registered bot in seconds, or nil.
+---@field GetPhase fun(id: any): number?
+
+---@class PW.BotSchedulerLib
+---Creates an independent scheduler (tests, or a replacement module).
+---@field New fun(opts?: PW.BotSchedulerOpts): PW.BotScheduler
+---The scheduler the Think hook ticks; the budget is the setting bots.tickbudget.
+---@field Default PW.BotScheduler
+---@field Register fun(id: any, fn: fun(id: any, now: number), opts?: PW.BotSchedulerRegisterOpts) Default.Register
+---@field Unregister fun(id: any): boolean Default.Unregister
+---@field Enqueue fun(job: fun()) Default.Enqueue
+---@field GetCounters fun(): PW.BotSchedulerCounters Default.GetCounters
+---@field ResetCounters fun() Default.ResetCounters
+---@field GetPhase fun(id: any): number? Default.GetPhase
+
+---@class PW
+---@field BotScheduler PW.BotSchedulerLib
+---@field _BotSchedulerState PW.BotSchedulerState

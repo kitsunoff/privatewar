@@ -1,0 +1,69 @@
+---@meta
+-- Types of the join-in-progress rule (T-8.4; 08-lobby.md d.4). Source: lua/privatewar/modules/lobby/ (shared.lua:
+-- the setting and the pure decision; init.lua: server glue). The module is called `lobby` so that its setting has the
+-- id the design names, lobby.joininprogress; the lobby screens live in the module lobby_ui.
+
+---What decides one join.
+---@class PW.JipFacts
+---@field phase PW.PhaseName
+---@field enabled boolean the setting lobby.joininprogress
+---@field human boolean bots are never held back
+
+---"normal": not a late join; "play": straight into the match (teams places, a bot leaves); "spectate": observer
+---until the next match.
+---@alias PW.JipDecision "normal"|"play"|"spectate"
+
+---Internal (server): the state and the engine calls of the rule; tests inject their own.
+---@class PW.JipStore
+---@field spectators table<Player, true> weak keys
+---@field phase fun(): PW.PhaseName
+---@field enabled fun(): boolean
+---@field isHuman fun(ply: Player): boolean
+---@field defer fun(fn: fun()) runs fn after the other PlayerSpawn listeners (timer.Simple(0))
+---@field park fun(ply: Player) puts the player into observer mode
+---@field unpark fun(ply: Player) leaves observer mode
+---@field mark fun(ply: Player, spectating: boolean) publishes the flag the HUD notice reads
+---@field players fun(): Player[] every connected player, bots included (player.GetAll)
+---@field unspawn fun(ply: Player) the first lobby's state: TEAM_UNASSIGNED, then Spawn (the base gamemode spectator)
+
+---Options of a store; every field has an engine default.
+---@class PW.JipStoreOptions
+---@field phase? fun(): PW.PhaseName
+---@field enabled? fun(): boolean
+---@field isHuman? fun(ply: Player): boolean
+---@field defer? fun(fn: fun())
+---@field park? fun(ply: Player)
+---@field unpark? fun(ply: Player)
+---@field mark? fun(ply: Player, spectating: boolean)
+---@field players? fun(): Player[]
+---@field unspawn? fun(ply: Player)
+
+---@class PW.JipLib
+---Name of the player's NW2 bool the HUD notice reads.
+---@field NetBool string
+---The notice text.
+---@field Notice string
+---Pure: join in progress, the decision for one join.
+---@field _Decide fun(facts: PW.JipFacts): PW.JipDecision
+---Pure: whether entering the phase releases the spectators (LOBBY, PREMATCH).
+---@field _ReleasesOn fun(phase: PW.PhaseName): boolean
+---Pure: whether entering `phase` from `oldPhase` unspawns every player: LOBBY from any match phase (not the first
+---lobby, which has no old phase; 08-lobby.md d.3).
+---@field _Unspawns fun(phase: PW.PhaseName, oldPhase?: PW.PhaseName): boolean
+---Internal (server): a fresh store (tests use their own; the real one is PW._Jip).
+---@field _NewStore? fun(opts?: PW.JipStoreOptions): PW.JipStore
+---Internal (server): PlayerInitialSpawn: decides and, for "spectate", remembers the player.
+---@field _OnJoin? fun(store: PW.JipStore, ply: Player): PW.JipDecision
+---Internal (server): PlayerSpawn: parks a remembered spectator (after the other listeners); true when it did.
+---@field _OnSpawn? fun(store: PW.JipStore, ply: Player): boolean
+---Internal (server): PW_CanRespawn: false for a spectator.
+---@field _CanRespawn? fun(store: PW.JipStore, ply: Player): boolean
+---Internal (server): the phase changed; LOBBY and PREMATCH release every spectator.
+---@field _OnPhase? fun(store: PW.JipStore, phase: PW.PhaseName)
+---Internal (server): the phase changed; LOBBY from a match unspawns every player one tick later (store.defer).
+---Returns the number of players it will unspawn.
+---@field _OnLobby? fun(store: PW.JipStore, phase: PW.PhaseName, oldPhase?: PW.PhaseName): integer
+
+---@class PW
+---@field Jip? PW.JipLib
+---@field _Jip PW.JipStore internal (server)

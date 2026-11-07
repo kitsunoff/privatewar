@@ -1,0 +1,159 @@
+---@meta
+-- Types of the navgen module (T-2.12; 03-mapdata.md d.8; notes/11-navmesh-generation.md "Recommendations").
+-- Source: lua/privatewar/modules/navgen/ (shared.lua: pure rules; init.lua: server glue).
+
+---The marker file data/privatewar/navgen.json, written before generation starts and checked after the engine
+---reloads the map.
+---@class PW.NavGenMarker
+---@field v integer format version (PW.NavGen.Version)
+---@field map string the map the navmesh is generated for
+---@field startedAt number os.time() when generation started
+---@field fast boolean fast mode (sv_cheats 1, nav_max_view_distance 1)
+---@field cheatsWasOn boolean sv_cheats was already on before the start (then it is not switched off afterwards)
+
+---What the marker is checked against after the reload.
+---@class PW.NavGenFacts
+---@field map string the current map
+---@field now number os.time()
+---@field areas integer navmesh.GetNavAreaCount()
+
+---The outcome of a marker: success (this map, fresh, navmesh present), failure (this map, fresh, no navmesh) or
+---stale (corrupt, other version, other map, too old or from the future: ignored and deleted).
+---@alias PW.NavGenOutcome "success"|"failure"|"stale"
+
+---Why a marker is stale.
+---@alias PW.NavGenStaleReason "corrupt"|"version"|"map"|"age"
+
+---Facts of the "may generate now" check.
+---@class PW.NavGenStartFacts
+---@field phase string current match phase
+---@field allowed boolean the caller holds PW.NavGen.Privilege (true for the server console)
+---@field generating boolean a generation is running
+---@field changing boolean a map change is in progress
+---@field areas integer navmesh areas of the current map
+---@field force? boolean generate even though the map has a navmesh
+
+---One walkable seed before it is traced to the ground.
+---@class PW.NavGenSeed
+---@field class string spawn entity class
+---@field pos Vector
+
+---The last result shown to the host (kept until the map changes).
+---@class PW.NavGenResult
+---@field kind "success"|"failure"
+---@field text string
+
+---The navmesh block of the lobby state (pw_lobby_state).
+---@class PW.LobbyNav
+---@field areas integer navmesh areas of the current map (0: no navmesh)
+---@field generating boolean a generation is running: the map reloads when it is done
+---@field canGenerate boolean this player may start a generation now (privilege, LOBBY, no navmesh, not busy)
+---@field fastDefault boolean the fast mode checkbox starts checked (the host is the only human)
+---@field result string the result of the last generation on this map, "" when there is none
+
+---Options of a navgen store; every field has an engine default (tests inject fakes, so nothing really runs).
+---@class PW.NavGenStoreOptions
+---@field log? PW.LogFn
+---@field time? fun(): number default os.time
+---@field map? fun(): string default game.GetMap
+---@field path? string default "privatewar/navgen.json" (DATA)
+---@field read? fun(path: string): string? default file.Read on DATA
+---@field write? fun(path: string, text: string): boolean default file.Write on DATA, true when the file exists
+---@field delete? fun(path: string) default file.Delete when the file exists
+---@field navCount? fun(): integer default navmesh.GetNavAreaCount
+---@field isGenerating? fun(): boolean default navmesh.IsGenerating
+---@field clearSeeds? fun() default navmesh.ClearWalkableSeeds
+---@field addSeed? fun(pos: Vector, normal: Vector) default navmesh.AddWalkableSeed
+---@field begin? fun() default navmesh.BeginGeneration
+---@field command? fun(name: string, value: string) default RunConsoleCommand
+---@field cheats? fun(): boolean default sv_cheats is on
+---@field records? fun(): PW.SpawnRecord[] default PW.Map._Collect (every spawn entity), {} without mapdata
+---@field ground? fun(pos: Vector): Vector?, Vector? default a trace down to the floor (position, normal)
+---@field hostSeed? fun(ply: Player?): Vector?, Vector? default the caller's position when on the ground
+---@field kickBots? fun() default kicks every bot
+---@field pauseNav? fun(paused: boolean) default PW.Map.PauseNav
+---@field defer? fun(fn: fun()) default timer.Simple(0, fn): one tick so ConVar commands apply
+---@field humans? fun(): integer default #player.GetHumans()
+---@field phase? fun(): string default PW.Phase.GetPhase
+---@field changing? fun(): boolean default PW.MapChange.IsChanging
+---@field broadcast? fun() default re-sends the lobby state to every human
+---@field readStart? fun(): boolean, boolean default two net.ReadBool (fast, force)
+
+---Internal (server): the navgen glue, its injectable engine calls and its state. A map change starts a new Lua
+---state, so the state lives for one map.
+---@class PW.NavGenStore
+---@field log PW.LogFn
+---@field time fun(): number
+---@field map fun(): string
+---@field path string
+---@field read fun(path: string): string?
+---@field write fun(path: string, text: string): boolean
+---@field delete fun(path: string)
+---@field navCount fun(): integer
+---@field isGenerating fun(): boolean
+---@field clearSeeds fun()
+---@field addSeed fun(pos: Vector, normal: Vector)
+---@field begin fun()
+---@field command fun(name: string, value: string)
+---@field cheats fun(): boolean
+---@field records fun(): PW.SpawnRecord[]
+---@field ground fun(pos: Vector): Vector?, Vector?
+---@field hostSeed fun(ply: Player?): Vector?, Vector?
+---@field kickBots fun()
+---@field pauseNav fun(paused: boolean)
+---@field defer fun(fn: fun())
+---@field humans fun(): integer
+---@field phase fun(): string
+---@field changing fun(): boolean
+---@field broadcast fun()
+---@field readStart fun(): boolean, boolean
+---@field generating? boolean this module started a generation that has not ended
+---@field result? PW.NavGenResult the result of the last generation on this map
+---@field checkAt? number CurTime of the next marker check after the reload
+---@field checkTries? integer marker checks so far
+
+---Navmesh generation (T-2.12; 03-mapdata.md d.8). Shared, except the server functions.
+---@class PW.NavGenLib
+---"pw.map.navgen", default superadmin: start navmesh generation for the current map.
+---@field Privilege string
+---Format version of the marker (1).
+---@field Version integer
+---Seconds after its start a marker is stale (6 hours: huge maps take over an hour).
+---@field MaxAge number
+---Pure: one seed per record whose class is a spawn class (every class, also the generic start points that the
+---spawn layers drop); records of other classes are ignored. Order kept.
+---@field _Seeds fun(records: PW.SpawnRecord[], classes: table<string, any>): PW.NavGenSeed[]
+---Pure: whether a generation may start now; on false the reason: "privilege", "phase" (not LOBBY), "busy"
+---(generating or changing map), "navmesh exists" (the map has areas and force is not set).
+---@field _MayGenerate fun(facts: PW.NavGenStartFacts): boolean, string?
+---Pure: the outcome of a marker read after the reload, and for "stale" the reason.
+---@field _ValidateMarker fun(marker: any, facts: PW.NavGenFacts): PW.NavGenOutcome, PW.NavGenStaleReason?
+---Pure: the marker as JSON text.
+---@field _Encode fun(marker: PW.NavGenMarker): string
+---Pure: JSON text back to a table (nil for anything that is not a JSON object).
+---@field _Decode fun(text: string): table?
+---Pure: whether fast mode starts checked: only when the host is the only human (03-mapdata.md d.8).
+---@field _FastDefault fun(humans: integer): boolean
+---Pure: the text the host sees for a result.
+---@field _ResultText fun(kind: "success"|"failure", map: string, areas: integer): string
+---Server: whether a generation started by this module is running (also true while the engine generates). The bots
+---module reads it to pause bot creation.
+---@field IsGenerating? fun(): boolean
+---Server: the navmesh block of the lobby state for one player.
+---@field LobbyInfo? fun(ply: Player): PW.LobbyNav
+---Internal (server): a fresh store (tests swap PW._NavGen).
+---@field _NewStore? fun(opts?: PW.NavGenStoreOptions): PW.NavGenStore
+---Internal (server): starts a generation for ply (nil: the server console). Returns true, or false and a reason
+---(_MayGenerate reasons, "no seeds", "marker", "engine").
+---@field _Start? fun(ply: Player?, fast: boolean, force: boolean): boolean, string?
+---Internal (server): checks the marker after the reload. With no navmesh yet and final false it waits (nil, the
+---marker stays). Otherwise it validates, deletes the marker, restores sv_cheats after fast mode, logs and stores the
+---result for the host. Returns the outcome, nil without a marker or while waiting.
+---@field _Check? fun(final: boolean): PW.NavGenOutcome?
+---Internal (server): registers pw_navgen_start through PW.Net.Receive, owned by owner (default: the navgen class
+---table).
+---@field _RegisterNet? fun(owner?: table)
+
+---@class PW
+---@field NavGen? PW.NavGenLib navmesh generation (nil when the navgen module is missing)
+---@field _NavGen? PW.NavGenStore internal (server)

@@ -1,0 +1,8 @@
+"privatewar"
+{
+	"base"		"base"
+	"title"		"Private War"
+	"maps"		""
+	"menusystem"	"1"
+	"category"	"pvp"
+}

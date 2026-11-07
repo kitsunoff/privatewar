@@ -1,0 +1,257 @@
+---@meta
+-- Types of the lobby screen v0 (T-1.19, 08-lobby.md d.3; 01-extensibility.md d.11, d.17; 00-core.md d.5, d.7).
+-- Source: lua/privatewar/modules/lobby_ui/ (sh_lobby.lua: pure rules; init.lua: server glue; cl_init.lua: screen).
+
+---One mode the host may start, with its Game Setup groups (PW.Settings.GetGroups("match", mode) on the server).
+---@class PW.LobbyMode
+---@field id string
+---@field name string
+---@field groups PW.SettingGroup[]
+
+---One enable flag (01-extensibility.md d.11) shown to privileged players.
+---@class PW.LobbyToggle
+---@field kind string registry kind id
+---@field id string entity id
+---@field name string display name (Name field or the id)
+---@field enabled boolean the ConVar's value (takes effect at the next match)
+
+---What the server sends to one client (server -> client message pw_lobby_state). can* flags are cosmetic: the
+---server checks the privileges again on every request.
+---@class PW.LobbyState
+---@field map string current map
+---@field maps string[] installed maps, sorted
+---@field modes PW.LobbyMode[] enabled modes whose flag is on, sorted by id
+---@field toggles PW.LobbyToggle[] empty unless canToggle
+---@field canStart boolean
+---@field canEdit boolean may change match settings (pw.settings.change)
+---@field canToggle boolean
+---@field nav? PW.LobbyNav the navmesh line (navgen module, T-2.12); nil without the navgen module
+
+---Input of PW.Lobby._BuildState.
+---@class PW.LobbyStateInput
+---@field map string
+---@field maps string[]
+---@field modes table[] mode entities, already filtered to the startable ones
+---@field groupsOf fun(mode: table): PW.SettingGroup[]
+---@field toggles PW.LobbyToggle[]
+---@field canStart boolean
+---@field canEdit boolean
+---@field canToggle boolean
+---@field nav? PW.LobbyNav
+
+---A Start request as read from the wire.
+---@class PW.LobbyStartRequest
+---@field mode any
+---@field map any
+
+---Facts the Start check needs.
+---@class PW.LobbyStartFacts
+---@field modes table<string, true> ids of the startable modes
+---@field mapExists fun(name: string): boolean
+---@field fits? PW.LobbyFits whether the mode is offered on the map (map data, PW.Map.ModeFits); nil = always
+
+---Ids of the listed entities by kind id.
+---@alias PW.LobbyListed table<string, table<string, true>>
+
+---The enable flag of one entity.
+---@alias PW.LobbyFlagFn fun(kind: string, id: string): boolean
+
+---An enable toggle request as read from the wire.
+---@class PW.LobbyToggleRequest
+---@field kind any
+---@field id any
+---@field enabled any
+
+---The client's choice on the lobby screen.
+---Whether a mode (by id) is offered on a map.
+---@alias PW.LobbyFits fun(modeId: string, map: string): boolean
+
+---@class PW.LobbySelection
+---@field mode? string
+---@field map? string
+
+---What the lobby screen draws (PW.Lobby._Model).
+---@class PW.LobbyModel
+---@field modes { id: string, label: string }[]
+---@field maps { id: string, label: string }[]
+---@field mode? string selected mode id (nil when there is none)
+---@field map? string selected map
+---@field sections PW.UIFormSection[] Game Setup of the selected mode
+---@field toggles PW.LobbyToggle[]
+---@field canStart boolean true when the player may start and a mode and a map are selected
+---@field canEdit boolean
+---@field canToggle boolean
+---@field nav? PW.LobbyNav
+
+---Options of a lobby store; every field has an engine default (tests inject their own).
+---@class PW.LobbyStoreOptions
+---@field log? PW.LogFn
+---@field registries? fun(): table<string, PW.Registry> default: PW.Registries
+---@field readStart? fun(): string, string default: two net.ReadString (mode id, map)
+---@field readToggle? fun(): string, string, boolean default: net.ReadString, net.ReadString, net.ReadBool
+---@field send? fun(ply: Player, state: PW.LobbyState) default: pw_lobby_state written by PW.Lobby._Encode
+---@field start? fun(mode: table, map: string): boolean default: PW.Match.Start
+---@field map? fun(): string default: game.GetMap
+---@field maps? fun(): string[] default: maps/*.bsp on the GAME path
+---@field mapExists? fun(name: string): boolean default: maps/<name>.bsp exists on the GAME path
+---@field readFlag? fun(name: string): boolean default: the ConVar (true when missing)
+---@field writeFlag? fun(name: string, enabled: boolean): boolean default: sets the ConVar; false when missing
+---@field navInfo? fun(ply: Player): PW.LobbyNav? default: PW.NavGen.LobbyInfo while the navgen module is valid
+
+---Internal (server): the lobby glue with its injectable engine calls.
+---@class PW.LobbyStore
+---@field log PW.LogFn
+---@field registries fun(): table<string, PW.Registry>
+---@field readStart fun(): string, string
+---@field readToggle fun(): string, string, boolean
+---@field send fun(ply: Player, state: PW.LobbyState)
+---@field start fun(mode: table, map: string): boolean
+---@field map fun(): string
+---@field maps fun(): string[]
+---@field mapExists fun(name: string): boolean
+---@field readFlag fun(name: string): boolean
+---@field writeFlag fun(name: string, enabled: boolean): boolean
+---@field navInfo fun(ply: Player): PW.LobbyNav?
+
+---Writes the fields of pw_lobby_state (net.WriteUInt/WriteString/WriteBool in the game, a queue in tests).
+---@class PW.LobbyWriter
+---@field uint fun(value: integer, bits: integer)
+---@field string fun(value: string)
+---@field bool fun(value: boolean)
+
+---Reads the fields of pw_lobby_state in the order they were written.
+---@class PW.LobbyReader
+---@field uint fun(bits: integer): integer
+---@field string fun(): string
+---@field bool fun(): boolean
+
+---What the decoder computes on the client from its own registries instead of receiving it.
+---@class PW.LobbyResolver
+---Match settings groups of a mode (PW.Settings.GetGroups("match", mode)); nil for a mode this realm lacks.
+---@field groupsOf fun(modeId: string): PW.SettingGroup[]?
+---Display name of an entity (Name field or the id).
+---@field nameOf fun(kind: string, id: string): string
+
+---Lobby screen v0 (T-1.19).
+---@class PW.LobbyLib
+---"pw.match.start", default superadmin: start a match from the lobby (00-core.md d.7).
+---@field StartPrivilege string
+---"pw.entities.toggle", default superadmin: change enable flags (01-extensibility.md d.11).
+---@field TogglePrivilege string
+---Pure: map names from a maps/*.bsp listing: valid names only, unique, sorted.
+---@field _MapsFromFiles fun(files: string[]): string[]
+---Pure: a map name is a non-empty string of letters, digits, "_" and "-", at most 64 characters.
+---@field _ValidMapName fun(name: any): boolean
+---Pure: checks a Start request. Returns true, or false and a reason.
+---@field _CheckStart fun(request: PW.LobbyStartRequest, facts: PW.LobbyStartFacts): boolean, string?
+---Pure: checks a toggle request against the listed entities by kind (the kinds registry is never toggled).
+---@field _CheckToggle fun(request: PW.LobbyToggleRequest, listed: PW.LobbyListed): boolean, string?
+---Pure: the enable flags of every listed entity of every registry except "kinds", sorted by kind and id.
+---@field _Toggles fun(registries: table<string, PW.Registry>, flagOf: PW.LobbyFlagFn): PW.LobbyToggle[]
+---Pure: the state sent to one client.
+---@field _BuildState fun(input: PW.LobbyStateInput): PW.LobbyState
+---Pure: what the screen draws for a state and the client's selection (an invalid selection falls back to the
+---first mode and to the current map, else the first map).
+---With fits, the maps list holds only the maps the selected mode is offered on (a mode that needs map data is
+---hidden on a map without it, 03-mapdata.md d.4, d.6).
+---@field _Model fun(state: PW.LobbyState, selection: PW.LobbySelection, fits?: PW.LobbyFits): PW.LobbyModel
+---Pure: writes a state as pw_lobby_state: the map, the maps, per mode its id and every Game Setup value as
+---(full id, text form), the three can* flags and the toggles as (kind, id, enabled). Names, definitions and
+---groups are not sent: the client computes them from its own registries.
+---@field _Encode fun(state: PW.LobbyState, writer: PW.LobbyWriter)
+---Pure: reads what _Encode wrote back into a state. A mode the resolver does not know is skipped; module groups
+---whose values were not sent (modules disabled on the server) are dropped; values come from their text form.
+---@field _Decode fun(reader: PW.LobbyReader, resolver: PW.LobbyResolver): PW.LobbyState
+---The resolver over a set of registries (the client passes PW.Registries).
+---@field _Resolver fun(registries: table<string, PW.Registry>): PW.LobbyResolver
+---Pure: a text form back to a value by the definition's type (the server already validated it).
+---@field _ParseText fun(def: PW.SettingDef, text: string): any
+---Internal: a fresh store (tests swap PW._Lobby).
+---The fits test over a set of registries: the mode by id, then PW.Map.ModeFits. An unknown mode never fits;
+---without the mapdata module a mode fits only when it does not need map data.
+---@field _Fits fun(registries: table<string, PW.Registry>): PW.LobbyFits
+---Pure: the navmesh line of the lobby (navgen, T-2.12): "" without the block, else generating, the last result,
+---"no navmesh" (03-mapdata.md d.8 wording) or the area count.
+---@field _NavLine fun(nav: PW.LobbyNav?): string
+---@field _NewStore? fun(opts?: PW.LobbyStoreOptions): PW.LobbyStore
+---Internal (server): the startable modes: GetEnabledList of the modes registry whose enable flag is on.
+---@field _StartableModes? fun(): table[]
+---Internal (server): handlers of pw_lobby_request, pw_lobby_start and pw_lobby_enable.
+---@field _OnRequest? fun(ply: Player): boolean
+---@field _OnStart? fun(ply: Player): boolean
+---@field _OnToggle? fun(ply: Player): boolean
+---Internal (server): registers the three messages through PW.Net.Receive, owned by owner (default: the lobby_ui
+---class table, so a disabled lobby_ui drops them; tests pass their own owner).
+---@field _RegisterNet? fun(owner?: table)
+---Pure: whether the lobby screen may be open: phase LOBBY or PREMATCH (the START button counts down; sh_flow.lua),
+---the lobby_ui module valid (not disabled for this
+---match) and the ui_kit module present and valid. The client checks it every frame and closes an open screen as
+---soon as it turns false. Positional arguments: it runs every frame, so it allocates nothing.
+---@field _ShouldShow fun(phase: string, active: boolean, kit: boolean): boolean
+---START button and map change popup texts (sh_flow.lua).
+---@field FlowText PW.LobbyFlowText
+---PW.UI.Style tokens of the START button while it counts down: dark fill, accent ink and outline.
+---@field CountdownColours { fill: string, ink: string, outline: string }
+---Pure: the screen of a phase: the lobby (LOBBY, PREMATCH), the postmatch summary, the vote; nil in LIVE.
+---@field _ScreenFor fun(phase: string): PW.LobbyScreen?
+---Pure: the START button override: an announced map change ("MAP CHANGE N...") wins, then PREMATCH
+---("STARTING N..."); nil keeps the normal button.
+---@field _StartButton fun(facts: PW.LobbyFlowFacts): PW.LobbyStartOverride?
+---Pure: applies _StartButton to the start action (label, title, locked with the reason, countdown = true); returns it.
+---@field _ApplyFlow fun(start: PW.LobbyAction, facts?: PW.LobbyFlowFacts): PW.LobbyAction
+---Pure: the display name of a map: the map data name when it differs from the file name, else the file name
+---without a short prefix (gm_, de_, ...) and underscores, upper case.
+---@field _MapTitle fun(map: string, name?: string): string
+---Pure: the map change popup, nil when no change is announced.
+---@field _MapChangePopup fun(facts: PW.LobbyPopupFacts): PW.LobbyPopup?
+---Pure: whether the client sends pw_lobby_request again (every RetryEvery seconds): the screen is open (which
+---implies _ShouldShow) and no pw_lobby_state arrived since the last request. Covers a lost request or reply
+---(garrysmod-issues #5081, same pattern as pw_client_ready).
+---@field _ShouldRequest fun(open: boolean, waiting: boolean): boolean
+---Seconds between two pw_lobby_request retries (2; the server accepts 4 per second).
+---@field RetryEvery number
+---Client: opens the lobby screen (and asks the server for the state).
+---@field Open? fun()
+---Client: closes the lobby screen.
+---@field Close? fun()
+
+---@class PW
+---@field Lobby? PW.LobbyLib the lobby screen (nil when the lobby_ui module is missing)
+---@field _Lobby? PW.LobbyStore internal (server)
+
+---The screen a phase shows (sh_flow.lua).
+---@alias PW.LobbyScreen "lobby"|"postmatch"|"vote"
+
+---@class PW.LobbyFlowText
+---@field starting string format with the seconds
+---@field startingReason string
+---@field changing string format with the seconds
+---@field changingReason string
+---@field popupTitle string
+---@field popupIn string format with the seconds
+
+---What the START button override is made from.
+---@class PW.LobbyFlowFacts
+---@field phase string
+---@field phaseEnd number PW.Phase.GetEnd()
+---@field now number CurTime()
+---@field changeAt number the announced map change time, negative when none
+
+---@class PW.LobbyStartOverride
+---@field label string
+---@field reason string
+---@field seconds integer
+
+---@class PW.LobbyPopupFacts
+---@field changeAt number negative when none
+---@field now number
+---@field map string
+---@field mapName? string the map data name, when there is one
+---@field modeName? string
+
+---@class PW.LobbyPopup
+---@field title string
+---@field map string
+---@field mode string
+---@field seconds integer
+---@field line string

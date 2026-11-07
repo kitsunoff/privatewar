@@ -1,0 +1,171 @@
+---@meta
+-- Types of the maps kind and the mapdata module (T-2.7, T-2.8; 03-mapdata.md d.1-d.3, d.6, d.7; docs/api/map.md).
+-- Kind: lua/privatewar/kinds/maps.lua. Module: lua/privatewar/modules/mapdata/ (shared.lua: API and pure rules;
+-- init.lua: server glue that reads spawn entities once per map).
+
+---One spawn point: a position and a view yaw (03-mapdata.md d.2).
+---@class PW.MapSpawn
+---@field pos Vector
+---@field yaw number
+
+---Spawn points by team index. Teams are 1..N as in PW.Teams; 0 (PW.Map.AnyTeam) holds points of no team: FFA and
+---deathmatch spawns, usable by every team.
+---@alias PW.MapSpawns table<integer, PW.MapSpawn[]>
+
+---An entry of the maps kind: lua/privatewar/maps/<id>.lua, data only (03-mapdata.md d.2). The id is the map name
+---normalised by PW.Map.Id. No field is required: map data is optional (d.1).
+---@class PW.MapEntry : PW.Entity
+---@field Spawns? PW.MapSpawns spawn points by team index; when non-empty they replace the detected ones (d.3)
+---@field Modes? table<string, table> mode data by mode id, opaque to the map module (d.6)
+
+---One spawn entity of the map as plain data, read by the server glue.
+---@class PW.SpawnRecord
+---@field class string entity class
+---@field pos Vector
+---@field yaw number
+---@field teamNum? integer the entity's TeamNum keyvalue (read for info_player_teamspawn only)
+
+---How an entity class maps to a team (PW.Map._SpawnClasses).
+---@class PW.SpawnClassRule
+---@field team? integer fixed team index (0 = any team)
+---@field byTeamNum? boolean the team comes from the TeamNum keyvalue (TF2)
+---@field generic? boolean a generic start point, used only when the map has no other spawn entity
+
+---One navmesh area as plain data, read by the server glue from a CNavArea (pure rules never see the userdata).
+---@class PW.NavAreaData
+---@field id integer CNavArea:GetID()
+---@field center Vector
+---@field sizeX number
+---@field sizeY number
+---@field underwater boolean
+---@field crouch boolean the area has NAV_MESH_CROUCH (a standing player does not fit)
+---@field corners Vector[] four corners in CNavArea order: north-west, north-east, south-east, south-west
+
+---Thresholds of the navmesh spawn sampler (PW.Map._NavRules; gameplay values, 03-mapdata.md d.7).
+---@class PW.NavRules
+---@field minSide number an area narrower than this on either side is too small (units; player hull is 32 wide)
+---@field maxSlope number an area steeper than this is too steep (degrees)
+---@field count integer at most this many samples (about 200, 03-mapdata.md d.7)
+---@field minSpawns? integer without map file spawns, fewer detected points than this add the samples (layers)
+---@field budgetMs? number the time one sampling pass should stay under (checked by the in-game smoke test)
+
+---The cached navmesh of the current map (server, PW._Map.nav).
+---@class PW.MapNav
+---@field loaded boolean whether the map had a navmesh when it was read
+---@field areas CNavArea[] every area of the navmesh, read once (for the bots); empty without a navmesh
+---@field samples PW.MapSpawn[] the sampled fallback spawn points, any team
+---@field eligible integer areas that passed the filters
+---@field costMs number time of the sampling pass, milliseconds
+
+---The hull clearance predicate of the sampler: whether a player fits at pos.
+---@alias PW.NavClear fun(pos: Vector): boolean
+
+---Injected engine reads of PW.Map._LoadNav (tests replace them).
+---@class PW.NavLoadOpts
+---@field count? fun(): integer default navmesh.GetNavAreaCount
+---@field areas? fun(): CNavArea[] default navmesh.GetAllNavAreas
+---@field log? fun(message: string) default print("[PW] " .. message)
+
+---Internal (server): state of the mapdata module. Survives pw_reload; a map change starts a new Lua state.
+---@class PW.MapStore
+---@field detected? PW.MapSpawns the cached auto-detected spawns of the current map
+---@field reason? string what filled the cache: "InitPostEntity" or "on demand"
+---@field nav? PW.MapNav the navmesh cache, nil until the navmesh was read (first Think after InitPostEntity)
+---@field navCheckAt? number CurTime of the next navmesh check while waiting for the navmesh to load
+---@field navTries? integer navmesh checks so far
+---@field navPaused? true the sampler is paused: a navmesh generation is running (navgen, T-2.12)
+---@field reported? table<string, true> "<map>/<mode>" pairs whose invalid data was already logged (ModeFits)
+
+---The map module (03-mapdata.md d.2, d.3, d.6). Shared, except the spawn functions (server).
+---@class PW.MapLib
+---Team index of spawn points that belong to no team (FFA and deathmatch spawns): 0.
+---@field AnyTeam integer
+---Pure: the map data file id of a map name: lowercase, every character outside [a-z0-9_] replaced by "_"
+---("cs-office.v2" -> "cs_office_v2").
+---@field Id fun(mapName: string): string
+---The map data entry of a map (default: the current map), nil without a file or when the entry is disabled
+---(pw_map_<id>_enabled 0 at the last snapshot, or after an error).
+---@field Get fun(mapName?: string): PW.MapEntry?
+---MAP.Modes.<id> of the current map for a mode, walking the mode's Base chain: the first id of the chain with an
+---entry wins (hardcore_dom without an entry gets MAP.Modes.dom). nil when no id of the chain has an entry, when the
+---map has no data file, or for a non-table entry (03-mapdata.md d.6).
+---@field GetModeData fun(modeId: string): table?
+---Whether a mode is offered on a map by its map data (03-mapdata.md d.4, d.6): true for a mode without
+---MapData = true; otherwise the map needs a data file with an entry for the mode or its Base chain, and the mode's
+---ValidateMapData (optional) must return true. On false the reason; data the mode rejects is logged once per map and
+---mode. Does not check that the map is installed or that the mode is enabled. Shared; works for any map with a data
+---file, not only the current one.
+---@field ModeFits fun(mode: table, mapName: string): boolean, string?
+---Server: spawn points of the current map by team index. Layers (03-mapdata.md d.3): the map file's Spawns when it
+---has at least one valid point; otherwise the auto-detected spawn entities, and when those have fewer than
+---_NavRules.minSpawns points in total the navmesh samples are added to the any-team (0) points (team points are
+---kept). Empty when no layer has points. Do not modify the result.
+---@field GetSpawns? fun(): PW.MapSpawns
+---Server: the auto-detected spawn points of the current map, cached once per map at InitPostEntity (collected on
+---first use if the cache is empty). Do not modify the result.
+---@field GetDetectedSpawns? fun(): PW.MapSpawns
+---Internal, pure: spawn entity classes and how each maps to a team.
+---@field _SpawnClasses table<string, PW.SpawnClassRule>
+---Internal, pure: team index of a spawn entity class (nil: not a spawn class) and whether it is a generic start
+---point. CS:S, HL2DM and TF2 engine teams 2 and 3 become teams 1 and 2; any other TeamNum is 0.
+---@field _SpawnTeam fun(class: string, teamNum?: integer): integer?, boolean
+---Internal, pure: groups spawn records by team. Generic start points are dropped when any other spawn class is
+---present. Records of unknown classes are ignored.
+---@field _GroupSpawns fun(records: PW.SpawnRecord[]): PW.MapSpawns
+---Internal, pure: the valid points of a map file's Spawns (team index integer >= 0, pos a Vector, yaw a number
+---or 0) and their count.
+---@field _CleanSpawns fun(raw: any): PW.MapSpawns, integer
+---Internal, pure: the layered spawns: the cleaned map file spawns when they have a point; otherwise detected, with
+---navSamples appended to team 0 when detected has fewer than minSpawns points (a new table; detected is not
+---changed). Without navSamples or minSpawns: detected as it is.
+---@field _Layer fun(file: any, detected: PW.MapSpawns, nav?: PW.MapSpawn[], minSpawns?: integer): PW.MapSpawns
+---Server: the navmesh fallback spawn points of the current map (any team, about 200), sampled once after the map
+---loaded; empty without a navmesh or before it was read. Do not modify the result.
+---@field GetNavSamples? fun(): PW.MapSpawn[]
+---Server: every CNavArea of the current map, read once after the map loaded (navmesh.GetAllNavAreas allocates a new
+---table each call; read this instead). Empty without a navmesh or before it was read. Do not modify the result.
+---@field GetNavAreas? fun(): CNavArea[]
+---Internal, pure: the sampler thresholds (gameplay values).
+---@field _NavRules PW.NavRules
+---Internal, pure: the steepest angle of an area's plane from its four corners, degrees (0 for degenerate corners).
+---@field _NavSlope fun(corners: Vector[]): number
+---Internal, pure: whether an area may hold a spawn point; on false the reason "small", "water", "steep" or "crouch".
+---@field _NavAreaOk fun(area: PW.NavAreaData, rules: PW.NavRules): boolean, string?
+---Internal, pure: up to rules.count spawn points at the centres of the areas that pass _NavAreaOk, spread evenly
+---over the list (one slot per point; a point clear() rejects is replaced by the next area of its slot). Each point
+---faces the middle of the samples. clear is the thin hull-trace wrapper (default: every point is clear).
+---@field _NavSample fun(areas: PW.NavAreaData[], rules: PW.NavRules, clear?: PW.NavClear): PW.MapSpawn[], integer
+---Internal (server): reads the navmesh into PW._Map.nav once: areas, samples, cost. Without a navmesh one log line.
+---@field _LoadNav? fun(opts?: PW.NavLoadOpts): PW.MapNav
+---Internal (server): thin trace wrapper: whether a standing player hull fits at pos (lifted by the step height).
+---@field _HullClear? fun(pos: Vector): boolean
+---Server: pauses (true) or resumes (false) the navmesh sampler while a navmesh generation runs (navgen, T-2.12;
+---notes/11-navmesh-generation.md "What the server does on confirm", step 2). Pausing also drops the cached areas:
+---generation destroys the navmesh, so the CNavArea handles are no longer valid. The samples (plain positions) stay.
+---@field PauseNav? fun(paused: boolean)
+---Internal (server): one step of the sampler's wait for the navmesh after InitPostEntity (the Think hook); does
+---nothing while paused.
+---@field _NavThink? fun()
+---Internal (server): one CNavArea as plain data.
+---@field _ReadNavArea? fun(area: CNavArea): PW.NavAreaData
+---Internal, pure: mode ids from modeId up its resolved BaseClass chain (mode may be nil: then only modeId).
+---@field _ModeChain fun(mode: table?, modeId: string): string[]
+---Internal, pure: the first table entry of modes along chain, nil if none.
+---@field _FindModeData fun(modes: any, chain: string[]): table?
+---Internal (server): reads every spawn entity of the map (ents.FindByClass) as plain records.
+---@field _Collect? fun(): PW.SpawnRecord[]
+---Internal (server): collects and groups the spawn entities without touching the cache.
+---@field _Detect? fun(): PW.MapSpawns
+---Internal (server): collects into the cache; reason is recorded on the store.
+---@field _Refresh? fun(reason: string): PW.MapSpawns
+---Internal: a fresh store (tests swap PW._Map).
+---@field _NewStore fun(): PW.MapStore
+
+---@class PW
+---@field Map? PW.MapLib the mapdata module (nil when the module is missing)
+---@field Maps? PW.Registry the maps kind registry (lua/privatewar/maps/)
+---@field _Map PW.MapStore internal
+
+---Class table inside a maps/ file.
+---@type PW.MapEntry
+MAP = nil

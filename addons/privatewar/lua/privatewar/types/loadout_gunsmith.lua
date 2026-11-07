@@ -1,0 +1,58 @@
+---@meta
+-- Types of the gunsmith server flow (T-4.8; 05-loadout.md d.15, d.12). Code: lua/privatewar/modules/loadout/
+-- sh_gunsmith.lua (pure: build validation, conflicts, the progression limit, apply bookkeeping) and sv_gunsmith.lua
+-- (adapter calls, apply on spawn, the not-installed repair and message).
+
+---One option of a build that cannot stay, and why ("not available", "locked", "conflict: <code>", "over the limit").
+---@class PW.GunsmithProblem
+---@field slot string the build slot
+---@field option string the option id
+---@field why string
+
+---Options that did not stick on a live weapon at spawn.
+---@class PW.GunsmithFailure
+---@field slot string the loadout slot (primary, secondary, ...)
+---@field weapon any the weapon entity
+---@field options string[] the option ids, in build slot order
+
+---Engine calls of the apply step; injected in tests.
+---@class PW.LoadoutGunsmithApi
+---@field gunsmith fun(wep: any): boolean does the weapon's adapter have a gunsmith (an Apply method)
+---@field apply fun(wep: any, build: PW.Build): any ADAPTER:Apply: the build that actually stuck
+---@field debug fun(message: string) a debug-level log line (printed only with pw_debug 1)
+---@field tell? fun(ply: any, message: string) one message to the player
+---@field name? fun(wep: any): string a display name of the weapon
+
+---@class PW.LoadoutLib
+---Pure (T-4.8): the save-time check of one weapon build, in this order: the option is offered by the adapter
+---(ctx.adapterOptions), unlocked (ctx.lockedOptions, asked per option), passes the adapter's static Validate
+---(ctx.adapterValidate) and fits the progression count limit (ctx.attachmentLimit: uncurated, non-cosmetic options in
+---build slot order). A missing context function skips its check. Returns the clean build and the problems.
+---@field _ValidateBuild fun(weaponId: string, weapon: table<string, any>, build: table<string, string|false>,
+---ctx: PW.LoadoutContext): table<string, string|false>, PW.GunsmithProblem[]
+---Pure: the string options of build that are not in stuck (stuck[slot] differs), in build slot order.
+---@field _NotStuck fun(build: table<string, any>, stuck: any): string[]
+---Pure: applies the build of every weapon slot through api; a weapon without a gunsmith is skipped with one debug
+---line. weapons maps a loadout slot to the first weapon given for it. Returns what did not stick.
+---@field _ApplyBuilds fun(loadout: PW.Loadout, weapons: table<string, any>, api: PW.LoadoutGunsmithApi):
+---PW.GunsmithFailure[]
+---Pure: the one message about options that did not stick.
+---@field _NotInstalledText fun(failures: PW.GunsmithFailure[], nameOf: fun(wep: any): string): string
+---Pure: a copy of loadout without the dropped options (slot -> option -> true) and the removals ("<id> (<why>)").
+---@field _DropOptions fun(loadout: PW.Loadout, drops: table<string, table<string, boolean>>?, why: string):
+---PW.Loadout, string[]
+---Server: the options the weapon's adapter offers per build slot (GetSlots with the build, then GetOptions per slot).
+---@field _AdapterOptions fun(weaponId: string, build: table<string, string|false>):
+---table<string, table<string, boolean>>
+---Server: the slots ADAPTER:Validate rejects, with their reason codes.
+---@field _AdapterValidate fun(weaponId: string, build: table<string, string|false>): table<string, string>
+---Server: does the adapter of the weapon (an entity or a class) implement Apply.
+---@field _HasGunsmith fun(weaponOrClass: any): boolean
+---Server: the save-time adapter checks added to a context (adapterOptions, adapterValidate).
+---@field _GunsmithContext fun(ctx: PW.LoadoutContext): PW.LoadoutContext
+---Server: after Give: applies the builds, calls PrepareForBot for a bot, and when something did not stick tells the
+---player once and repairs the picked class (the options are dropped with the reason "not installed").
+---@field _GunsmithOnGive fun(ply: Player, loadout: PW.Loadout, weapons: table<string, any>,
+---api?: PW.LoadoutGunsmithApi): PW.GunsmithFailure[]
+---Server: ADAPTER:PrepareForBot for every given weapon of a bot (05 d.15 item 5); nothing for a human.
+---@field _PrepareForBot fun(ply: Player, given: any[])

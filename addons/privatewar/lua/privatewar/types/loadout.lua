@@ -1,0 +1,124 @@
+---@meta
+-- Types of the loadout module (T-4.1; 05-loadout.md d.1). Code: lua/privatewar/modules/loadout/ (shared.lua: slots,
+-- pure rules, resolution; init.lua: giving on spawn).
+
+---A slot declaration: what a slot holds. Modules declare slots with PW.Loadout.DeclareSlot.
+---@class PW.LoadoutSlotDecl
+---@field kind string the kind the items come from: "weapons", "perks", "equipment", "streaks", "wildcards", ...
+---@field filter? string[] allowed Category or Kind values of the item (weapons in practice); nil allows any
+---@field count? integer how many items the slot holds, default 1
+---@field group? integer perk group (used by the perks module, not by the loadout module)
+---@field label? string display name or "#" language key
+---@field maxattachments? integer attachment cap of the slot (read by the gunsmith, not by the loadout module)
+---@field key? string action key of the slot (read by the equipment module)
+
+---A declared slot: the declaration with its id.
+---@class PW.LoadoutSlot : PW.LoadoutSlotDecl
+---@field id string
+
+---A loadout (a class): slot id to an entity id, or a list of ids when the slot holds several.
+---(T-4.2: the reserved key "builds" holds the attachment builds, slot id -> PW.Build; it is not a slot.)
+---@alias PW.Loadout table<string, string|string[]|table<string, PW.Build>>
+
+---Reads a setting by full id (PW.Setting).
+---@alias PW.LoadoutSettingReader fun(id: string): any
+
+---Pick X rules in force for one validation (T-4.2). Read from the settings by PW.Loadout._Context; injected in tests.
+---@class PW.LoadoutContext
+---@field lookup PW.LoadoutLookup
+---@field budget number 0 = unlimited
+---@field maxattachments number cap per weapon slot when the slot declares none
+---@field bannedWeapons? table<string, boolean> weapon classes
+---@field bannedAttachments? table<string, boolean> option ids
+---Does the adapter call this option cosmetic (free, not counted toward the cap)?
+---@field isCosmetic? fun(weaponId: string, buildSlot: string, option: string): boolean
+---Progression (T-4.9): is the item unlocked for the player? Absent: nothing is locked. Set per player by the classes.
+---@field isUnlocked? fun(kind: string, id: string): boolean
+---Progression (T-4.9): the option ids of a weapon build the player has not unlocked (curation and the count limit).
+---@field lockedOptions? fun(weaponId: string, build: table<string, string|false>): table<string, boolean>
+---Gunsmith (T-4.8): the options the weapon's adapter offers per build slot. Absent: the check is skipped.
+---@field adapterOptions? fun(weaponId: string, build: table<string, string|false>):
+---table<string, table<string, boolean>>
+---Gunsmith (T-4.8): ADAPTER:Validate, the rejected build slots with their reason codes. Absent: skipped.
+---@field adapterValidate? fun(weaponId: string, build: table<string, string|false>): table<string, string>
+---Gunsmith (T-4.8): how many uncurated, non-cosmetic attachments the player's progression allows on the weapon (the
+---weapon level; nil = no limit). The match cap (with wildcards) is checked separately and only marks unavailable.
+---@field attachmentLimit? fun(weaponId: string): integer?
+
+---Finds an entity of a kind by id (nil when absent). Injected in pure tests; the default reads PW.Registries.
+---@alias PW.LoadoutLookup fun(kind: string, id: string): table<string, any>?
+
+---Internal: state of the loadout module. Survives a reload, so slots declared by other modules are not lost.
+---@class PW.LoadoutStore
+---@field slots table<string, PW.LoadoutSlot>
+---@field order string[] slot ids in declaration order
+---@field classes table<any, PW.Loadout> weak-keyed: the class of a player
+
+---@class PW.LoadoutLib
+---Declares (or re-declares, keeping its position) a slot. Returns true, or false and the reason when the id is not a
+---non-empty string, the kind is missing, the filter is not a list of strings or the count is not a positive integer.
+---@field DeclareSlot fun(id: string, decl: PW.LoadoutSlotDecl): boolean, string?
+---A copy of the slot, or nil.
+---@field GetSlot fun(id: string): PW.LoadoutSlot?
+---Slot ids in declaration order.
+---@field GetSlotIds fun(): string[]
+---Removes a slot (tests; a module that goes away). Returns true when it existed.
+---@field RemoveSlot fun(id: string): boolean
+---Checks a loadout against the slot declarations (unknown slot, item missing from the kind, filter mismatch, too many
+---items), then asks the question PW_ValidateLoadout(ply, loadout): false rejects, a string rejects with that reason.
+---Returns true, or false and the reason. lookup defaults to the registries (PW.Registries[kind]).
+---@field Validate fun(ply: Player, loadout: PW.Loadout, lookup?: PW.LoadoutLookup): boolean, string?
+---Stores the player's class (the loadout used when the mode gives none). It is not validated here: T-4.7 repairs
+---classes on upload. nil clears it.
+---@field SetClass fun(ply: Player, loadout: PW.Loadout?)
+---@field GetClass fun(ply: Player): PW.Loadout?
+---The id of the wildcard slot ("wildcard", kind wildcards, up to 2 items; T-4.3).
+---@field WildcardSlot string
+---Internal, pure (T-4.3): the slot set a loadout is judged by: the declared slots, or (when the loadout holds wildcards
+---in the wildcard slot) a copy changed by their ModifySlots, in pick order, each id once. A wildcard that errors is
+---skipped; the wildcard slot itself stays as declared. defaultCap fills maxattachments of weapon slots without one.
+---@field _EffectiveSlots fun(slots: table<string, PW.LoadoutSlot>, loadout: PW.Loadout, lookup: PW.LoadoutLookup,
+---defaultCap?: number): table<string, PW.LoadoutSlot>
+---Internal, pure (T-4.3): a reason when the same wildcard is picked twice, else nil.
+---@field _WildcardError fun(slots: table<string, PW.LoadoutSlot>, loadout: PW.Loadout): string?
+---Internal, pure (T-4.3): the Stats tables of the wildcards among ids (unknown ids skipped).
+---@field _WildcardStats fun(ids: string[], lookup: PW.LoadoutLookup): table<string, number>[]
+---Internal, server (T-4.3): stores the wildcards of a loadout the player has equipped (the stat source reads them).
+---@field _EquipWildcards fun(ply: any, loadout: PW.Loadout, lookup: PW.LoadoutLookup)
+---A fresh copy of the default loadout (everyone until classes exist).
+---@field Default fun(): PW.Loadout
+---The loadout for the player now: the table the question PW_PlayerLoadout(ply) answers (source "mode", used as
+---given: the mode is trusted), else the player's class ("class"), else the default ("default").
+---@field Resolve fun(ply: Player): PW.Loadout, string
+---Server: strips the player's weapons and gives every weapons-kind slot of the loadout through PW.WeaponAmmo.Give, in
+---slot declaration order; selects the first given weapon; then notifies PW_LoadoutGiven(ply, loadout) so the
+---modules of other slot kinds (perks) apply the loadout. Returns the classes given.
+---@field Give fun(ply: Player, loadout: PW.Loadout): string[]
+---Internal, pure: the checks of Validate without the hook. With ctx the Pick X rules apply too (builds, bans, cap,
+---budget); without it only the slot rules.
+---@field _Validate fun(slots: table<string, PW.LoadoutSlot>, loadout: PW.Loadout, lookup: PW.LoadoutLookup,
+---ctx?: PW.LoadoutContext): boolean, string?
+---Total Pick X cost of a loadout under the current settings (killstreaks excluded; cosmetic attachments free; the
+---question PW_LoadoutCost(item) may replace the cost of any pick). lookup defaults to the registries.
+---@field Cost fun(loadout: PW.Loadout, lookup?: PW.LoadoutLookup): number
+---Internal, pure: the cost of a loadout under a context.
+---@field _Cost fun(slots: table<string, PW.LoadoutSlot>, loadout: PW.Loadout, ctx: PW.LoadoutContext): number
+---Internal, pure: builds structure, bans, attachment cap and budget of a loadout whose slots passed.
+---@field _Extras fun(slots: table<string, PW.LoadoutSlot>, loadout: PW.Loadout, ctx: PW.LoadoutContext):
+---boolean, string?
+---Internal: the context from a reader of setting ids (PW.Setting); missing values fall back to the design defaults.
+---@field _Context fun(read: PW.LoadoutSettingReader, lookup?: PW.LoadoutLookup): PW.LoadoutContext
+---Internal: the context from the live settings, with the adapter cosmetic check.
+---@field _LiveContext fun(lookup: PW.LoadoutLookup): PW.LoadoutContext
+---Internal: the default lookup, the registries.
+---@field _RegistryLookup PW.LoadoutLookup
+---Internal, pure: does the entity fit the filter of the slot (Category or Kind in the filter; no filter fits all).
+---@field _Matches fun(slot: PW.LoadoutSlot, entity: table<string, any>): boolean
+---Internal, pure: the ids of a slot value as a list, or nil when it is not a string or a non-empty list of strings.
+---@field _Items fun(value: any): string[]?
+---Internal: the spawn hook body; true when it handled the spawn (LIVE only), else nil.
+---@field _OnPlayerLoadout fun(ply: Player): boolean?
+
+---@class PW
+---@field Loadout PW.LoadoutLib
+---@field _Loadout PW.LoadoutStore internal

@@ -1,0 +1,96 @@
+---@meta
+-- Types of the bot input writer (T-5.2; 07-bots.md d.2, d.3; notes/08 section 6; docs/api/adapter.md "Bot input
+-- rules"; docs/api/bots-blackboard.md "Intent"). Module: lua/privatewar/modules/bots_input/ (shared.lua: the pure
+-- translation and the dev command parser; init.lua: the StartCommand glue and the pw_bot_intent command).
+
+---What a bot wants this tick (docs/api/bots-blackboard.md "Intent"). The brain writes movement, stance and
+---buttons, the aim controller writes view and the attack part of buttons; the input writer only reads it.
+---@class PW.BotIntent
+---@field goal? table legs channel request, written only through SetGoal (bots_nav, T-5.6); not read by the writer
+---@field target? Entity aim channel: who to look at and shoot; not read by the writer (the aim writes view)
+---@field stance? "stand"|"crouch" "crouch" holds IN_DUCK; nil or "stand" does not
+---@field buttons integer IN_* mask wanted this tick (attack, ADS, reload, jump, sprint, use, ...); 0 = none
+---@field view? Angle wanted view angles; nil keeps the current eye angles
+---@field move? Vector forward, side, up move values as CUserCmd takes them (relative to the view); nil = 0
+---@field weapon? string class to select (T-5.2 contract decision); nil keeps the active weapon
+---@field viewTarget? Angle walking view target (path follower); the writer turns the view toward it every tick
+---@field viewSpeed? number degrees per second the view may turn toward viewTarget (the follower's turn_max_speed)
+---@field sprint? boolean legs channel (T-11.6): IN_SPEED while moving forward; a sprinting bot does not fire
+---@field drive? Vector legs channel (T-11.6): forward and side move used while the path follower writes no move
+---@field slideAt? number legs channel (T-11.6): CurTime() a Quick Slide was asked; ignored without the addon
+
+---@class PW.BotBoard
+---@field intent? PW.BotIntent written by the brain and the aim controller, read by the input writer
+
+---The command of one tick for one bot: what the glue writes into CUserCmd.
+---@class PW.BotCmd
+---@field buttons integer
+---@field forward number
+---@field side number
+---@field up number
+---@field angles Angle
+---@field weapon? string class to SelectWeapon this tick; nil = no selection
+
+---Per-bot memory between ticks (plain data, owned by the input writer).
+---@class PW.BotInputState
+---@field attackSent boolean IN_ATTACK was sent last tick
+---@field reloadSince? number time the current reload press started (reload tap); nil while not wanted
+---@field sprintAt? number time of the last tick that sent IN_SPEED
+---@field selected? string the class already selected once (reselectEveryTick false)
+
+---Facts of the tick the translation needs.
+---@class PW.BotInputFacts
+---@field now number seconds (CurTime in the glue)
+---@field eye Angle current eye angles (a nil intent or view keeps them)
+---@field active? string class of the active weapon
+---@field dt? number tick interval in seconds; without it viewTarget is ignored
+---@field slide? boolean the Quick Slide addon is present (T-11.6); without it intent.slideAt is ignored
+---@field slideTime? number seconds a slide lasts (the addon's sv_qslide_duration), default 0.75
+
+---Result of the dev command parser: a scripted intent, or clear (drop the scripted intent).
+---@class PW.BotInputParsed
+---@field intent? PW.BotIntent
+---@field clear? boolean
+
+---The bot input writer (T-5.2). Shared: the pure translation and parser; server: the glue.
+---@class PW.BotInputLib
+---Privilege of pw_bot_intent: "pw.bots.debug", default superadmin.
+---@field Privilege string
+---Pure: a fresh per-bot state.
+---@field NewState fun(): PW.BotInputState
+---Pure over plain data (updates state): the command of one tick from the intent (nil: stand still), the rules of the
+---active weapon (adapter GetInputRules; missing fields take the defaults) and the facts.
+---@field Translate fun(i: PW.BotIntent?, rules: PW.InputRules?, s: PW.BotInputState, f: PW.BotInputFacts): PW.BotCmd
+---Seconds of a slide during which duck and sprint are pressed together (0.15; T-11.6).
+---@field SlideStart number
+---Pure (T-11.6): the wanted buttons with the sprint and Quick Slide keys of the intent added (forward: the move).
+---@field MoveKeys fun(wanted: integer, i: PW.BotIntent, f: PW.BotInputFacts, forward: number): integer
+---Pure: the eye angles turned toward the target by at most speed (degrees per second) * dt on each axis.
+---@field StepView fun(eye: Angle, target: Angle, speed: number, dt: number): Angle
+---Pure: console fields to a scripted intent; nil and the usage text when a field is not valid.
+---@field ParseArgs fun(args: string[]): PW.BotInputParsed?, string?
+---Internal, pure: the rules with every missing field taken from PW.Adapters.Defaults.GetInputRules.
+---@field _Rules fun(rules: table?): PW.InputRules
+---Internal, pure: whether a bot name matches a pw_bot_intent pattern ("*" every bot; else a case-insensitive
+---plain substring).
+---@field _NameMatches fun(nick: string, pattern: string): boolean
+---Server: sets (or with nil drops) the scripted intent of a bot; it overrides the blackboard intent.
+---@field SetScripted? fun(bot: Player, intent: PW.BotIntent?)
+---Server: the intent the writer uses for a bot: the scripted one, else the blackboard's; nil for a bot the writer
+---does not drive (no scripted intent and no blackboard).
+---@field IntentFor? fun(bot: Player): PW.BotIntent?, boolean
+---Internal (server): the rules of a weapon through PW.Adapters.CallFor; the defaults without a valid weapon.
+---@field _RulesFor? fun(wep: Weapon?): PW.InputRules
+---Internal (server): the command of this tick for a bot, nil when the writer does not drive it.
+---@field _CommandFor? fun(bot: Player, now: number): PW.BotCmd?
+---Internal (server): pw_bot_intent; ply nil is the server console. Returns the number of bots changed.
+---@field _Command? fun(ply: Player?, args: string[], out?: fun(line: string)): integer
+
+---Internal (server): state of the writer.
+---@class PW.BotInputStore
+---@field scripted table<Player, PW.BotIntent> scripted intents (weak keys)
+---@field states table<Player, PW.BotInputState> per-bot memory (weak keys)
+
+---@class PW
+---@field BotInput? PW.BotInputLib
+---@field _BotInput PW.BotInputStore internal (server)

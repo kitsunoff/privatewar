@@ -1,0 +1,82 @@
+---@meta
+-- Type definitions of PW.Net, the wrapper for client -> server messages (T-1.11; 00-core.md d.8).
+
+---Options of PW.Net.Receive (00-core.md d.8). Checked in this order before the handler runs.
+---@class PW.NetOptions
+---@field who string "any", or a privilege name checked with PW.Can
+---@field phases? PW.PhaseName[] phases in which the message is accepted; omitted means every phase
+---@field rate number max messages per second per player (token bucket of this size); extra ones are dropped
+---@field maxLen integer max payload in bytes
+---The entity that owns the message, usually the class table of the file (MODULE). While owner:IsValid() is false
+---(the module is disabled for this match, or replaced) the message is dropped before any other check
+---(01-extensibility.md d.16: a disabled module's handlers do not run). Omitted: always active.
+---@field owner? table
+
+---Internal: one message registered through PW.Net.Receive.
+---@class PW.NetDef
+---@field name string
+---@field who string
+---@field phases? table<string, true> set of accepted phases, nil for every phase
+---@field rate number
+---@field maxLen integer
+---@field handler fun(ply: Player, len: integer)
+---@field owner? table
+
+---What the wrapper knows about one incoming message (input of PW.Net._Decide).
+---@class PW.NetFacts
+---@field allowed boolean the sender passes the privilege check (always true for who = "any")
+---@field phase string current match phase
+---@field len integer payload length in bits, as net.Receive gives it
+---@field active? boolean false when the message's owner is not valid; nil or true otherwise
+
+---Internal: rate state of one player for one message name.
+---@class PW.NetBucket
+---@field tokens number messages still allowed right now
+---@field at number clock time of the last update
+
+---Why a message was dropped.
+---@alias PW.NetReason "disabled"|"privilege"|"phase"|"rate"|"length"
+
+---Options of a net store; every field has an engine default (tests inject their own).
+---@class PW.NetStoreOptions
+---@field log? PW.LogFn
+---@field clock? fun(): number default SysTime
+---@field phase? fun(): string default PW.Match.GetPhase
+---@field logInterval? number seconds between two rejection lines for one player (default 5)
+
+---Internal (00-core.md d.8): registered messages, rate state and the rejection log throttle.
+---@class PW.NetStore
+---@field defs table<string, PW.NetDef> by lowercase message name
+---@field buckets table<Player, table<string, PW.NetBucket>> weak-keyed by player
+---@field lastLog table<Player, number> weak-keyed: clock time of the player's last rejection line
+---@field log PW.LogFn
+---@field clock fun(): number
+---@field phase fun(): string
+---@field logInterval number
+
+---The one wrapper for client -> server messages (T-1.11, 00-core.md d.8). Server only.
+---@class PW.NetLib
+---Registers a client -> server message: calls util.AddNetworkString(name) and net.Receive(name, ...). Before the
+---handler runs, the privilege (opts.who), the phase (opts.phases), the rate (opts.rate) and the length
+---(opts.maxLen) are checked; a rejected message is dropped and logged at most once per logInterval seconds per
+---player. The handler validates the values itself. Invalid options: one log line, nothing registered, false.
+---Registering the same name again replaces the handler and options.
+---@field Receive fun(name: string, opts: PW.NetOptions, handler: fun(ply: Player, len: integer)): boolean
+---Internal: the receive path without real traffic (tests call it with a bot). len is in bits. Returns true when
+---the handler ran, else false and the reason ("unknown" for a name not registered through the wrapper).
+---@field _Dispatch fun(name: string, len: integer, ply: Player): boolean, string?
+---Internal, pure: the first failed check (disabled owner, privilege, phase, rate, length) or nil, and the updated
+---bucket. A message dropped as disabled, by privilege or by phase takes no rate token.
+---@field _Decide fun(def: PW.NetDef, facts: PW.NetFacts, b: PW.NetBucket?, now: number): PW.NetReason?, PW.NetBucket
+---Internal, pure: token bucket of size rate refilled at rate per second; true when a message may pass.
+---@field _TakeToken fun(bucket: PW.NetBucket?, rate: number, now: number): boolean, PW.NetBucket
+---Internal, pure: true when a rejection line may be written (no line yet, or interval seconds since the last).
+---@field _ShouldLog fun(last: number?, now: number, interval: number): boolean
+---Internal, pure: validates options and builds the definition; nil and an error text when invalid.
+---@field _MakeDef fun(name: string, opts: any, handler: any): PW.NetDef?, string?
+---Internal, pure: sorted names in receivers (net.Receivers) that start with "pw_" and are not in defs.
+---@field _FindBypass fun(receivers: table<string, any>, defs: table<string, any>): string[]
+---Internal: with pw_debug 1 logs one warning per pw_* net.Receive registered without the wrapper; returns them.
+---@field _CheckBypass fun(): string[]
+---Internal: a fresh store (tests swap PW._Net).
+---@field _NewStore fun(opts?: PW.NetStoreOptions): PW.NetStore

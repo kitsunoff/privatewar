@@ -1,0 +1,223 @@
+---@meta
+-- Types of killstreaks and the deliberate reveal (T-4.6; 05-loadout.md d.9, d.10). Source:
+-- lua/privatewar/kinds/streaks.lua (the kind), lua/privatewar/modules/streaks/ (shared.lua: slots, earning rules,
+-- inventory, wire; sh_reveal.lua: reveal and airstrike rules; init.lua: per-player state, earning hooks,
+-- activation; sv_reveal.lua: PW.Reveal and jamming; cl_init.lua: keys and the radar data) and
+-- lua/privatewar/streaks/ (uav, counter_uav, airstrike).
+
+---One killstreak, a file in lua/privatewar/streaks/ with a STREAK table. Never auto-subscribed: activating it makes
+---a PW.Instance of it whose OnEquip is the activation (00-core.md d.11).
+---@class PW.Streak : PW.Entity
+---Required. Display name.
+---@field Name string
+---Required. Cost when earned by kills (streaks.earn = "kills"); at least 1.
+---@field Kills number
+---Cost when earned by score (streaks.earn = "score"); default Kills x PW.Streaks.ScorePerKill.
+---@field Score? number
+---Seconds from activation until the module removes the instance; default PW.Streaks.DefaultDuration.
+---@field Duration? number
+---Required. The activation: runs on the new instance with its owner. Use self:Timer / self:Hook for effects.
+---@field OnEquip fun(self: PW.StreakInstance, owner: Player)
+---Runs once when the instance ends (Duration passed, match end).
+---@field OnUnequip? fun(self: PW.StreakInstance, owner: Player)
+---Bots: whether the bot should activate the streak now; default (nil) yes.
+---@field BotShouldUse? fun(self: PW.Streak, bot: Player): boolean
+
+---The instance of an activated streak (the definition's fields plus the instance methods).
+---@class PW.StreakInstance : PW.Streak, PW.Instance
+
+---One streak of a player's set: its id and its cost under the current earning mode.
+---@class PW.StreakSetEntry
+---@field id string
+---@field cost integer
+
+---State of one player (server).
+---@class PW.StreakPlayer
+---@field progress number kills or points since the last reset
+---@field inventory string[] earned and unused streak ids, oldest first
+---@field set PW.StreakSetEntry[] the streaks of the player's loadout, cheapest first
+
+---Internal (server): per-player state and injectable engine calls.
+---@class PW.StreaksStore
+---@field players table<any, PW.StreakPlayer> weak-keyed
+---@field depth integer > 0 while a streak deals damage (StreakDamage)
+---@field lookup fun(id: string): PW.Streak? the streak definition; default the streaks registry (valid only)
+---@field resolve fun(ply: any): PW.Loadout the player's loadout; default PW.Loadout.Resolve
+---@field publish fun(ply: any, key: string, value: any) mirrors a value to the client (NW2)
+---@field phase fun(): string the match phase; earning and Use work in LIVE only
+---@field alive fun(ply: any): boolean
+---@field setting fun(key: string): any reads streaks.<key>; default PW.Setting
+---@field persist fun(ply: any): boolean whether the counter survives death; default the question PW_StreaksPersist
+---@field read fun(): integer reads the wire index of the use message
+
+---Options of PW.Streaks._NewStore; every field defaults to the engine.
+---@class PW.StreaksStoreOptions
+---@field lookup? fun(id: string): PW.Streak?
+---@field resolve? fun(ply: any): PW.Loadout
+---@field publish? fun(ply: any, key: string, value: any)
+---@field phase? fun(): string
+---@field alive? fun(ply: any): boolean
+---@field setting? fun(key: string): any
+---@field persist? fun(ply: any): boolean
+---@field read? fun(): integer
+
+---A key of the streaks module.
+---@class PW.StreakKey
+---@field command string console command (bindable: bind x pw_streak)
+---@field convar string client ConVar holding the default key name
+---@field default string default key name (input.GetKeyCode form)
+
+---Whether a is an enemy of b (PW.IsEnemy or a test stand-in).
+---@alias PW.EnemyFn fun(a: any, b: any): boolean
+
+---A revealed position (the radar data).
+---@class PW.RevealBlip
+---@field index integer entity index of the revealed player
+---@field pos Vector
+---@field ends? number client: CurTime() at which the blip expires
+
+---An active Counter-UAV: it hides its owner's side from hostile reveals until `ends`.
+---@class PW.RevealJam
+---@field owner any the player who activated it
+---@field ends number
+
+---Internal (server): reveal state and injectable engine calls.
+---@class PW.RevealStore
+---@field jams PW.RevealJam[]
+---@field clock fun(): number
+---@field isEnemy fun(a: any, b: any): boolean default PW.IsEnemy (no teams module: a ~= b)
+---@field members fun(viewer: any): any[] the players of a viewer: a team's players, or the player
+---@field players fun(): any[] every connected player
+---@field send fun(recipients: any[], blips: PW.RevealBlip[], duration: number) the radar data (net)
+---@field jamSend fun(recipients: any[], duration: number) the jam notice (net)
+---@field stimulus fun(viewer: any, target: any, pos: Vector) feeds bots (PW.Bot.AddStimulus, kind "radar")
+
+---Options of PW.Streaks._NewRevealStore; every field defaults to the engine.
+---@class PW.RevealStoreOptions
+---@field clock? fun(): number
+---@field isEnemy? fun(a: any, b: any): boolean
+---@field members? fun(viewer: any): any[]
+---@field players? fun(): any[]
+---@field send? fun(recipients: any[], blips: PW.RevealBlip[], duration: number)
+---@field jamSend? fun(recipients: any[], duration: number)
+---@field stimulus? fun(viewer: any, target: any, pos: Vector)
+
+---Client: the radar data received from the server.
+---@class PW.RadarView
+---@field blips PW.RevealBlip[]
+---@field jammedUntil number
+
+---@class PW
+---@field Streaks? PW.StreaksLib the streaks module (nil when the module is missing)
+---Server. The deliberate reveal (DESIGN.md net rule): shows the positions of `targets` to `viewer` (a team index
+---or a player) for `duration` seconds. Targets hidden by a hostile Counter-UAV are skipped. Sends the radar data
+---to the viewer's human players and feeds the positions to its bots. Returns how many targets were revealed.
+---@field Reveal? fun(viewer: integer|Player, targets: Player[], duration: number): integer
+---@field _Streaks? PW.StreaksStore
+---@field _Reveal? PW.RevealStore
+
+---Streaks module. Wire: client to server "pw_streak_use", one UInt(WireBits): the inventory index; server to
+---client "pw_reveal" (RevealNet), see sh_reveal.lua.
+---@class PW.StreaksLib
+---@field Slots string[] the streak slots of the loadout
+---@field Defaults table<string, string> default streak per slot
+---@field Keys { use: PW.StreakKey, next: PW.StreakKey }
+---@field WireBits integer
+---@field MaxInventory integer
+---@field DefaultDuration number
+---@field ScorePerKill integer
+---@field NetName string
+---@field ProgressKey string NW2 Int: the counter
+---@field InventoryKey string NW2 String: the inventory, comma-separated ids
+---@field SetKey string NW2 String: the set, "id:cost" comma-separated
+---@field RevealNet string
+---@field TimeBits integer
+---@field CountBits integer
+---@field IndexBits integer
+---@field PosBits integer
+---@field PosScale number
+---@field MaxBlips integer
+---The counter (server state, or the networked value on the client).
+---@field Progress fun(ply: Player): number
+---The inventory, oldest first (server: the live list, do not modify; client: decoded).
+---@field Inventory fun(ply: Player): string[]
+---The player's streak set, cheapest first.
+---@field Set fun(ply: Player): PW.StreakSetEntry[]
+---Server. Activates a streak from the inventory: LIVE, living player, id held. Creates the instance (OnEquip)
+---and ends it after Duration. Bots call it directly. Returns true when activated.
+---@field Use? fun(ply: Player, id: string): boolean
+---Server. The first held streak whose BotShouldUse agrees (nil when none).
+---@field Ready? fun(bot: Player): string?
+---Server. Puts a streak into the inventory (tests, dev commands); false for an unknown streak.
+---@field Give? fun(ply: Player, id: string): boolean
+---Server. Runs fn(...) as streak damage: kills and points scored meanwhile are streak kills (no chaining).
+---@field StreakDamage? fun(fn: (fun(...: any)), ...: any)
+---Server. Starts a Counter-UAV of `owner` for `duration` seconds and notifies the hostile players.
+---@field Jam? fun(owner: Player, duration: number)
+---Server. The living enemies of a player (PW.IsEnemy).
+---@field Enemies? fun(owner: Player): Player[]
+---Server. The reveal viewer of a player: its team index in a team mode, else the player.
+---@field Viewer? fun(owner: Player): integer|Player
+---Client. The live blips (not expired).
+---@field Blips? fun(): PW.RevealBlip[]
+---Client. Whether the local radar is jammed now.
+---@field Jammed? fun(): boolean
+---Client. The selected inventory index (1-based).
+---@field Selected? integer
+---Client. The radar data.
+---@field Radar? PW.RadarView
+---Pure: the cost of a streak under an earning mode ("kills" or "score").
+---@field _Cost fun(def: { Kills: any, Score: any }, earn: string): integer
+---Pure: the streak set of a loadout (slots in order, duplicates and unknown ids skipped), cheapest first.
+---@field _Set fun(loadout: table, lookup: (fun(id: string): any), earn: string): PW.StreakSetEntry[]
+---Pure: what a score event adds to the counter (kills: 1 for "kill"; score: the points).
+---@field _Gain fun(earn: string, eventId: string, points: number): number
+---Pure: whether an event counts (a streak kill counts only with chain).
+---@field _Counts fun(chain: boolean, fromStreak: boolean): boolean
+---Pure: the streaks whose cost the counter crossed from before to after.
+---@field _Crossed fun(set: PW.StreakSetEntry[], before: number, after: number): string[]
+---Pure: the counter after death.
+---@field _AfterDeath fun(progress: number, persist: boolean): number
+---Pure: the next streak to earn, nil when every streak of the set is behind.
+---@field _NextGoal fun(set: PW.StreakSetEntry[], progress: number): PW.StreakSetEntry?
+---Pure: appends to the inventory, dropping the oldest beyond max.
+---@field _Push fun(inventory: string[], id: string, max: integer): string[]
+---Pure: the first index of an id.
+---@field _Find fun(inventory: string[], id: string): integer?
+---Pure: a selection index moved by step and wrapped into 1..count.
+---@field _Select fun(selected: integer, count: integer, step?: integer): integer
+---@field _EncodeInventory fun(inventory: string[]): string
+---@field _DecodeInventory fun(text: string?): string[]
+---@field _EncodeSet fun(set: PW.StreakSetEntry[]): string
+---@field _DecodeSet fun(text: string?): PW.StreakSetEntry[]
+---Pure: "use", "next" or nil for a pressed button.
+---@field _KeyAction fun(button: integer, codes: { use: integer?, next: integer? }): string?
+---@field _DeclareSlots fun()
+---Pure: whether a target shows to the side of `ref` under the jams.
+---@field _Visible fun(target: any, ref: any, jams: PW.RevealJam[], now: number, isEnemy: PW.EnemyFn): boolean
+---Pure: the visible targets.
+---@field _Filter fun(targets: any[], ref: any, jams: PW.RevealJam[], now: number, isEnemy: PW.EnemyFn): any[]
+---Pure: drops expired jams (in place) and returns the list.
+---@field _Prune fun(jams: PW.RevealJam[], now: number): PW.RevealJam[]
+---@field _Quantize fun(value: number): integer
+---@field _Dequantize fun(value: integer): number
+---@field _EncodeTime fun(seconds: number): integer
+---@field _DecodeTime fun(tenths: integer): number
+---Pure: the bomb points of an airstrike, centred on `center` along the flat direction `dir`.
+---@field _AirstrikePoints fun(center: Vector, dir: Vector, count: integer, spacing: number): Vector[]
+---Pure: copies the blips that have not expired into out; returns out.
+---@field _Live fun(blips: PW.RevealBlip[], now: number, out: PW.RevealBlip[]): PW.RevealBlip[]
+---@field _NewStore? fun(opts?: PW.StreaksStoreOptions): PW.StreaksStore
+---@field _NewRevealStore? fun(opts?: PW.RevealStoreOptions): PW.RevealStore
+---@field _OnScore? fun(ply: Player, eventId: string, points: number): string[]
+---@field _OnSpawn? fun(ply: Player): boolean
+---@field _OnDeath? fun(ply: Player)
+---@field _Clear? fun(ply: Player)
+---@field _Reset? fun()
+---@field _Receive? fun(ply: Player): boolean
+---@field _RegisterNet? fun(owner?: table)
+---@field _Instances? table<PW.StreakInstance, true> live activations (server)
+
+---Class table inside a streaks/ file.
+---@type PW.StreakInstance
+STREAK = nil

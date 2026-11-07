@@ -1,0 +1,79 @@
+---@meta
+-- Type definitions of the enable ConVars and the enable snapshot (T-1.4; 01-extensibility.md d.11, d.16).
+
+---Enable ConVar snapshot (01-extensibility.md d.11): ids whose flag was 0, by kind id.
+---@alias PW.EnableSnapshot table<string, table<string, true>>
+
+---Options of an enable store; every field has an engine default (tests inject their own).
+---@class PW.EnableStoreOptions
+---@field registries? fun(): table<string, PW.Registry> default: PW.Registries
+---@field read? fun(name: string): boolean default: the ConVar's value (true when it does not exist)
+---@field create? fun(name: string) default: CreateConVar(name, "1", FCVAR_ARCHIVE, ..., 0, 1)
+---@field exists? fun(name: string): boolean default: GetConVar(name) ~= nil
+---@field write? fun(key: string, value: boolean) default: SetGlobal2Bool(key, value)
+
+---Internal (01-extensibility.md d.11): the registries the flags apply to, the ConVar glue and the snapshot.
+---@class PW.EnableStore
+---@field registries fun(): table<string, PW.Registry>
+---@field read fun(name: string): boolean
+---@field create fun(name: string)
+---@field exists fun(name: string): boolean
+---@field snapshot? PW.EnableSnapshot the snapshot of the current match (taken at boot until the first match)
+---@field write fun(key: string, value: boolean)
+---@field networked boolean the snapshot is written to NW2 (from server InitPostEntity on, like the phase globals)
+---@field published table<string, true> NW2 keys this store has set to true
+
+---A set of strings.
+---@alias PW.KeySet table<string, true>
+
+---One NW2 global write of the enable snapshot.
+---@class PW.EnableWrite
+---@field key string
+---@field value boolean
+
+---Enable ConVars pw_<kind>_<id>_enabled (T-1.4, 01-extensibility.md d.11, d.16). The ConVars and the snapshot are
+---server only; the snapshot reaches clients as one NW2 global bool per disabled entity (PW.Enable._Key), so
+---GetEnabledList and IsValid on the client match the server. Fields marked "server" or "client" exist only there;
+---the others are shared.
+---@class PW.EnableLib
+---@field _Reason string internal: the _Disable reason of an entity disabled by its ConVar
+---Internal, pure: the NW2 global bool that is true while entity id of kind kindId is disabled by the snapshot:
+---"pw_off:<kind id>:<id>".
+---@field _Key fun(kindId: string, id: string): string
+---Internal, pure: the NW2 writes that turn the published keys into the snapshot: true for every listed entity the
+---snapshot disables and published lacks, false for every published key the snapshot no longer disables. Sorted
+---by key.
+---@field _Writes fun(regs: table<string, PW.Registry>, snap: PW.EnableSnapshot, published: PW.KeySet): PW.EnableWrite[]
+---Internal, pure: the snapshot as the NW2 values show it: the listed entities whose key reads true, by kind.
+---@field _ReadSnapshot fun(registries: table<string, PW.Registry>, read: fun(key: string): boolean): PW.EnableSnapshot
+---Internal, server: marks the store networked and writes the snapshot to NW2 (run from server InitPostEntity).
+---@field _Publish fun()
+---Internal, client: reads the NW2 values and applies them to PW.Registries. Runs on every client Boot and before
+---every PW_PhaseChanged (cl_phase.lua), so a module disabled for the match is disabled before it hears of it.
+---@field _Sync fun()
+---Name of the enable ConVar of entity id in registry kind ("pw_<token>_<id>_enabled"); nil for an unknown kind.
+---Server.
+---@field ConVarName fun(kind: string, id: string): string?
+---Internal, pure: the ConVar token of a kind: its class table name in lowercase (MODE -> mode, MODULE -> module,
+---KIND -> kind), the kind id when the kind has no declaration.
+---@field _KindToken fun(registries: table<string, PW.Registry>, kindId: string): string
+---Internal, pure: "pw_<token>_<id>_enabled".
+---@field _ConVarName fun(token: string, id: string): string
+---Internal, pure: the ids of the listed (resolved, non-abstract) entities whose flag reads false, by kind.
+---@field _TakeSnapshot fun(registries: table<string, PW.Registry>, read: fun(name: string): boolean): PW.EnableSnapshot
+---Internal: disables the listed entities of the snapshot (reason _Reason) and enables entities that _Reason
+---disabled and the snapshot no longer lists. Entities disabled for another reason (an error) are left alone.
+---@field _Apply fun(registries: table<string, PW.Registry>, snapshot: PW.EnableSnapshot)
+---Internal: creates the missing ConVars of every listed entity of the store's registries.
+---@field _EnsureConVars fun()
+---Internal, server: run when a new match enters PREMATCH: creates missing ConVars, takes, applies and publishes
+---a new snapshot.
+---@field _NewMatch fun()
+---Internal: run by PW.Loader.Boot. Server: creates missing ConVars, takes a snapshot if there is none, applies and
+---publishes it. Client: _Sync.
+---@field _OnBoot fun()
+---Internal: a registry calls it after a registration made after its first ResolveAll (late registration). Server:
+---creates the new entity's ConVar; client: nothing.
+---@field _OnRegistered fun(registry: PW.Registry, id: string)
+---Internal, server: a fresh store without a snapshot, not networked (tests swap PW._Enable).
+---@field _NewStore fun(opts?: PW.EnableStoreOptions): PW.EnableStore

@@ -1,0 +1,108 @@
+---@meta
+-- Types of the match_rules module (T-2.2; 02-modes.md d.5, d.7; 00-core.md d.3, d.5). Source:
+-- lua/privatewar/modules/match_rules/ (shared.lua: API, pure rules and reading; init.lua: server glue) and the
+-- modes tdm and ffa (lua/privatewar/modes/).
+
+---One entry of the standings: a team index (team modes) or a player (FFA), and its score toward the limit.
+---@class PW.Standing
+---@field id any team index (integer) in a team mode, the Player in FFA (any value in pure tests)
+---@field score integer
+
+---Result of a match, the value a mode gives to PW.Match.Finish (and PW_MatchEnd receives).
+---@class PW.MatchResult
+---@field reason string why the match ended: "scorelimit" or "timelimit" (other modes may add their own)
+---@field teams boolean true: ids in winner and standings are team indices; false: players (FFA)
+---@field draw boolean true: the top score is shared, there is no winner
+---@field winner? any the standing id of the winner (team index or Player); nil on a draw
+---@field standings PW.Standing[] best first; equal scores keep the input order
+
+---Plain input of the win evaluation.
+---@class PW.LimitInput
+---@field standings PW.Standing[] unsorted
+---@field teams boolean
+---@field scorelimit number 0 or less: no score limit
+---@field timelimit number seconds; 0 or less: no time limit
+---@field elapsed number seconds since the match went LIVE
+
+---Plain facts about one kill, for the scoring rule.
+---@class PW.KillInfo
+---@field suicide boolean the attacker is the victim
+---@field player boolean the attacker is a valid player
+---@field enemy boolean PW.IsEnemy(attacker, victim)
+---@field headshot boolean the victim's last hit group was the head
+
+---A spawn point answer of PW_SelectSpawn given as data (map data entries have this shape, 03-mapdata.md d.2).
+---@class PW.SpawnPoint
+---@field pos Vector
+---@field yaw? number
+
+---Internal (server): state of the current match.
+---@class PW.MatchRulesStore
+---@field kills table<any, integer> enemy kills by player
+---@field teamKills table<integer, integer> enemy kills by team index
+---@field respawnAt table<any, number> CurTime() at which a dead player respawns (set on the first death tick)
+---@field points table<any, PW.SpawnPoint> a PW_SelectSpawn data answer, applied when the player spawns
+
+---Kill, respawn and win rules shared by the modes (T-2.2). Kills are counted toward the score limit; the score
+---module keeps the points (PW.Score).
+---@class PW.MatchRulesLib
+---Team index of FFA players: a real engine team, so the base GM:PlayerSpawn (GM.TeamBased) does not make them
+---spectators. Outside 1..N, so it never counts as a team of the match (no team score, every player an enemy).
+---@field FreeTeam integer
+---Server: the mode's default reaction to PW_PlayerKilled: awards "kill" (and "headshot") to the attacker for an
+---enemy kill and counts the kill toward the score limit; suicides, team kills and world kills score nothing.
+---@field ScoreKill? fun(victim: Player, attacker: Entity, dmg: CTakeDamageInfo)
+---Server: the win check of a kill-limit mode at time now (CurTime()): a PW.MatchResult when the match is over,
+---else nil. Limits come from the mode's settings scorelimit and timelimit, the start time from mode._StartedAt.
+---players defaults to every connected player (FFA standings).
+---@field Check? fun(mode: PW.Mode, now: number, players?: Player[]): PW.MatchResult?
+---Enemy kills of a player in this match. The server reads its store, a client the NW2 value.
+---@field GetKills fun(ply: Player): integer
+---Enemy kills of a team in this match. The server reads its store, a client the NW2 global.
+---@field GetTeamKills fun(index: integer): integer
+---Internal, pure: the score event ids of a kill, in award order ({} for no score).
+---@field _KillEvents fun(info: PW.KillInfo): string[]
+---Internal, pure: a sorted copy, best first; equal scores keep the input order.
+---@field _Sort fun(standings: PW.Standing[]): PW.Standing[]
+---Internal, pure: the result when a limit is reached, else nil. The score limit is checked before the time limit;
+---a shared top score is a draw.
+---@field _Evaluate fun(input: PW.LimitInput): PW.MatchResult?
+---Internal, pure: standings from kill counts: teams 1..teamCount, or the given players when teamCount is 0.
+---@field _Standings fun(teamCount: integer, store: PW.MatchRulesStore, players: any[]): PW.Standing[]
+---Internal, pure: whether a dead player with respawn time at (nil: not set yet) may respawn at now.
+---@field _RespawnDue fun(now: number, at: number?): boolean
+---Internal, pure: the kind of a PW_SelectSpawn answer: "entity" (a valid entity), "point" (PW.SpawnPoint) or
+---nil (use the base gamemode's selection).
+---@field _SpawnTarget fun(answer: any): string?
+---Internal, pure: adds one enemy kill to a player and, for a team index (nil = none), to the team.
+---@field _Tally fun(store: PW.MatchRulesStore, ply: any, team: integer?): integer, integer?
+---Internal: a fresh store (tests swap PW._MatchRules).
+---@field _NewStore fun(): PW.MatchRulesStore
+---Internal: the default respawn delay when nobody answers PW_RespawnDelay with a number.
+---@field _DefaultDelay number
+---Internal: NW2 key of the player kill count and prefix of the team kill count globals; NW2 global of the match
+---end time (CurTime(), -1 without a time limit).
+---@field _KillsKey string
+---@field _TeamKillsKey string
+---@field _EndsKey string
+---Internal: NW2 globals of the HUD (U-8): the key prefix of the per-team score of the running mode (a string), and
+---the result of the finished match (winner: team index, or UserID in FFA, 0 none; draw; team count, 0 in FFA).
+---@field _ScoreKeyKey string
+---@field _ResultWinnerKey string
+---@field _ResultDrawKey string
+---@field _ResultTeamsKey string
+---Internal: NW2 global Int of the score limit of the running mode for the HUD bars (0: none, also outside a match).
+---@field _LimitKey string
+---Internal, pure: the score limit a HUD shows for a mode: mode.HudScoreLimit, else RoundsToWin (round modes), else
+---the `scorelimit` setting; 0 when there is none or no mode.
+---@field _HudScoreLimit fun(mode: table<string, any>?): integer
+---Internal, pure: the NW2 key prefix of the per-team score of a mode: mode.HudScoreKey, else by ClassName or Base
+---(dom, kc, round_base), else the kill count prefix. nil (no mode) gives the kill count prefix.
+---@field _HudScoreKey fun(mode: table<string, any>?): string
+---Internal, pure: winner, draw and team count of a result as plain numbers for NW2 (a Player winner becomes its
+---UserID, teams is 0 in FFA).
+---@field _ResultFields fun(result: PW.MatchResult): integer, boolean, integer
+
+---@class PW
+---@field MatchRules? PW.MatchRulesLib the match_rules module (nil when the module is missing)
+---@field _MatchRules PW.MatchRulesStore internal

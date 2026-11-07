@@ -1,0 +1,184 @@
+---@meta
+-- Types of settings (T-1.5, 01-extensibility.md d.17) and of the modes kind (02-modes.md d.7).
+-- Shared logic: gamemodes/privatewar/gamemode/core/sh_settings.lua; server glue: sv_settings.lua.
+
+---@alias PW.SettingType "int"|"float"|"bool"|"enum"|"set"
+
+---match: a snapshot per match, edited by the host in the lobby; server: an archived server ConVar;
+---client: an archived client ConVar (01-extensibility.md d.17).
+---@alias PW.SettingScope "match"|"server"|"client"
+
+---One setting as a mode or module declares it in its Settings table (key = setting key).
+---A mode with Base may redeclare an inherited key partially, for example { default = 65 }.
+---@class PW.SettingDecl
+---@field type? PW.SettingType
+---@field default? any int/float: number, bool: boolean, enum: string, set: list or { [id] = true }
+---@field min? number int/float only
+---@field max? number int/float only
+---@field options? string[]|fun(): string[] enum: the allowed values (required); set: the allowed members (optional).
+---A function gives dynamic options (for example the installed player models): it is called again at every
+---validation and form build; a failing call keeps the last good list
+---@field label? string localisation key shown in settings screens
+---@field scope? PW.SettingScope default "match"; always "match" for modes
+
+---A validated setting with its full id.
+---@class PW.SettingDef
+---@field id string full id "<owner id>.<key>"
+---@field owner string id of the mode or module
+---@field ownerKind "modes"|"modules"
+---@field key string
+---@field type PW.SettingType
+---@field scope PW.SettingScope
+---@field default any validated default (a set is { [id] = true })
+---@field min? number
+---@field max? number
+---@field options? string[]
+---@field optionSet? table<string, true> options as a lookup table
+---@field optionsFn? fun(): string[] the declaration's dynamic options function, if any
+---@field label string
+---@field description? string what the setting trades or changes, shown beside the form (optional)
+
+---Full id -> definition, for the listed (non-abstract) modes and all modules.
+---@alias PW.SettingIndex table<string, PW.SettingDef>
+
+---Match values by full id: the pending edits of the host or a match snapshot.
+---@alias PW.SettingValues table<string, any>
+
+---One setting in a settings form (T-1.19, T-7.2).
+---@class PW.SettingField
+---@field def PW.SettingDef
+---@field value any the value the form shows (match: pending or effective default; server/client: the ConVar)
+
+---One group of a settings form: the mode group first, then one group per module.
+---@class PW.SettingGroup
+---@field owner string
+---@field ownerKind "modes"|"modules"
+---@field fields PW.SettingField[] sorted by key
+
+---ConVar glue of the settings store (tests inject fakes).
+---@class PW.SettingConVars
+---@field read fun(name: string): string? the ConVar's string value, nil when it does not exist
+---@field write fun(name: string, text: string): boolean false when the ConVar does not exist
+---@field create fun(def: PW.SettingDef) creates the ConVar of a server or client setting for this realm
+
+---@class PW.SettingStoreOptions
+---@field registries? fun(): table<string, PW.Registry> default: PW.Registries
+---@field log? PW.LogFn
+---@field convars? PW.SettingConVars
+---Reads full id and value text of a pw_settings_* message (default: two net.ReadString).
+---@field readChange? fun(): string, string
+
+---Internal: the settings state of this realm.
+---@class PW.SettingStore
+---@field registries fun(): table<string, PW.Registry>
+---@field log PW.LogFn
+---@field convars PW.SettingConVars
+---@field readChange fun(): string, string
+---@field pending PW.SettingValues match values edited for the next match (server)
+---@field snapshot? PW.SettingValues match values of the current match, taken on LOBBY -> PREMATCH (server)
+---@field reported table<string, true> unknown ids already logged
+---@field index? { modes: PW.Entity[], modules: PW.Entity[], index: PW.SettingIndex } the last index and its lists
+
+---The value a settings form shows for a definition.
+---@alias PW.SettingValueFn fun(def: PW.SettingDef): any
+
+---Input of PW.Settings._Groups.
+---@class PW.SettingGroupsInput
+---@field mode? table the mode of the match group
+---@field modules table[] modules, sorted by id
+---@field scope PW.SettingScope
+---@field log PW.LogFn
+---@field valueOf PW.SettingValueFn
+
+---Settings library (T-1.5, 01-extensibility.md d.17).
+---@class PW.SettingsLib
+---Privilege needed to change match and server settings (00-core.md d.7): "pw.settings.change", superadmin.
+---@field Privilege string
+---Methods the core puts on every resolved mode and module: Setting(self, key).
+---@field EntityMethods table<string, function>
+---Changes a setting by full id. Server: match -> the pending value of the next match, server -> its ConVar.
+---Client: client settings only. Out-of-range numbers are clamped; anything invalid returns false and a reason.
+---@field Set fun(fullId: string, value: any): boolean, string?
+---Settings form groups of a scope: "match" lists the mode group (mode may be nil) and every enabled module
+---with match settings; "server"/"client" list the modules with settings of that scope.
+---@field GetGroups fun(scope: PW.SettingScope, mode?: table): PW.SettingGroup[]
+---Internal, pure: checks one declaration (merged along Base) and returns the definition or an error.
+---@field _CheckDef fun(owner: string, ownerKind: "modes"|"modules", key: any, decl: any): PW.SettingDef?, string?
+---Internal, pure: validates a Lua value. Returns ok, the value to store (clamped, rounded, set normalized) and
+---a note ("clamped") or the reason of a rejection.
+---@field _Validate fun(def: PW.SettingDef, value: any): boolean, any, string?
+---Internal: the current options of a definition (a dynamic options function is called again; a failing call keeps the
+---last good list).
+---@field _Options fun(def: PW.SettingDef): string[]?
+---Internal: the current options as a lookup table.
+---@field _OptionSet fun(def: PW.SettingDef): table<string, true>?
+---Internal, pure: a wire or ConVar string -> validated value (int/float: number, bool: 1/0/true/false,
+---enum: the option, set: comma-separated members).
+---@field _Parse fun(def: PW.SettingDef, text: string): boolean, any, string?
+---The text form of a value (ConVars, pw_settings_* messages) for a definition or a full id; nil for an unknown
+---id. Same format as the internal _Format.
+---@field Format fun(def: PW.SettingDef|string, value: any): string?
+---Internal, pure: a validated value -> its wire or ConVar string.
+---@field _Format fun(def: PW.SettingDef, value: any): string
+---Internal, pure: "tdm.scorelimit" -> "tdm", "scorelimit"; nil for a malformed id.
+---@field _SplitId fun(fullId: any): string?, string?
+---Internal, pure: ConVar name of a server or client setting: pw_<owner>_<key>.
+---@field _ConVarName fun(def: PW.SettingDef): string
+---Internal, pure: the stored tables of an entity's Base chain, root first (the entity alone without registry).
+---@field _OwnChain fun(entity: table): table[]
+---Internal, pure: the settings of an entity: declarations merged along its Base chain, validated.
+---@field _Schema fun(entity: table, ownerKind: "modes"|"modules", log: PW.LogFn): table<string, PW.SettingDef>
+---Internal, pure: SettingDefaults merged along a mode's Base chain (child wins).
+---@field _SettingDefaults fun(mode: table): table<string, any>
+---Internal, pure: full id -> definition for modes and modules. An id taken twice keeps the module's setting.
+---@field _Index fun(modes: table[], modules: table[], log: PW.LogFn): PW.SettingIndex
+---Internal, pure: the default of a setting for a mode: the mode's SettingDefaults for a module match setting,
+---else the declared default.
+---@field _DefaultFor fun(def: PW.SettingDef, mode: table?, log: PW.LogFn): any
+---Internal, pure: match values of a mode and modules: pending values, else defaults for the mode.
+---@field _TakeSnapshot fun(mode: table?, modules: table[], pending: PW.SettingValues, log: PW.LogFn): PW.SettingValues
+---Internal, pure: form groups (see GetGroups); valueOf gives the shown value of a definition.
+---@field _Groups fun(input: PW.SettingGroupsInput): PW.SettingGroup[]
+---Internal: the index of the store's registries.
+---@field _CurrentIndex fun(): PW.SettingIndex
+---Internal: the current value of a setting definition (snapshot, pending, default or ConVar).
+---@field _Value fun(def: PW.SettingDef): any
+---Internal: logs a message once per store (schema errors and unknown ids would repeat on every lookup).
+---@field _LogOnce fun(message: string)
+---Internal: the enabled modules of the store's registries (the modules of a match).
+---@field _EnabledModules fun(): PW.Entity[]
+---Internal: creates the ConVars of server and client settings of the store's registries (run by Boot).
+---@field _OnBoot fun()
+---Internal: a fresh store (tests swap PW._Settings).
+---@field _NewStore fun(opts?: PW.SettingStoreOptions): PW.SettingStore
+---Internal (server): takes the match snapshot of a new match (PW.Match, LOBBY -> PREMATCH).
+---@field _NewMatch? fun(mode: table?)
+---Internal (server): drops the snapshot when the machine enters LOBBY; match settings read pending values again.
+---@field _EndMatch? fun()
+---Internal (server): the match values written to pending_match.json for a mode.
+---@field _ForFile? fun(mode: table): PW.SettingValues
+---Internal (server): restores match values from pending_match.json as the pending values; invalid ones dropped.
+---@field _FromFile? fun(values: table<string, any>)
+---Internal (server): handles a pw_settings_match / pw_settings_server message of scope from ply.
+---@field _OnChange? fun(scope: PW.SettingScope, ply: Player): boolean
+---Internal (server): registers pw_settings_match and pw_settings_server with PW.Net.Receive.
+---@field _RegisterNet? fun()
+
+---A game mode: an entity of the modes kind (02-modes.md d.7).
+---@class PW.Mode : PW.Entity
+---@field Name string display name (localisation key), required
+---@field Teams integer team count, 0 = FFA, required (02-modes.md d.6)
+---@field Description? string
+---@field Icon? string
+---@field Short? string badge text of the mode monogram ("TDM"); fallback: the initials of Name (10-frontend.md d.10)
+---@field Settings? table<string, PW.SettingDecl> match settings of the mode (01-extensibility.md d.17)
+---@field SettingDefaults? table<string, any> defaults of module match settings by full id, for this mode
+---@field Start? fun(self: PW.Mode) called on entering LIVE (00-core.md d.3)
+---@field Cleanup? fun(self: PW.Mode) called on leaving LIVE
+---@field Think? fun(self: PW.Mode) called every tick during LIVE
+---Value of one of the mode's settings: self:Setting("scorelimit") reads "<id>.scorelimit".
+---@field Setting fun(self: PW.Mode, key: string): any
+
+---Class table inside a modes/ file.
+---@type PW.Mode
+MODE = nil

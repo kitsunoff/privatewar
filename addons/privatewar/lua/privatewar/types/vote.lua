@@ -1,0 +1,216 @@
+---@meta
+-- Types of the vote module (T-2.13; 08-lobby.md d.5; 00-core.md d.2, d.5; 02-modes.md d.2, d.5b; docs/api/modes.md
+-- "Vote module"). Module: lua/privatewar/modules/vote/ (shared.lua: pure rules, wire and screen model; init.lua:
+-- server glue and messages; cl_init.lua: the vote screen).
+
+---One offered next match.
+---@class PW.VoteOption
+---@field mode string mode id
+---@field map string
+
+---What candidate selection needs (plain data).
+---@class PW.VoteCandidateInput
+---@field modes table<string, number> mode id -> weight (> 0), the playlist's Modes
+---@field maps string[] the playlist's Maps, or the curated map list for Maps = nil and Custom
+---@field fits? fun(modeId: string, map: string): boolean whether the mode is offered on the map (default: always)
+---@field recent string[] recently played maps, newest first
+---@field current? PW.VoteOption the match that just ended
+---@field allowRepeat boolean vote.allowrepeat
+---@field count integer vote.options
+---@field rng fun(): number returns a number in [0, 1)
+
+---Where the options come from: the active playlist, or nil for Custom.
+---@class PW.VoteSource
+---@field modes table<string, number>
+---@field maps? string[] nil: the curated map list
+
+---One open vote.
+---@class PW.VoteSession
+---@field options PW.VoteOption[]
+---@field votes table<any, integer> voter -> option index; a new vote replaces the old one
+---@field ended boolean the vote was ended early (all humans voted, or the host picked); later votes are refused
+---@field picked? PW.VoteOption the host's pick
+---@field result? PW.VoteOption the decided next match (decided once)
+
+---The answer to the question hook PW_NextMatch: the next match after VOTE.
+---@class PW.NextMatch
+---@field mode table a mode entity (a table with a string ClassName)
+---@field map? string nil or the current map: no map change
+
+---One option as a client sees it (wire form of pw_vote_state).
+---@class PW.VoteStateOption
+---@field mode string
+---@field name string the mode's display name
+---@field map string
+---@field votes integer
+
+---What the server sends to one client.
+---@class PW.VoteState
+---@field options PW.VoteStateOption[]
+---@field mine integer the receiver's own vote, 0 for none
+---@field canPick boolean the receiver may pick the next match directly
+
+---@class PW.VoteWriter
+---@field uint fun(value: integer, bits: integer)
+---@field string fun(value: string)
+---@field bool fun(value: boolean)
+
+---@class PW.VoteReader
+---@field uint fun(bits: integer): integer
+---@field string fun(): string
+---@field bool fun(): boolean
+
+---One row of the vote screen.
+---@class PW.VoteRow
+---@field index integer
+---@field label string "<mode name> on <map>"
+---@field votes integer
+---@field mine boolean
+
+---What the vote screen draws.
+---@class PW.VoteModel
+---@field title string
+---@field rows PW.VoteRow[]
+---@field canPick boolean
+
+---One card of the vote screen (U-7).
+---@class PW.VoteCard
+---@field index integer option index (the number sent in pw_vote_cast)
+---@field mode string
+---@field modeName string
+---@field map string
+---@field votes integer
+---@field badge string mode monogram
+---@field thumb? string map thumbnail path
+---@field mine boolean the own vote
+
+---@class PW.VoteTurnout
+---@field voted integer
+---@field total integer
+---@field text string "3/4 voted"
+
+---@class PW.VoteTimer
+---@field text string "m:ss", empty without a phase end
+---@field warning boolean the last 10 seconds
+
+---@class PW.VoteScreenOpts
+---@field remaining? number phase time left in seconds
+---@field humans? integer human players (the turnout total)
+---@field shortOf? fun(modeId: string): string? the mode's Short
+---@field pickReady? boolean false when the map picker has no data (hides "Pick myself"); default true
+
+---@class PW.VoteScreen
+---@field title string
+---@field cards PW.VoteCard[]
+---@field turnout PW.VoteTurnout
+---@field timer PW.VoteTimer
+---@field pick { visible: boolean, label: string }
+---@field hints PW.UIHintEntry[]
+
+---Injectable glue of the server side (tests give fakes).
+---@class PW.VoteStoreOptions
+---@field log? PW.LogFn
+---@field rng? fun(): number
+---@field source? fun(): PW.VoteSource? the active playlist, nil for Custom
+---@field pool? fun(): string[] the curated map list (PW.MapList.GetList)
+---@field fits? fun(modeId: string, map: string): boolean
+---@field current? fun(): PW.VoteOption? the active mode and the current map
+---@field getRecent? fun(): string[]
+---@field setRecent? fun(list: string[])
+---@field humans? fun(): table[] the connected human players
+---@field endVote? fun(): boolean ends VOTE now (PW.Match.EndVote)
+---@field send? fun(ply: any, state: PW.VoteState)
+---@field resolveMode? fun(id: string): table? an enabled mode entity by id
+---@field count? fun(): integer vote.options
+---@field allowRepeat? fun(): boolean vote.allowrepeat
+---@field canPick? fun(ply: any): boolean
+---@field readIndex? fun(): integer
+---@field readPick? fun(): string, string mode id and map
+---@field isMatchMode? fun(mode: any): boolean whether a mode is one of the real modes registry (not a test double)
+
+---@class PW.VoteStore
+---@field log PW.LogFn
+---@field rng fun(): number
+---@field source fun(): PW.VoteSource?
+---@field pool fun(): string[]
+---@field fits fun(modeId: string, map: string): boolean
+---@field current fun(): PW.VoteOption?
+---@field getRecent fun(): string[]
+---@field setRecent fun(list: string[])
+---@field humans fun(): table[]
+---@field endVote fun(): boolean
+---@field send fun(ply: any, state: PW.VoteState)
+---@field resolveMode fun(id: string): table?
+---@field count fun(): integer
+---@field allowRepeat fun(): boolean
+---@field canPick fun(ply: any): boolean
+---@field readIndex fun(): integer
+---@field readPick fun(): string, string
+---@field isMatchMode fun(mode: any): boolean
+---@field session? PW.VoteSession the open vote, nil outside VOTE
+
+---@class PW.VoteLib
+---Privilege of "Pick myself" (08-lobby.md d.5): "pw.vote.pick", default superadmin.
+---@field Privilege string
+---How many recently played maps are excluded: 2.
+---@field RecentCount integer
+---Pure: up to count distinct options sampled by weight (a mode by its playlist weight, then a fitting map). The
+---last RecentCount maps are excluded when the playlist has 3 or more fitting maps; the current match is excluded
+---unless allowRepeat. When the exclusions leave nothing, the recent rule and then the repeat rule are dropped.
+---@field Candidates fun(input: PW.VoteCandidateInput): PW.VoteOption[]
+---Pure: the recent list with map in front, without duplicates, at most RecentCount long.
+---@field PushRecent fun(list: string[], map: string): string[]
+---Pure: the ConVar text of the recent list ("gm_a,gm_b") and back; invalid names are skipped.
+---@field FormatRecent fun(list: string[]): string
+---@field ParseRecent fun(text: string): string[]
+---Pure: a new session over the options.
+---@field NewSession fun(options: PW.VoteOption[]): PW.VoteSession
+---Pure: records a vote (replacing the voter's previous one). False and "bot", "ended" or "index" when refused.
+---@field Cast fun(session: PW.VoteSession, voter: any, isBot: boolean, index: integer): boolean, string?
+---Pure: votes per option index.
+---@field Tally fun(votes: table<any, integer>, count: integer): integer[]
+---Pure: the option with the most votes; a tie (also no votes) is broken by rng among the tied options only.
+---@field Winner fun(counts: integer[], rng: fun(): number): integer?
+---Pure: the players that are not bots (anything with an IsBot method).
+---@field Humans fun(players: table[]): table[]
+---Pure: true when there is at least one human and every human has voted.
+---@field AllVoted fun(humans: table[], votes: table<any, integer>): boolean
+---Pure: the pw_vote_state encoding.
+---@field _Encode fun(state: PW.VoteState, writer: PW.VoteWriter)
+---@field _Decode fun(reader: PW.VoteReader): PW.VoteState
+---Pure: the screen model; remaining is the phase time left in seconds, nil when unknown.
+---@field _Model fun(state: PW.VoteState, remaining?: number): PW.VoteModel
+---Pure: one card per option, the own vote marked (U-7).
+---@field _Cards fun(state: PW.VoteState, opts: PW.VoteScreenOpts): PW.VoteCard[]
+---Pure: votes cast against the humans.
+---@field _Turnout fun(state: PW.VoteState, humans: integer): PW.VoteTurnout
+---Pure: the timer text and the last-10-seconds warning; nil remaining gives an empty text.
+---@field _Timer fun(remaining?: number): PW.VoteTimer
+---Pure: the whole vote screen model; "Pick myself" is visible only with state.canPick (and pickReady).
+---@field _Screen fun(state: PW.VoteState, opts: PW.VoteScreenOpts): PW.VoteScreen
+---Server: a fresh store with the given fakes.
+---@field _NewStore? fun(opts?: PW.VoteStoreOptions): PW.VoteStore
+---Server: opens the vote (samples the options, sends them to every human). Nil when nothing can be offered.
+---@field Open? fun(): PW.VoteSession?
+---Server: closes the open vote.
+---@field Close? fun()
+---Server: the next match decided by the open vote (the host's pick, else the winner); nil without an open vote.
+---@field Result? fun(): PW.NextMatch?
+---Server: a vote of ply; ends the vote when every human has voted.
+---@field _Cast? fun(ply: any, index: integer): boolean, string?
+---Server: the host's pick; ends the vote.
+---@field _Pick? fun(ply: any, modeId: string, map: string): boolean, string?
+---Server: a match went live on map: it becomes the newest recent map.
+---@field _Played? fun(map: string)
+---Server: sends ply the current state.
+---@field _SendState? fun(ply: any)
+---Server: registers the three client messages (owner: the module, or a test double).
+---@field _RegisterNet? fun(owner?: table)
+---Client: sends a vote, sends a pick, asks for the state.
+---@field SendVote? fun(index: integer)
+---@field SendPick? fun(option: PW.VoteStateOption)
+---@field Request? fun()
+
+---@class PW
+---@field Vote? PW.VoteLib the vote module (nil when the module is missing)
+---@field _Vote PW.VoteStore internal (server)

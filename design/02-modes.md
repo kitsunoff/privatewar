@@ -1,0 +1,115 @@
+# 02 — Modes
+
+Status: decided.
+
+## Goal and scope
+
+Mode registry with a single active mode object; TDM, Domination, Kill Confirmed.
+
+## Decisions
+
+Inherited from `00-core.md`:
+
+- A mode owns everything inside `LIVE`. Contract: `MODE:Start()`, `MODE:Cleanup()`, `PW.Match.Finish(result)` (core decision 3).
+- Rounds are provided by the abstract base mode `round_base` (core decision 4).
+
+Inherited from `01-extensibility.md`:
+
+- Modes are entities of the kind `modes/` with the class table `MODE` (decisions 8, 16).
+- A mode is the default answer for question hooks such as `PW_CanRespawn` (decision 9).
+- Mode settings are declared in `MODE.Settings` (decision 17).
+
+### Configurability
+
+1. **Two ways to set up a match.**
+   - **Custom:** the host picks one mode and one map and edits Game Setup by hand (CoD private match).
+   - **Playlist:** the host picks a ready-made playlist curated by an addon author (for example "Shipment 24/7" from a map pack, "Hardcore" from a mode pack); nothing to configure.
+   - Rationale: players get both "configure it yourself" and curated experiences from addon authors.
+
+2. **Playlists are a kind `playlists/` (data only).**
+
+   ```lua
+   -- lua/privatewar/playlists/shipment_247.lua
+   PLAYLIST.Name  = "Shipment 24/7"
+   PLAYLIST.Modes = { tdm = 1, dom = 1, kc = 1 }       -- mode id → weight
+   PLAYLIST.Maps  = { "pw_shipment" }                  -- map pool; nil = every map that supports the mode
+   PLAYLIST.Settings = {                                -- match-scope overrides, full setting ids
+       ["tdm.scorelimit"] = 100,
+       ["bots.count"]     = 11,
+   }
+   ```
+
+   - A "preset" is just a playlist with one mode (for example Hardcore TDM = `Modes = { tdm = 1 }`, `Settings = { ["health.hardcore"] = true }`). No separate preset concept.
+   - In "rotation with vote" (core decision 2) the vote offers several map + mode pairs sampled from the active playlist by weight.
+
+3. **Host-saved playlists.** "Save as…" in the lobby stores the current Custom setup as a playlist in JSON under `data/privatewar/playlists/`. The loader reads them alongside Lua playlists; same fields, same validation.
+
+4. **`maxplayers` cannot be changed from Lua** (`../notes/17-lobby-and-join-flow.md`, fact 5). A playlist's player count can only mean "fill with bots up to N". If the server was started with fewer slots, the lobby shows a warning ("playlist expects 24 players, server has 16").
+
+5a. **Bot fill instead of a player-count field.** The bots module setting is `bots.fill` ("fill with bots up to N players in total"), not a fixed bot count. In Custom the host sets it in Game Setup; a playlist sets it through `Settings = { ["bots.fill"] = 24 }`. Capped by `maxplayers` (decision 4). No separate playlist field. Clarified with the user on 2026-11-07: `bots` is one module that owns the bot settings; the `bots_*` modules of `07-bots.md` d.3 are its sub-modules.
+5b. **Vote size** is a `server` setting `vote.options` (default 3), not a playlist field.
+
+### Scope
+
+5. **MVP modes: TDM, FFA, Domination, Kill Confirmed.**
+   - Together they exercise teams and no-teams, zones on the map and pickup objects, which is enough to test the extensibility foundation.
+   - S&D (with `round_base`) is the first mode after MVP; the `MODE` interface is designed with it in mind so the API does not break later.
+   - Gun Game and Gunfight come later; good candidates to test writing a mode as a third-party pack.
+
+### Teams
+
+6. **The team API supports N teams; MVP is tested only with 0 (FFA) and 2.**
+   - A mode declares its team count: `MODE.Teams = N` (`0` = FFA).
+   - Modules work with the list `PW.Teams.GetActive()` and never assume exactly two teams. There are no `TEAM_A` / `TEAM_B` constants in the public API.
+   - **Enemy check only through `PW.IsEnemy(a, b)`**, a question hook (`hook.Call("PW_IsEnemy", PW.ActiveMode, a, b)`). Team-based default: `a:Team() ~= b:Team()`; FFA: `a ~= b`. Modules (damage, HUD, bots, minimap) never compare `Team()` directly; otherwise FFA breaks in every module separately.
+   - Team assignment, balancing, late-join placement and the per-team bot target are done by a `teams` module, not by the core or the mode. `round_base` swaps sides through that module's functions.
+   - Team names and colours are cosmetic; MVP has defaults; "factions" may become a kind later.
+   - Rationale: keeps the door open for modes with many teams (for example a Plunder-like squads mode) without a breaking API change later; writing modules as loops over teams costs almost nothing when done from the start.
+   - Known cost for N > 2 when such a mode appears: dynamic spawning instead of per-team spawn zones (`03-mapdata`), N-team scoreboard and HUD, N-owner capture in Domination-like modes.
+   - Decided by the user on 2026-11-06 (T-1.16): team assignment balances all players evenly and does not keep humans together against bots. Friends may end up on opposite teams. There is no setting for this.
+
+### MODE interface
+
+7. **Fields and methods of `MODE`.**
+
+   | Field | Required | Meaning |
+   | --- | --- | --- |
+   | `Name` | Yes | Display name (localisation key) |
+   | `Teams` | Yes | Team count (`0` = FFA), decision 6 |
+   | `Description`, `Icon` | No | Lobby and vote |
+   | `Base`, `Abstract` | No | Inheritance; hidden from lists |
+   | `Settings`, `SettingDefaults` | No | `01-extensibility.md` decision 17 |
+
+   - Lifecycle: `MODE:Start()`, `MODE:Cleanup()` (core decision 3).
+   - `MODE:Think()`, optional: called by the core every tick during `LIVE` through `PW.Call` (pcall + profiler, core decision 6). A mode does not add its own `Think` hooks.
+   - Default answers and reactions: the mode defines methods named like `PW_*` hooks; they are called last for every `PW_*` hook while the mode is active (`01-extensibility.md` decisions 9 and 18):
+
+     ```lua
+     function MODE:PW_CanRespawn(ply) return true end
+     function MODE:PW_RespawnDelay(ply) return self:Setting("respawndelay") end
+     function MODE:PW_SelectSpawn(ply) ... end
+     function MODE:PW_IsEnemy(a, b) return a:Team() ~= b:Team() end
+     function MODE:PW_PlayerKilled(victim, attacker, dmg) ... end   -- scoring
+     ```
+
+   - The full list of `PW_*` hooks a mode may answer is defined together with the subsystems that fire them (spawn: `03-mapdata`, loadout: `05-loadout`, bots: `07-bots`).
+
+## Interfaces
+
+TBD.
+
+## Performance budget
+
+TBD.
+
+## Security
+
+TBD.
+
+## Open questions
+
+1. ~~Playlist fields~~ Closed: decisions 5a and 5b; per-mode settings inside a multi-mode playlist use full ids (`tdm.scorelimit`).
+2. ~~How a mode declares which maps it supports~~ Closed: `03-mapdata.md` decision 6 (`MODE.MapData`, `MODE:ValidateMapData`).
+3. ~~The `MODE` interface~~ Closed: decision 7 (hook list grows with the subsystems that fire the hooks).
+4. ~~Team model~~ Closed: decision 6. Open detail: verify the engine limit on team count if a mode ever needs more than 8–16 teams.
+5. ~~MVP mode list~~ Closed: decision 5.

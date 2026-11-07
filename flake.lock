@@ -1,0 +1,100 @@
+{
+  "nodes": {
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "git-hooks": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793686154,
+        "narHash": "sha256-Zb/0L3soxrkfcrywpfp0J++0WFLB3tzh0Xtx9up+VNc=",
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "204b6977e00caac19e2313015a598543ca7be150",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    },
+    "glua-api-snippets": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793502897,
+        "narHash": "sha256-q7+35d90xB/gc5/cD6cZvpxovURSHg23ddpCmA62Esk=",
+        "owner": "luttje",
+        "repo": "glua-api-snippets",
+        "rev": "a3a6f5f0cca6eefca2135a7f3490d40edae03dd1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "luttje",
+        "ref": "lua-language-server-addon",
+        "repo": "glua-api-snippets",
+        "type": "github"
+      }
+    },
+    "gluatest": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793682435,
+        "narHash": "sha256-8Kn5ZHgfen7yj6dhS+/6NDCjhpOxuGXkcJT91D9Qbeg=",
+        "owner": "CFC-Servers",
+        "repo": "GLuaTest",
+        "rev": "52208ad34f171d5ddf501291d6758c22c96bc60b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "CFC-Servers",
+        "repo": "GLuaTest",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1793726008,
+        "narHash": "sha256-jQp1wKvbwWdLBASTXkSi/VYmDJ5AbBi1WvcMt9HWJC8=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1d060086d60cb76a40cf37109f979d88a5bd6396",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "git-hooks": "git-hooks",
+        "glua-api-snippets": "glua-api-snippets",
+        "gluatest": "gluatest",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

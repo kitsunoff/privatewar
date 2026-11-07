@@ -1,0 +1,97 @@
+---@meta
+-- Types of the kit v1 client glue (U-4; 10-frontend.md d.3, d.7). Source: lua/privatewar/modules/ui_kit/cl_*.lua.
+-- The vgui classes themselves are declared next to their code (cl_components.lua, cl_cards.lua, cl_form.lua).
+
+---Focus node data a panel carries; PWRoot turns it into a PW.UIFocusNode with the panel's screen rectangle.
+---@class PW.UIFocusSpec
+---@field id string
+---@field group string
+---@field locked? boolean focusable, not activatable; the reason shows in the hint bar
+---@field reason? string
+---@field disabled? boolean skipped by focus (a disabled panel is skipped too)
+---@field axis? "vertical"|"horizontal" axis of the group (the first spec of a group decides)
+---@field wrap? boolean
+
+---Focus nodes collected from the visible panels of a PWRoot.
+---@class PW.UIFocusCollect
+---@field nodes PW.UIFocusNode[]
+---@field panels table<string, Panel> by node id
+---@field groups table<string, PW.UIFocusGroup>
+
+-- Fields the kit sets on any panel (focus marks and optional handlers).
+---@class Panel
+---@field _pwFocus? PW.UIFocusSpec makes the panel a focus node
+---@field _pwFocused? boolean painted as focused
+---@field _pwIsRoot? boolean the panel is a PWRoot
+---Handles an input action while focused; true when handled, optionally with the panel to focus next.
+---@field PWAct? fun(self: Panel, action: string): boolean, Panel?
+---Accept on the focused panel (default: DoClick).
+---@field PWActivate? fun(self: Panel)
+---Called when the panel gets the focus.
+---@field PWOnFocus? fun(self: Panel)
+---PWRoot only: moves the focus to a panel ("mouse" when hovered).
+---@field FocusPanel? fun(self: Panel, panel: Panel, source?: string)
+---PWRoot only: shows a modal panel (focus stays inside it) and focuses first.
+---@field OpenModal? fun(self: Panel, modal: Panel, first?: Panel)
+---PWRoot only: drops the modal panel and restores the focus.
+---@field CloseModal? fun(self: Panel)
+---Modal panels: Back closes them.
+---@field PWBack? fun(self: Panel)
+
+---Drawing helpers (client). Sizes are pixels unless the name says design units.
+---@class PW.UIDrawLib
+---Design units to whole pixels (at least 1).
+---@field Px fun(value: number): integer
+---@field Rect fun(x: number, y: number, w: number, h: number, colour: Color)
+---@field Outline fun(x: number, y: number, w: number, h: number, colour: Color, thickness?: integer)
+---Accent bar on the left edge (focused or selected rows).
+---@field EdgeBar fun(h: number, colour?: Color)
+---@field Lock fun(x: number, y: number, size: number, colour: Color)
+---Filled badge right-aligned at xRight; returns its width.
+---@field Badge fun(text: string, font: string, xRight: number, yCentre: number, fill: Color, ink: Color): number
+---Key cap or pad badge at x; returns its width.
+---@field KeyCap fun(label: string, font: string, x: number, yCentre: number, device: "keyboard"|"controller"): number
+---Blurred view plus bg_scrim over the panel.
+---@field Backdrop fun(panel: Panel, w: number, h: number)
+---Layout time only (allocates): the text cut with "..." to fit a width.
+---@field Fit fun(text: string, font: string, width: number): string
+---Layout time only (allocates): word-wrapped lines.
+---@field Wrap fun(text: string, font: string, width: number): string[]
+
+---@class PW.UIDialogSpec
+---@field title string
+---@field text string
+---@field confirm string label of the confirm button
+---@field cancel? string label of the cancel button (default "CANCEL")
+---@field alt? string label of an optional third button between cancel and confirm
+---@field onAlt? fun()
+---@field onConfirm? fun()
+---@field onCancel? fun()
+
+---@class PW.UILib
+---Client only (the fields below are nil on the server): drawing helpers.
+---@field Draw PW.UIDrawLib
+---Client: makes a panel a focus node of a group; returns its spec.
+---@field Focusable fun(panel: Panel, group: string, id?: string): PW.UIFocusSpec
+---Client: locks a focusable panel with a reason.
+---@field SetLocked fun(panel: Panel, locked: boolean, reason?: string)
+---@field IsFocused fun(panel: Panel): boolean
+---Client: the PWRoot that contains a panel.
+---@field FindRoot fun(panel: Panel): Panel?
+---Client: mouse hover moves the focus to the panel.
+---@field HoverFocus fun(panel: Panel)
+---@field HoverLeave fun(panel: Panel)
+---Client: accept on a panel (PWActivate, else DoClick).
+---@field Activate fun(panel: Panel)
+---Client: the seen-set (data/privatewar/ui_seen.json), loaded once.
+---@field SeenSet fun(): table<string, true>
+---Client: writes the seen-set.
+---@field SaveSeen fun()
+---Client: player records of the connected players for PW.UI.PlayerList.
+---@field CollectPlayers fun(): PW.UIPlayerInfo[]
+---Client: the hints setting (pw_ui_kit_hints: "auto", "keyboard" or "gamepad").
+---@field HintOverride fun(): string
+---Client: the open PWRoot, or nil.
+---@field CurrentRoot fun(): Panel?
+---Client: opens a modal dialog (inside the open PWRoot when there is one).
+---@field OpenDialog fun(spec: PW.UIDialogSpec): Panel

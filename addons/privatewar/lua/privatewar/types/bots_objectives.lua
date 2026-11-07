@@ -1,0 +1,129 @@
+---@meta
+-- Types of the bots_objectives module and of the objective and roam behaviours of T-5.10 (07-bots.md d.13, d.14):
+-- objective, use_streak, hunt, camp. Code: lua/privatewar/modules/bots_objectives/ (shared.lua: the facts accessor and
+-- the objective rules; sh_roam.lua: hot spots, roam and camp points; init.lua: the engine gatherer) and
+-- lua/privatewar/bot_behaviors/<id>.lua.
+
+---One objective in the format of MODE:BotObjectives (docs/api/modes.md "BotObjectives").
+---@class PW.BotObjective
+---@field id string
+---@field pos Vector
+---@field radius number
+---@field action string "capture" | "defend" | "collect" | "deny" | "hold"
+---@field weight number 0..1
+---@field want integer desired number of bots
+
+---A Domination flag as plain data (from PW.DomFlags.GetAll()).
+---@class PW.BotFlagInfo
+---@field letter string
+---@field pos Vector
+---@field owner integer 0 = nobody
+---@field value number signed capture scalar, +100 = team 1, -100 = team 2
+
+---A Kill Confirmed tag as plain data (from PW.KCTags.GetAll()).
+---@class PW.BotTagInfo
+---@field id string
+---@field pos Vector
+---@field team? integer the victim's team
+
+---A teammate's recent death (the team knows where its own died).
+---@class PW.BotDeathInfo
+---@field pos Vector
+---@field team? integer
+---@field time number
+
+---A place worth a look for hunt: a lost or heard contact, or a teammate's recent death.
+---@class PW.BotHotSpot
+---@field pos Vector
+---@field time number
+---@field kind string the contact source or "death"
+---@field fresh number 0..1, 1 = right now
+
+---A ready killstreak whose STREAK:BotShouldUse agreed (PW.Streaks.Ready, T-4.6).
+---@class PW.BotReadyStreak
+---@field id string
+
+---Facts of one bot for one brain tick: what the behaviours of this file read besides the ctx.
+---@class PW.BotFacts
+---@field pos Vector the bot's position
+---@field team? integer the bot's team (nil in FFA)
+---@field mode? string id of the active mode
+---@field objectives PW.BotObjective[] MODE:BotObjectives(team), else derived from flags (dom) or tags (kc)
+---@field mates Vector[] positions of the alive teammates (the bot itself excluded)
+---@field deaths PW.BotDeathInfo[] the teammates' recent deaths
+---@field candidates Vector[] random navmesh points around the map (roam and camp choose among them)
+---@field stationary boolean the personality is of type "stationary" (07 d.10)
+---@field teamwork number 0..1, order compliance (difficulty teamwork, default 1)
+---@field streak? PW.BotReadyStreak
+
+---@class PW.BotBrainApi
+---@field facts? fun(ctx: PW.BotBrainCtx): PW.BotFacts tests: the facts of the bot, in place of the engine gatherer
+---@field random? fun(): number tests: uniform in [0, 1), in place of math.random
+---@field mode? string tests: the mode id the gatherer uses in place of PW.ActiveMode
+---@field useStreak? fun(bot: any, id: string): boolean tests: in place of PW.BotObjectives.UseStreak
+
+---@class PW.BotBrainCtx
+---@field facts? PW.BotFacts cached facts of the tick (PW.BotObjectives.Facts)
+---@field factsAt? number the ctx.now the facts belong to
+---@field recent? Vector[] the last places the bot roamed to, newest last (persists between runs)
+---@field checked? { pos: Vector, time: number }[] hot spots hunt already looked at
+---@field lastObjective? string the objective the bot worked on last (sticky local pick)
+
+---@alias PW.BotDeriveFn fun(mode: string?, own: PW.BotObjective[]?, flags: PW.BotFlagInfo[],
+---    tags: PW.BotTagInfo[], team: integer?): PW.BotObjective[]
+---@alias PW.BotPickObjectiveFn fun(objectives: PW.BotObjective[], pos: Vector, mates: Vector[],
+---    currentId: string?): PW.BotObjective?, number
+---@alias PW.BotPickHotSpotFn fun(spots: PW.BotHotSpot[], pos: Vector, checked: { pos: Vector, time: number }[]?,
+---    now: number): PW.BotHotSpot?, number
+---@alias PW.BotPickRoamFn fun(pos: Vector, candidates: Vector[], recent: Vector[], mates: Vector[],
+---    random: fun(): number): Vector?
+
+---Shared helpers of the objective and roam behaviours (module bots_objectives).
+---@class PW.BotObjectivesLib
+---The facts of a ctx, cached per brain tick: ctx._api.facts in tests, else Gather (server).
+---@field Facts fun(ctx: PW.BotBrainCtx): PW.BotFacts
+---Server: reads the engine into facts.
+---@field Gather? fun(ctx: PW.BotBrainCtx): PW.BotFacts
+---Uniform random in [0, 1): ctx._api.random, else math.random.
+---@field Random fun(ctx: PW.BotBrainCtx): number
+---Pure: 1 at distance 0, falling off with the distance (1/2 at Falloff units).
+---@field Closeness fun(dist: number): number
+---Pure: the objectives of Domination for a team from plain flag data (07 d.14).
+---@field DomObjectives fun(flags: PW.BotFlagInfo[], team: integer?): PW.BotObjective[]
+---Pure: the objectives of Kill Confirmed for a team from plain tag data (07 d.14).
+---@field KCObjectives fun(tags: PW.BotTagInfo[], team: integer?): PW.BotObjective[]
+---Pure: the objectives for a mode: the mode's own answer when it has one, else the fallback derivation.
+---@field Derive PW.BotDeriveFn
+---Pure: how many of mates stand within dist of pos.
+---@field CountNear fun(points: Vector[], pos: Vector, dist: number): integer
+---Pure: the local fallback assignment: the best objective by weight, closeness and crowding; currentId is sticky.
+---@field PickObjective PW.BotPickObjectiveFn
+---The objective a bot works on: the commander's order, else the local pick; nil when there is none.
+---@field Resolve fun(ctx: PW.BotBrainCtx, facts: PW.BotFacts, currentId: string?): PW.BotObjective?, number, boolean
+---Pure: hot spots from the contact memory (lost or heard contacts) and the teammates' deaths.
+---@field HotSpots fun(memory: table<any, PW.BotContact>, deaths: PW.BotDeathInfo[], now: number): PW.BotHotSpot[]
+---Pure: the best hot spot by freshness and closeness, skipping spots already checked; nil and 0 when there is none.
+---@field PickHotSpot PW.BotPickHotSpotFn
+---Pure: a natural roam point: far enough, away from where the bot just was, away from teammates, with jitter.
+---@field PickRoamPoint PW.BotPickRoamFn
+---Pure: a camp spot: near an objective the team defends, else a quiet point at a medium distance.
+---@field PickCampSpot fun(pos: Vector, candidates: Vector[], objectives: PW.BotObjective[], mates: Vector[]): Vector?
+---Pure: a point inside a circle (random angle and distance up to radius).
+---@field PointIn fun(center: Vector, radius: number, random: fun(): number): Vector
+---Pure: remembers a visited point (at most Recent entries, newest last).
+---@field Remember fun(list: Vector[], pos: Vector): Vector[]
+---Writes a look-at point as the aim target (a Vector target is never fired at, bots_aim decision 7).
+---@field LookAt fun(ctx: PW.BotBrainCtx, point: Vector?)
+---Server: a ready streak of the bot whose BotShouldUse agrees (PW.Streaks.Ready); nil without the streaks module.
+---@field ReadyStreak fun(bot: any): PW.BotReadyStreak?
+---Activates a streak through PW.Streaks.Use (ctx._api.useStreak in tests); false without the streaks module.
+---@field UseStreak fun(ctx: PW.BotBrainCtx, id: string): boolean
+---Server: records a death for the hot spots (PlayerDeath).
+---@field RecordDeath? fun(pos: Vector, team: integer?, now: number)
+---@field Falloff number
+---@field Recent integer
+---@field DeathMemory number seconds a teammate's death stays a hot spot
+---@field _Deaths PW.BotDeathInfo[] internal (server)
+
+---@class PW
+---@field BotObjectives? PW.BotObjectivesLib

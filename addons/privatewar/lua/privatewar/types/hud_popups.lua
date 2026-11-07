@@ -1,0 +1,127 @@
+---@meta
+-- Types of the score popups and medals (T-6.4, 09-hud.md d.2). Source: lua/privatewar/modules/hud/sh_popups.lua (pure
+-- rules), lua/privatewar/hud/popups.lua (receive and drawing), modules/score/init.lua (the owner-only send).
+--
+-- Wire (server -> client, message "pw_score_popup", owner only, humans only): String event id, UInt(16) points.
+
+---One score popup ("+200 Kill"): events of one id within the merge window are one entry.
+---@class PW.ScorePopup
+---@field id string score event id
+---@field name string display text of the event
+---@field points number summed points
+---@field label string "+<points> <name>", rebuilt when the entry changes
+---@field at number CurTime of the last event merged into it (the fade starts after the hold)
+
+---Score popups on screen, newest first. A fixed list: entries past `count` are nil.
+---@class PW.PopupState
+---@field list PW.ScorePopup[]
+---@field count integer
+
+---One medal waiting or showing.
+---@class PW.MedalPopup
+---@field id string medal id (a score event id)
+---@field name string display text
+---@field points number
+---@field label string "+<points>"
+---@field startedAt number? CurTime when it started showing; nil while it waits
+---@field played boolean? the sound was played (client glue)
+---@field kind? "levelup" nil for a medal; "levelup" for the LEVEL UP popup (_LevelUpAdd)
+---@field level? integer the new player level of a LEVEL UP entry
+
+---FIFO of medals; the head is the one showing.
+---@class PW.MedalState
+---@field list PW.MedalPopup[]
+---@field count integer
+
+---@class PW.HudLib
+---Seconds in which the same event merges into one score popup (counted from its last merge).
+---@field PopupMergeWindow number
+---Seconds a score popup stays fully visible after its last merge, then seconds it takes to fade out.
+---@field PopupHold number
+---@field PopupFade number
+---Most score popups on screen; the oldest is dropped.
+---@field PopupMax integer
+---Seconds a medal shows (fade in, hold, fade out inside it), and the fade lengths.
+---@field MedalDuration number
+---@field MedalFadeIn number
+---@field MedalFadeOut number
+---Most medals waiting (the head included); later ones are dropped. A LEVEL UP entry ignores the limit.
+---@field MedalMax integer
+---Seconds of the LEVEL UP pop-in (the scale eases from LevelUpScaleFrom down to 1), and the start scale.
+---@field LevelUpPop number
+---@field LevelUpScaleFrom number
+---Pure: queues a LEVEL UP for `level` in the medal queue (after the medals already waiting, never dropped by
+---MedalMax). A LEVEL UP that is still waiting takes the newer level instead (several level-ups in a row show the
+---final one); one that already shows gets a new entry after it. Returns the entry.
+---@field _LevelUpAdd fun(state: PW.MedalState, level: integer): PW.MedalPopup
+---Pure: the text scale of a LEVEL UP of the given age: LevelUpScaleFrom at 0, eased out to 1 at LevelUpPop, then 1.
+---@field _LevelUpScale fun(age: number): number
+---Design units between the LEVEL UP title and the level line, and the least room to the screen edges.
+---@field LevelUpGap number
+---@field LevelUpMargin number
+---Pure: the LEVEL UP layout in pixels. The text is drawn unscaled at absolute screen positions (titleY, labelY,
+---centred on cx) and scaled around (cx, cy), so the unscaled text stays inside the surface clip rect, which applies
+---before the model matrix. The box is the extent of both lines at LevelUpScaleFrom; cy is moved so it stays on
+---screen. Writes into and returns `out` (no allocation per frame).
+---@field _LevelUpLayout fun(facts: PW.LevelUpFacts, out: PW.LevelUpLayout): PW.LevelUpLayout
+---Pure: an empty score popup state.
+---@field _PopupNew fun(): PW.PopupState
+---Pure: adds an event. The same id within PopupMergeWindow of the entry's last merge adds into it (points summed,
+---label rebuilt, `at` refreshed); otherwise a new entry goes first. Returns the entry.
+---@field _PopupAdd fun(state: PW.PopupState, id: string, name: string, points: number, now: number): PW.ScorePopup
+---Pure: alpha 0..1 of a popup of the given age (since its last merge): 1 through PopupHold, linear to 0 over PopupFade.
+---@field _PopupAlpha fun(age: number): number
+---Pure: removes popups older than hold plus fade, keeping the order of the rest.
+---@field _PopupPrune fun(state: PW.PopupState, now: number)
+---Pure: an empty medal queue.
+---@field _MedalNew fun(): PW.MedalState
+---Pure: appends a medal; dropped when MedalMax are waiting. Returns whether it was queued.
+---@field _MedalAdd fun(state: PW.MedalState, id: string, name: string, points: number, now: number): boolean
+---Pure: the medal showing at `now`. Starts the head when it has not started (at `now`), drops it once MedalDuration
+---passed and starts the next one at `now`. Nil when the queue is empty.
+---@field _MedalCurrent fun(state: PW.MedalState, now: number): PW.MedalPopup?
+---Pure: alpha 0..1 of a medal of the given age: fade in, hold at 1, fade out; 0 outside 0..MedalDuration.
+---@field _MedalAlpha fun(age: number): number
+---Pure: display text of an event: the phrase of a "#key" Name when it resolves, else Name as is when it is plain
+---text, else the id humanised ("first_blood" -> "First Blood"). `phrase` maps a key to text (language.GetPhrase
+---returns the key without "#" when it is missing).
+---@field _PopupText fun(name: string?, id: string, phrase: fun(key: string): string): string
+---Pure: "medal" for an event with Medal = true whose id is in `ids` (the medals the medals module announces),
+---"score" otherwise.
+---@field _PopupKind fun(isMedal: boolean?, id: string, ids: string[]): "medal"|"score"
+
+---@class PW.ScoreStore
+---Server: sends one popup message to the owner (id, wire points); the default is net.Send of "pw_score_popup".
+---Absent in a store built by `_NewStore` (tests), set by the score module's init.lua on the real store.
+---@field popup? fun(ply: Player, id: string, points: integer)
+
+---@class PW.ScoreLib
+---Server: tells the owner of an award about it through store.popup. False (nothing sent) for an invalid player, a
+---bot, points of 0 or less, or a store without a sender.
+---@field _NotifyOwner fun(store: PW.ScoreStore, ply: Player, id: string, points: number): boolean
+---Pure: points to the wire value: rounded, clamped to 0..65535.
+---@field _PopupPoints fun(points: number): integer
+
+---Pixel facts of one LEVEL UP layout (PW.HUD._LevelUpLayout): the screen, the HUD scale, the wanted centre line and
+---the measured unscaled text sizes of the title and the level line.
+---@class PW.LevelUpFacts
+---@field width number
+---@field height number
+---@field scale number HUD scale (design unit -> pixels)
+---@field anchorY number wanted centre y in pixels
+---@field titleW number
+---@field titleH number
+---@field labelW number
+---@field labelH number
+
+---The LEVEL UP layout in pixels: draw both lines unscaled, centred on cx at titleY / labelY, and scale around
+---(cx, cy). box* is the extent of both lines at LevelUpScaleFrom.
+---@class PW.LevelUpLayout
+---@field cx number
+---@field cy number
+---@field titleY number
+---@field labelY number
+---@field boxX number
+---@field boxY number
+---@field boxW number
+---@field boxH number

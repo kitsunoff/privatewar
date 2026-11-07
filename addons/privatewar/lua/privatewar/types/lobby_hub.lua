@@ -1,0 +1,191 @@
+---@meta
+-- Types of the lobby hub and custom game models (U-5, T-8.1, T-8.2; notes/16-frontend-d1-proposal.md §4a, §4b;
+-- 10-frontend.md d.8-d.10). Source: lua/privatewar/modules/lobby_ui/sh_hub.lua (pure); the screens are
+-- lua/privatewar/screens/lobby_hub.lua and lobby_custom.lua.
+
+---What the hub and custom screens are built from (plain data; the client fills it from its own state).
+---@class PW.LobbyHubInput
+---@field state? PW.LobbyState|false the last pw_lobby_state; nil or false until it arrives
+---@field selection PW.LobbySelection the client's mode and map choice
+---@field fits? PW.LobbyFits whether a mode is offered on a map
+---@field playlists? PW.PlaylistListState|false the last pw_playlist_list; nil or false without the module
+---@field players PW.UIPlayerInfo[]
+---@field maxPlayers integer server slots (game.MaxPlayers())
+---@field seen table<string, true> the seen-set (data/privatewar/ui_seen.json)
+---@field shortOf? fun(modeId: string): string? the mode's Short field (monogram), nil when it has none
+---@field entry? PW.EntryFacts how the game was started; without it no entry hint is made
+---@field flow? PW.LobbyFlowFacts phase and map change facts for the START countdown; nil keeps the normal button
+
+---Facts about how the game was started (T-8.3; 08-lobby.md d.2).
+---@class PW.EntryFacts
+---@field singlePlayer boolean game.SinglePlayer()
+---@field maxPlayers integer game.MaxPlayers()
+---@field host boolean the local player is the listen server host
+---@field p2p? boolean p2p_enabled; nil when unknown (no hint then)
+
+---One entry hint.
+---@class PW.EntryHint
+---@field id "listen"|"p2p"
+---@field title string
+---@field text string
+---@field blocking boolean true: Start is locked
+
+---What the entry facts say: the hints (at most one) and the reason Start is locked with, if it is.
+---@class PW.EntryHints
+---@field hints PW.EntryHint[]
+---@field startReason? string
+
+---What Start sends: a playlist id (pw_playlist_start) or a mode and a map (pw_lobby_start).
+---@class PW.LobbyStartPlan
+---@field playlist? string
+---@field mode? string
+---@field map? string
+
+---One lobby action (a card of the custom screen; Start and Game Setup on the hub). Locked actions are focusable
+---and show their reason in the hint bar.
+---@class PW.LobbyAction : PW.UICard
+---@field locked boolean
+---@field label? string button text (Start)
+---@field request? PW.LobbyStartPlan Start only: what the button sends
+---@field countdown? boolean Start only: the button counts down (sh_flow.lua), drawn in the countdown style
+
+---Mode monogram, mode name and map (PWSummary).
+---@class PW.LobbySummary
+---@field badge string
+---@field mode string mode display name ("" without a mode)
+---@field map string
+---@field text string "<mode> on <map>"
+
+---The hub (PLAY tab root, notes/16 §4a).
+---@class PW.LobbyHub
+---@field ready boolean the lobby state has arrived
+---@field cards PW.UICard[] playlists, then Custom game
+---@field selected string the selected card: the active playlist id or "@custom"
+---@field seenKeys string[] seen-set keys of the listed playlists (marked seen when the screen closes)
+---@field start PW.LobbyAction
+---@field modeMap PW.LobbyAction
+---@field setup PW.LobbyAction
+---@field summary PW.LobbySummary
+---@field rows { [1]: string, [2]: string }[] the match card: playlist or key settings, bots fill
+---@field warning? string the maxplayers warning (T-8.2)
+---@field hint? PW.EntryHint the entry hint (T-8.3); a blocking one locks Start with its reason
+---@field party PW.UIPlayerSection[]
+---@field note? string status line note for players who may not start ("waiting for host")
+---@field model? PW.LobbyModel the underlying screen model (nil until the state arrives)
+
+---The custom game screen (notes/16 §4b).
+---@class PW.LobbyCustom : PW.LobbyHub
+---@field actions PW.LobbyAction[] start, modemap, setup, content, navmesh (the last only with the navgen block)
+---@field modeCards PW.UICard[]
+---@field modeSelected? string
+---@field mapCards PW.UICard[]
+---@field mapSelected? string
+---@field sections PW.UIFormSection[] Game Setup of the selected mode
+---@field canEdit boolean
+---@field canToggle boolean
+---@field toggles PW.LobbyToggle[]
+---@field nav? PW.LobbyNav
+---@field navLine string
+
+---@class PW.LobbyLib
+---Pure: the hub model (U-5, notes/16 §4a).
+---@field _Hub fun(input: PW.LobbyHubInput): PW.LobbyHub
+---Pure: the custom game model (U-5, notes/16 §4b).
+---@field _Custom fun(input: PW.LobbyHubInput): PW.LobbyCustom
+---Pure: the maxplayers warning (T-8.2) when the bots fill exceeds the server slots, else nil.
+---@field _SlotWarning fun(fill: integer?, maxPlayers: integer): string?
+---Pure: the entry hints for how the game was started (T-8.3): Singleplayer or maxplayers 1 gives the blocking
+---listen-server hint, the host with P2P off gets the P2P hint, a listen server with slots gets none.
+---@field _Entry fun(facts: PW.EntryFacts): PW.EntryHints
+---Texts of the entry hints.
+---@field EntryText table<string, string>
+---Pure: the seen-set key of a playlist ("playlist:<id>").
+---@field _SeenKey fun(id: string): string
+---Pure: a setting value as text for the match card.
+---@field _ShowValue fun(def: table, value: any): string
+---Client: the lobby state and playlist state the screens read (nil parts until they arrive).
+---@field Input? fun(): PW.LobbyHubInput
+---Client: sends a Game Setup change (pw_settings_match) and applies it to the local copy.
+---@field SendSetting? fun(control: PW.UIFormControl, value: any)
+---Client: sends an enable toggle (pw_lobby_enable).
+---@field SendToggle? fun(toggle: PW.LobbyToggle, enabled: boolean)
+---Client: sends a Start request (pw_playlist_start or pw_lobby_start).
+---@field SendStart? fun(plan: PW.LobbyStartPlan)
+---Client: sends pw_navgen_start.
+---@field SendNavGen? fun(fast: boolean)
+---Client: sets the mode or map choice and refreshes the open screens.
+---@field Select? fun(selection: PW.LobbySelection)
+---Client: picks a playlist ("" = Custom) when the player may start (pw_playlist_pick).
+---@field SendPick? fun(id: string)
+
+-- Fields the lobby screens set on their view panel.
+---@class Panel
+---Redraws the screen from the current lobby data (called after a state, playlist or selection change).
+---@field PWRefresh? fun(self: Panel)
+
+---@class PW.LobbyLib
+---Client: pushes the custom game screen on the PLAY tab, showing a section ("modemap", "setup", ...).
+---@field OpenCustom? fun(section?: string)
+---Client: the section asked by OpenCustom, once (nil after the first read).
+---@field TakeSection? fun(): string?
+---Client: puts cards into a PWCardList; the same ids update the panels in place (the focus is kept).
+---@field SetCards? fun(list: any, cards: PW.UICard[], selected?: string)
+---Client: the open root collects the focus nodes again in the next frames.
+---@field Refocus? fun()
+---Client: the status note and the hint bar entries of the open root.
+---@field SetFrame? fun(note?: string, hints: PW.UIHintEntry[])
+
+-- Map picker (U-6, notes/16 §4c).
+
+---The picker's own choice: the mode and the map being looked at (nil fields start from the lobby selection).
+---@class PW.LobbyPick
+---@field mode? string
+---@field map? string
+
+---What the map picker draws.
+---@class PW.LobbyPicker
+---@field ready boolean the lobby state has arrived and offers a mode
+---@field modes string[] every mode id, in the order Q and E cycle them
+---@field mode? string
+---@field modeName string display name ("" without a mode)
+---@field maps string[] the maps the mode is offered on
+---@field map? string the selection (kept when it fits the mode, else the first fitting map)
+---@field cards PW.UICard[] one card per map; the lobby's current map carries the badge "CURRENT"
+---@field focusIndex integer index of the selection in cards (1 for an empty list)
+---@field thumb? string maps/thumb/<map>.png of the selection
+---@field summary PW.LobbySummary
+
+---The pager state of a list plus its "n / N" text.
+---@class PW.LobbyPickerPage
+---@field state PW.UIPagerState
+---@field text string
+
+---Options of the picker screen (PW.Lobby.OpenPicker).
+---@class PW.LobbyPickerOpts
+---@field mode? string start mode (default: the lobby selection)
+---@field map? string start map
+---@field pick? fun(mode: string, map: string) pick mode: receives the choice; the lobby selection is not touched
+---@field input? fun(): PW.LobbyHubInput state source (default: PW.Lobby.Input)
+---@field title? string
+
+---@class PW.LobbyLib
+---Pure: the maps a mode is offered on (all of them without a fits test; none for an unknown mode id).
+---@field _PickerMaps fun(state: PW.LobbyState, modeId: string?, fits?: PW.LobbyFits): string[]
+---Pure: the wanted map when the list holds it, else the first map of the list (nil for an empty list).
+---@field _PickerKeep fun(maps: string[], wanted: string?): string?
+---Pure: the next (1) or previous (-1) id of the list, wrapping; the first id for an unknown current one.
+---@field _PickerCycle fun(ids: string[], current: string?, delta: integer): string?
+---Pure: the pager state of the focused row and its "n / N" text.
+---@field _PickerPage fun(count: integer, perPage: integer, index: integer): PW.LobbyPickerPage
+---Pure: "maps/thumb/<map>.png", nil for a name with anything but letters, digits, "_" and "-".
+---@field _ThumbPath fun(map: string): string?
+---Pure: the picker model for the input and the picker's own choice.
+---@field _Picker fun(input: PW.LobbyHubInput, pick: PW.LobbyPick): PW.LobbyPicker
+---Pure: the choice after an input action (tab_prev and tab_next cycle the mode); nil for other actions.
+---@field _PickerStep fun(input: PW.LobbyHubInput, pick: PW.LobbyPick, action: string): PW.LobbyPick?
+---Client: pushes the map picker; with opts.pick it is the pick mode (the vote's "Pick myself").
+---@field OpenPicker? fun(opts?: PW.LobbyPickerOpts)
+---Client: the options given to OpenPicker, once.
+---@field TakePicker? fun(): PW.LobbyPickerOpts
+---Client: leaves the picker (pops the screen).
+---@field ClosePicker? fun()

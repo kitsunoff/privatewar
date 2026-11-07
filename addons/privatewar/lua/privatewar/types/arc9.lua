@@ -1,0 +1,244 @@
+---@meta
+-- Types of the ARC9 integration addon (T-3.6; 04-weapons.md d.2, d.4, d.6; notes/08 section 2 and 6.2). Code: the
+-- separate addon integrations/privatewar-arc9/ (module arc9, adapter arc9). Also declares the small part of ARC9's
+-- public surface the integration uses, so the type checker knows it. ARC9 itself is not part of this project.
+
+---The part of the ARC9 global the integration reads (ARC9 commit f9bbe034).
+---@class ARC9Lib
+---@field SpawnableWeapons table<string, integer> class to ARC9 weapon type (ARC9.WEAPON_*)
+---@field Attachments table<string, table> attachment table by short name
+---@field Blacklist table<string, boolean>
+---@field CosmeticCategories table<string, boolean>
+---@field RandomizeQueue Weapon[]
+---@field GetAttTable fun(name: string|integer): table?
+---@field GetAttsForCats fun(cats: string|string[]): string[]
+---@field Attachments_Count integer
+
+---@type ARC9Lib?
+ARC9 = nil
+
+---An ARC9 weapon instance (arc9_base): the methods the integration calls.
+---@class PW.Arc9Weapon : Weapon
+---@field ARC9 boolean
+---@field Attachments PW.Arc9SlotTable[]
+---@field ForceDefaultAmmo number?
+---@field PrintName string
+---@field pwArc9StatMods boolean? internal: InstallStatMods already ran on this instance
+---@field SetNoPresets fun(self: PW.Arc9Weapon, value: boolean)
+---@field BuildSubAttachments fun(self: PW.Arc9Weapon, tree: PW.Arc9Tree)
+---@field DoInvalidateCache fun(self: PW.Arc9Weapon)
+---@field PruneAttachments fun(self: PW.Arc9Weapon)
+---@field FillIntegralSlots fun(self: PW.Arc9Weapon)
+---@field SendWeapon fun(self: PW.Arc9Weapon, rec: Player?)
+---@field PostModify fun(self: PW.Arc9Weapon, toggleonly: boolean?)
+---@field GetProcessedValue fun(self: PW.Arc9Weapon, name: string, isstatic: boolean?): any
+---@field GetCurrentFiremode fun(self: PW.Arc9Weapon): integer
+---@field GetFiremode fun(self: PW.Arc9Weapon): integer
+---@field SetFiremode fun(self: PW.Arc9Weapon, index: integer)
+---@field GetValue fun(self: PW.Arc9Weapon, name: string): any
+---@field GetReloading fun(self: PW.Arc9Weapon): boolean
+---@field GetInSights fun(self: PW.Arc9Weapon): boolean
+---@field GetCapacity fun(self: PW.Arc9Weapon): integer
+---@field CanAttach fun(self: PW.Arc9Weapon, addr: integer, att: string, slottbl: table?): boolean
+---@field CanDetach fun(self: PW.Arc9Weapon, addr: integer): boolean
+---@field ReceiveWeapon fun(self: PW.Arc9Weapon)
+---@field Bash boolean? the bash (melee key) is on; an instance value overrides the class
+---@field PrimaryBash boolean? the primary attack is a bash (knives, fists, shields)
+---@field MeleeAttack fun(self: PW.Arc9Weapon, bypass: boolean?, bash2: boolean?) starts a bash swing
+---@field GetInMeleeAttack fun(self: PW.Arc9Weapon): boolean a bash swing is under way
+---@field GetLastMeleeTime fun(self: PW.Arc9Weapon): number
+---@field GetSafe fun(self: PW.Arc9Weapon): boolean
+---@field GetGrenadePrimed fun(self: PW.Arc9Weapon): boolean
+---@field GetBipod fun(self: PW.Arc9Weapon): boolean
+---@field GetAnimLockTime fun(self: PW.Arc9Weapon): number
+---@field GetPrimedAttack fun(self: PW.Arc9Weapon): boolean
+---@field GetHolsterTime fun(self: PW.Arc9Weapon): number
+---@field SprintLock fun(self: PW.Arc9Weapon): boolean sprinting or the barrel against a wall
+---@field GetIsSprinting fun(self: PW.Arc9Weapon): boolean
+
+---One slot of an ARC9 weapon or attachment (SWEP.Attachments[i], or an attachment's own Attachments[j]).
+---@class PW.Arc9SlotTable
+---@field Installed string|false|nil
+---@field ToggleNum integer?
+---@field SubAttachments PW.Arc9SlotTable[]?
+---@field Category string|string[]|nil
+---@field PrintName string?
+---@field Integral string|boolean|nil
+---@field Hidden boolean?
+---@field CosmeticOnly boolean?
+---@field Address integer? ARC9's flat address, set by BuildAttachmentAddresses
+
+---A plain attachment tree as BuildSubAttachments takes it: tree[i] = { Installed, ToggleNum, SubAttachments }.
+---@alias PW.Arc9Tree PW.Arc9Node[]
+
+---@class PW.Arc9Node
+---@field Installed string|nil
+---@field ToggleNum integer?
+---@field SubAttachments PW.Arc9Node[]?
+
+---Looks up an attachment table by short name (ARC9.GetAttTable in the glue; a plain table in tests).
+---@alias PW.Arc9AttLookup fun(name: string): table?
+
+---A slot found by walking a class and a build: the slot table and its address id.
+---@class PW.Arc9FoundSlot
+---@field id PW.SlotId
+---@field parent? PW.SlotId
+---@field slot PW.Arc9SlotTable
+
+---Internal: one set of session ConVars, on or off, and what it replaced.
+---@class PW.Arc9ConVarSwap
+---@field on boolean
+---@field saved table<string, string> ConVar name to the value before the swap
+
+---How _SwapConVars reads and writes ConVars (GetConVar in the glue, a plain table in tests). get returns nil for a
+---ConVar that does not exist.
+---@class PW.Arc9ConVarIO
+---@field get fun(name: string): string?
+---@field set fun(name: string, value: string)
+
+---The realm whose ConVars a perf profile entry belongs to: set by that realm's glue only.
+---@alias PW.Arc9PerfRealm "server"|"client"
+
+---What a profile does to the ConVars of a realm: "apply" its values (saving the originals), "restore" the
+---originals, "none" (nothing).
+---@alias PW.Arc9PerfAction "apply"|"restore"|"none"
+
+---Where a realm keeps the originals the deck profile replaced (a JSON file in data/ in the glue, a table in tests).
+---read returns nil when there is no backup.
+---@class PW.Arc9PerfBackup
+---@field read fun(): table<string, string>?
+---@field write fun(values: table<string, string>)
+---@field remove fun()
+
+---@alias PW.Arc9ConVarValues table<string, string> ConVar name to value
+---@alias PW.Arc9SwapFn fun(swap: PW.Arc9ConVarSwap, values: PW.Arc9ConVarValues, on: boolean, io: PW.Arc9ConVarIO)
+
+---What a bot bash depends on (T-11.6 follow-up), read from a live ARC9 weapon by the adapter; plain data in tests.
+---@class PW.Arc9BashState
+---@field bash boolean Bash or PrimaryBash (GetProcessedValue: attachments may change them)
+---@field safe boolean the safety is on (ARC9 turns it off instead of bashing)
+---@field inSights boolean ARC9's melee key does nothing in sights
+---@field grenadePrimed boolean
+---@field bipod boolean
+---@field swinging boolean a bash swing is under way (GetInMeleeAttack)
+---@field reloading boolean
+---@field cancelsReload boolean BashCancelsReload: a bash may cut the reload
+---@field busy boolean an animation lock, a primed attack or a holster in progress
+---@field sprintLock boolean sprinting (ARC9 waits for the sprint to end) or the barrel against a wall
+---@field lastMelee number time of the last bash (GetLastMeleeTime)
+---@field preTime number PreBashTime: the swing before the hit
+---@field postTime number PostBashTime: the recovery after it
+---@field speed number BashSpeed: divides the swing time only, as ARC9 does
+---@field now number
+---@field reach boolean a player, NPC or nextbot along the aim within the longer of BashRange and BashLungeRange
+
+---Values computed from ARC9's static tables, valid while the revision (lib.Revision) holds.
+---@class PW.Arc9Memo
+---@field revision string?
+---@field values table<string, any>
+
+---Internal: the session ConVar swaps of this realm.
+---@class PW.Arc9Store
+---@field lock PW.Arc9ConVarSwap the customization lock (server)
+---@field hud PW.Arc9ConVarSwap ARC9's HUD hidden (server: HudConVars; client: ClientHudConVars)
+---@field memo PW.Arc9Memo the class slots, slot lists and option lists of the adapter
+---@field perf PW.Arc9ConVarSwap the performance profile's ConVars of this realm (PerfConVars[realm])
+
+---Pure helpers and the lock of the ARC9 integration (module arc9).
+---@class PW.Arc9Lib
+---ARC9 weapon type (ARC9.WEAPON_*) to PW category. Types without an entry have no category.
+---@field Categories table<integer, string>
+---ARC9 stat name to stat-mod key (04-weapons.md d.6; notes/12 section 6.3).
+---@field StatHooks table<string, PW.StatModKey>
+---ConVars set while customization is locked (04-weapons.md d.2 and "Security"; notes/08 section 6.2).
+---@field LockConVars table<string, string>
+---Server ConVars (replicated) that hide ARC9's own HUD while the gamemode runs (09-hud.md d.1: our overlay on the
+---vanilla HUD; ARC9's crosshair stays).
+---@field HudConVars table<string, string>
+---Client ConVars that hide the rest of ARC9's HUD (the hints), set on each client of the gamemode.
+---@field ClientHudConVars table<string, string>
+---Server ConVars (archived, replicated) for ARC9's startup precache; set by the module, never restored.
+---@field PrecacheConVars table<string, string>
+---ARC9 performance profile (04-weapons.md d.7): the ConVar values of the deck profile per realm. Client: visuals
+---(hand IK and effects of other players, LOD distance, scopes); server: bullet simulation and ricochets.
+---@field PerfConVars table<PW.Arc9PerfRealm, PW.Arc9ConVarValues>
+---The profiles of the setting arc9.perf, in display order: "deck" (default), "off".
+---@field PerfProfiles string[]
+---Pure: what profile does ("deck" applies, "off" restores, unknown ids do nothing).
+---@field _PerfAction fun(profile: string): PW.Arc9PerfAction
+---Pure: the ConVar values profile sets in realm, a copy: PerfConVars[realm] for "deck", {} for "off" and unknown ids.
+---@field _PerfValues fun(profile: string, realm: PW.Arc9PerfRealm): PW.Arc9ConVarValues
+---Pure: the DATA path of the backup file of realm (one file per realm: a listen host shares data/).
+---@field PerfBackupPath fun(realm: PW.Arc9PerfRealm): string
+---The backup of realm as a JSON file at PerfBackupPath(realm) in this realm's data/ (an unreadable file reads as {}).
+---@field PerfFileBackup fun(realm: PW.Arc9PerfRealm): PW.Arc9PerfBackup
+---Internal glue: defines ApplyPerf and RestorePerf for realm over io and the file backup, and adds the module's
+---once-a-second Think check.
+---@field _InstallPerf fun(module: table, realm: PW.Arc9PerfRealm, io: PW.Arc9ConVarIO)
+---Pure: brings the ConVars of realm to profile through io. "deck" when not on: sets the values, keeps the originals
+---in swap and writes them to backup; "off" when on: restores them and removes backup. Idempotent.
+---@field _ApplyPerf fun(swap: PW.Arc9ConVarSwap, profile: string, realm: PW.Arc9PerfRealm, io: PW.Arc9ConVarIO,
+---backup: PW.Arc9PerfBackup)
+---Pure: puts back what the profile replaced in realm and removes backup (ShutDown). Idempotent.
+---@field _RestorePerf fun(swap: PW.Arc9ConVarSwap, realm: PW.Arc9PerfRealm, io: PW.Arc9ConVarIO,
+---backup: PW.Arc9PerfBackup)
+---Pure: when swap is off and backup holds values (the last session ended without ShutDown), sets the profile
+---ConVars of realm that exist back to them and removes backup; returns how many it set (0: nothing to recover).
+---@field _RecoverPerf fun(swap: PW.Arc9ConVarSwap, realm: PW.Arc9PerfRealm, io: PW.Arc9ConVarIO,
+---backup: PW.Arc9PerfBackup): integer
+---Applies profile (default: the setting arc9.perf) to this realm's ARC9 ConVars, after recovering a backup left by a
+---crash once per session; nothing while ARC9 is missing.
+---@field ApplyPerf fun(profile: string?)
+---Restores this realm's ARC9 ConVars the profile replaced and deletes the backup file (ShutDown).
+---@field RestorePerf fun()
+---Pure: sets values through access when on and not yet on (saving what it replaces, skipping missing ConVars);
+---restores the saved values when off. Idempotent.
+---@field _SwapConVars PW.Arc9SwapFn
+---Pure: the value of key in memo for revision; computes it once (compute()) and forgets every value when the
+---revision changes.
+---@field _Memo fun(memo: PW.Arc9Memo, revision: string, key: string, compute: fun(): any): any
+---What the memo of the adapter depends on: ARC9's attachment table, its count and the blacklist size.
+---@field Revision fun(): string
+---Pure: a PW.WeaponInfo from an ARC9 SWEP table and its ARC9 weapon type.
+---@field _InfoFrom fun(swep: table<string, any>, weptype: integer?): PW.WeaponInfo
+---Pure: the address of a slot id ("3" or "3.1") as indices, nil when it is not one.
+---@field _ParseAddress fun(id: any): integer[]?
+---Pure: the slot ids of a build, parents before children, then by index.
+---@field _Order fun(build: PW.Build): PW.SlotId[]
+---Pure: a plain copy of the installed tree of slot tables (wep.Attachments).
+---@field _TreeOf fun(slots: PW.Arc9SlotTable[]): PW.Arc9Tree
+---Pure: tree with build applied (a copy); a changed slot loses its sub-slots; every installed node gets one entry
+---per sub-slot of its attachment (subCount).
+---@field _WithBuild fun(tree: PW.Arc9Tree, build: PW.Build, subCount: fun(att: string): integer): PW.Arc9Tree
+---Pure: for each slot of build, what is installed there now in the slot tables (false = nothing).
+---@field _ReadBuild fun(slots: PW.Arc9SlotTable[], build: PW.Build): PW.Build
+---Pure: the top slots of a class and the sub-slots the build opens (through the attachments it installs).
+---@field _FindSlots fun(top: PW.Arc9SlotTable[], build: PW.Build?, lookup: PW.Arc9AttLookup): PW.Arc9FoundSlot[]
+---Pure: is a slot or an attachment cosmetic (CosmeticOnly, or a category in cosmetic).
+---@field _IsCosmetic fun(tbl: table<string, any>, cosmetic: table<string, boolean>): boolean
+---Pure: may an attachment go into a slot by category (the static part of ARC9's own check).
+---@field _Fits fun(att: table<string, any>, slot: PW.Arc9SlotTable): boolean
+---The top slots of a class: a copy from weapons.Get, with the class defaults installed; {} for an unknown class.
+---Memoized per revision; callers must not change the result.
+---@field ClassSlots fun(class: string): PW.Arc9SlotTable[]
+---The attachment table of name when it may be offered at all: known, not blacklisted (checked by name: ARC9's own
+---GetAttsForCats misses it, notes/08 section 2.3), not admin-only, not marked Ignore.
+---@field Offerable fun(name: string): table?
+---T-11.7: the ARC9 stats behind each PW.OptionStats field, as { stat, condition, share }.
+---@field OptionStatKeys table<string, { [1]: string, [2]: string, [3]: number }[]>
+---Pure (T-11.7): the PW.OptionStats of an attachment table against the raw base values of a weapon (needed only for
+---Add and Override); nil when the attachment changes none of the stats.
+---@field _OptionStats fun(att: table<string, any>?, base: table<string, any>?): PW.OptionStats?
+---Pure (T-11.6 follow-up): why a bot may not bash now, nil when it may: "no_bash", "safe", "sights", "grenade",
+---"bipod", "swinging", "cooldown", "reloading", "busy", "sprint", "out_of_reach" (checked in this order).
+---@field _BashRefusal fun(s: PW.Arc9BashState): string?
+---Server (the adapter's init.lua): what a bot bash with gun depends on now, read from the live weapon.
+---@field BashState fun(owner: Player, gun: PW.Arc9Weapon): PW.Arc9BashState
+---Server: applies or lifts the lock ConVars; lifting restores what the lock replaced. Idempotent.
+---@field SetLocked fun(locked: boolean)
+---Hides ARC9's own HUD (server: HudConVars, client: ClientHudConVars) or restores it. Idempotent.
+---@field SetHudHidden fun(hidden: boolean)
+
+---@class PW
+---@field Arc9 PW.Arc9Lib
+---@field _Arc9 PW.Arc9Store internal

@@ -1,0 +1,156 @@
+---@meta
+-- Types of the bots_aim module (T-5.8; 07-bots.md d.8, d.10, d.15; docs/api/bots-blackboard.md). Code:
+-- lua/privatewar/modules/bots_aim/ (shared.lua: the pure controller math; sh_step.lua: one aim step and the dev
+-- command parser; init.lua: the Tick glue and the line-of-fire trace; sv_command.lua: pw_bot_aim).
+
+---Aim parameters of one bot (the human-like axes of its difficulty; names as in notes/14 where a row exists).
+---@class PW.BotAimParams
+---@field look_stiffness number spring stiffness, 1/s^2
+---@field look_damping number spring damping, 1/s
+---@field look_max_accel number angular acceleration clamp per axis, degrees/s^2
+---@field turn_max_speed number angular speed clamp per axis, degrees/s (07 d.15 "turn speed")
+---@field aim_focus_initial number error radius on acquisition and after a reset, degrees
+---@field aim_focus_decay number fraction of the error left after 1 s of steady aim
+---@field aim_focus_floor number the error never shrinks below this, degrees
+---@field aim_focus_reset_deg number accumulated goal movement that resets the focus, degrees
+---@field aim_reroll_interval number seconds between two re-rolls of the error direction
+---@field aim_offset_scale number 0..1, tracking lag behind a moving target (0: the spring follows the goal speed)
+---@field attack_delay number hesitation from acquisition to the first allowed shot, seconds
+---@field lead_target number 0..1, share of the projectile lead the bot applies
+---@field headshot_allowed "no"|"rifles"|"yes" when the head may be the aim point
+---@field headshot_chance number chance, rolled once per acquisition, to pick the head when it is allowed
+---@field recoil_comp_gain number 0..1, share of the view kick the bot pulls against
+
+---Short name of PW.BotAimParams for long signatures.
+---@alias PW.AimP PW.BotAimParams
+
+---Per-bot aim state (plain data; owned by bots_aim).
+---@class PW.BotAimState
+---@field p number current view pitch, degrees
+---@field y number current view yaw, degrees
+---@field vp number pitch speed, degrees/s
+---@field vy number yaw speed, degrees/s
+---@field focus number current error radius, degrees
+---@field offP number current error direction, pitch part (unit disk)
+---@field offY number current error direction, yaw part (unit disk)
+---@field rollP number error direction the offset drifts toward, pitch part
+---@field rollY number error direction the offset drifts toward, yaw part
+---@field rerollAt number time of the next re-roll of the error direction
+---@field drift number leaky sum of the goal movement, degrees (focus reset when above aim_focus_reset_deg)
+---@field baseP? number last aim goal without error, pitch (nil before the first step)
+---@field baseY? number last aim goal without error, yaw
+---@field goalP number last aim goal with error and recoil compensation, pitch
+---@field goalY number last aim goal with error and recoil compensation, yaw
+---@field acquiredAt number time of the acquisition
+---@field part "head"|"chest" the body part picked on acquisition
+---@field err number angular distance from the view to the goal after the last step, degrees
+---@field tolerance number fire tolerance of the last step, degrees
+---@field fire boolean the last step wants IN_ATTACK
+---@field settledSince? number since when the view is settled (entered within the tolerance, held within the hold band)
+---@field blockedSince? number time since when the aim is settled but the line of fire is blocked (brain: flank)
+---@field sighted? boolean canFire of the last step (a change is a knowledge switch, not target movement)
+---@field firingSince? number time since when IN_ATTACK is wanted without a break (recoil estimate)
+
+---Facts of one aim step.
+---@class PW.BotAimInput
+---@field now number seconds
+---@field dt number seconds since the previous step
+---@field eye Vector the bot's eye position
+---@field point Vector the aim point (lead already applied)
+---@field radius number fire gate half size, units (FireHalfSize; the tolerance is its angular size)
+---@field canFire boolean an entity target that is visible now; false for a point target or a remembered contact
+---@field kickP? number current view kick, pitch, degrees (negative = up)
+---@field kickY? number current view kick, yaw, degrees
+---@field lineOfFire? fun(): boolean one trace, called only when every other fire condition holds
+
+---Result of a line-of-fire trace as the gate reads it.
+---@class PW.BotAimHit
+---@field fraction number 0..1 of the trace length (1 = nothing hit)
+---@field ent? any the entity hit (nil or the world: nothing to shoot)
+---@field world? boolean the world was hit
+
+---Facts of the aim point.
+---@class PW.BotAimTargetFacts
+---@field pos Vector the part position (head or chest)
+---@field vel Vector target velocity
+---@field ownVel Vector the bot's velocity
+---@field eye Vector the bot's eye position
+---@field projectileSpeed? number units/s; nil = hitscan
+
+---Parsed pw_bot_aim arguments.
+---@class PW.BotAimParsed
+---@field bots string bot name pattern ("*" = every bot)
+---@field action "clear"|"status"|"target"
+---@field target? string player name pattern or "me"
+---@field tier? string a tier of Tiers the aim of these bots uses instead of their difficulty (CP-5c comparisons)
+
+---@class PW.BotAimLib
+---Privilege of pw_bot_aim: "pw.bots.debug" (default superadmin, also declared by bots_input).
+---@field Privilege string
+---Gameplay constants that are not per tier (degrees, seconds, units).
+---@field Config table<string, number>
+---Default parameters per difficulty tier until T-5.12 gives every bot a difficulty entity.
+---@field Tiers table<string, PW.BotAimParams>
+---Pure: the tier defaults overridden by the numeric (or headshot_allowed string) fields of a difficulty entity.
+---@field ParamsFor fun(difficulty: table?, tier: string?): PW.BotAimParams
+---@field _ParamsOf? fun(bot: Player, board: PW.BotBoard?): PW.BotAimParams internal (server), cached per bot
+---Pure: a fresh state looking at (p, y); the focus starts at the initial error.
+---@field NewState fun(p: number, y: number, params: PW.BotAimParams, now: number): PW.BotAimState
+---Pure: a new acquisition: focus back to the initial error, attack delay restarts, the body part is re-picked.
+---@field Acquire fun(s: PW.BotAimState, params: PW.BotAimParams, now: number, category: string?, roll?: fun(): number)
+---Pure: one spring-damper step of one axis toward goal moving at goalVel; returns position, speed and the
+---acceleration used. Damping acts on the speed relative to (1 - aim_offset_scale) * goalVel.
+---@field SpringAxis fun(x: number, v: number, g: number, gv: number, p: PW.AimP, dt: number): number, number, number
+---Pure: advances the spring on both axes over dt in fixed sub-steps (07 d.8 "integrated at a fixed dt").
+---@field Spring fun(s: PW.BotAimState, gp: number, gy: number, p: PW.AimP, dt: number, gvp?: number, gvy?: number)
+---Pure: focus update from the goal movement of this step (degrees) and dt: shrink while steady, reset on big moves.
+---@field Focus fun(s: PW.BotAimState, moved: number, params: PW.BotAimParams, dt: number)
+---Pure: the error direction drifts toward a direction re-rolled every aim_reroll_interval.
+---@field Wander fun(s: PW.BotAimState, params: PW.BotAimParams, now: number, dt: number, roll?: fun(): number)
+---Pure: the aim point with lead: pos + relative velocity * flight time * lead_target (hitscan: no lead).
+---@field Lead fun(facts: PW.BotAimTargetFacts, params: PW.BotAimParams): Vector
+---Pure: "head" or "chest" from the headshot gate (difficulty, weapon category, chance roll in [0, 1)).
+---@field AimPart fun(params: PW.BotAimParams, category: string?, roll: number): "head"|"chest"
+---Pure: the pitch and yaw to add to the goal against the view kick, by recoil_comp_gain.
+---@field RecoilOffset fun(kickP: number, kickY: number, params: PW.BotAimParams): number, number
+---Pure: the fire gate half size in units for a weapon category (CS: 32, 16 for a sniper rifle).
+---@field FireHalfSize fun(category: string?): number
+---Pure: the fire tolerance in degrees for a gate of half size radius at distance dist, widened by focusTolerance
+---times the current focus error (degrees, default 0).
+---@field Tolerance fun(radius: number, dist: number, focus?: number): number
+---Pure: whether a line-of-fire trace lets the bot shoot at target (nothing hit, the target, or another enemy).
+---@field FireClear fun(hit: PW.BotAimHit, target: any, isEnemy?: fun(ent: any): boolean): boolean
+---Pure: the end of the line-of-fire trace: from eye through the aimed point, Config.traceSlack units past it.
+---@field FireRayEnd fun(eye: Vector, point: Vector): Vector
+---Pure: the angles from eye to point (pitch clamped to the view limits).
+---@field AnglesTo fun(eye: Vector, point: Vector): number, number
+---Pure: one aim step (wander, focus, recoil, spring, fire decision); updates and returns the state.
+---@field Step fun(s: PW.BotAimState, i: PW.BotAimInput, p: PW.AimP, roll?: fun(): number): PW.BotAimState
+---Pure: pw_bot_aim arguments; nil and the usage text when they are not valid.
+---@field ParseArgs fun(args: string[]): PW.BotAimParsed?, string?
+---Server: aims a bot at an entity or a fixed point (dev command, tests); nil clears. Overrides the brain's target;
+---tier (a key of Tiers) replaces the bot's difficulty for the aim until the override is cleared.
+---@field SetTarget? fun(bot: Player, target: Entity|Vector|nil, tier?: string)
+---Server: the aim state of a bot, nil while it has no target.
+---@field GetState? fun(bot: Player): PW.BotAimState?
+---Server: whether the aim drives the bot's view now (it has a target and a state); other writers of intent.view
+---(the path follower) should leave the view alone while this is true.
+---@field OwnsView? fun(bot: Player): boolean
+---Internal (server): pw_bot_aim; ply nil is the server console. Returns the number of bots changed.
+---@field _Command? fun(ply: Player?, args: string[], out?: fun(line: string)): integer
+
+---Internal (server): state of the aim glue.
+---@class PW.BotAimStore
+---@field override table<Player, Entity|Vector> dev and test targets (weak keys)
+---@field states table<Player, PW.BotAimState> per-bot aim state (weak keys)
+---@field targets table<Player, any> the target each state was acquired on (weak keys)
+---@field owned table<Player, PW.BotIntent> scripted intents the aim created for undriven bots (weak keys)
+---@field tiers table<Player, string> tier overrides of the dev command and tests (weak keys)
+
+---The brain's target (docs/api/bots-blackboard.md "Blackboard"); the aim reads it.
+---@class PW.BotBoard
+---@field target? Entity
+
+---@class PW
+---@field BotAim? PW.BotAimLib
+---@field _BotAim PW.BotAimStore internal (server)

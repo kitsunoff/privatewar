@@ -1,0 +1,71 @@
+# 09 — HUD
+
+Status: decided.
+
+## Goal and scope
+
+In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, compass, markers.
+
+## Decisions
+
+- Immediate-mode HUD in Lua (see `../DESIGN.md`, Decided).
+
+1. **Keep the vanilla HUD; draw only our additions on top. As simple as possible.**
+
+   | Element | Source |
+   | --- | --- |
+   | Health, ammo | Vanilla GMod HUD or the weapon base's own HUD (ARC9, TFA) |
+   | Crosshair | Vanilla or the weapon base's |
+   | Killfeed | Vanilla `DeathNotice` of the base gamemode |
+   | Scoreboard (Tab) | Vanilla base gamemode scoreboard |
+
+2. **Our overlay elements.**
+   - Effects: hitmarker (red on kill); score popups ("+100", "+50 Headshot") from `PW_ScoreEvent` (`06-progression.md` decision 3); medals (icon, name, sound) for events with `Medal = true`.
+   - Minimum required by other decisions:
+     - match status: team scores (`team.GetScore`) and time left, computed locally from `pw_phase_end` (`00-core.md` decision 10);
+     - Domination point status (A, B, C with owner colour), drawn by the mode's own element;
+     - radar: a circle in a corner; teammates always, enemies only while a UAV is active, jammed by Counter-UAV (MVP streaks, `05-loadout.md` decision 10);
+     - phase messages: "Match starts in 10", "Victory" / "Defeat" in `POSTMATCH`.
+
+- **Revision 2026-11-07 (user decisions after the first playtest; decision 2 stays valid for everything not mentioned here):**
+
+  1. **Killstreak element.** Three squares on the right edge, one per streak in the player's set, ordered by cost.
+     - A progress bar along the squares fills with kills or score, depending on the streak earning mode.
+     - A square lights up (usable) when the bar reaches its cost.
+     - The selected streak is highlighted; ready streaks show the key or the gamepad hint.
+  2. **XP bar in the MWR style.**
+     - A thin full-width bar at the bottom edge: the current level at the left end, the next level at the right end, an eased fill.
+     - On level-up the bar fills to full and restarts.
+     - A "LEVEL UP" popup is shown centred in the upper middle. It goes through the same queue as the medal popups, so they never overlap.
+     - The old top-left LVL element is removed.
+  3. **Scoreboard (match status) moves from the top centre to the top left, under the radar** (the radar stays in the corner).
+     - Per team a horizontal bar in the team colour, filled by score / score limit, with the number next to it.
+     - A semi-transparent L-shaped outline marks the full bar length, which is the score limit.
+     - The own team is on top.
+     - FFA shows you and the leader (you and second place if you lead).
+     - The match timer sits next to the bars.
+     - The Domination flag tiles stay in the top centre.
+  4. **No "Match starts in N" message (user request after the playtest, T-11.10).** The lobby stays open in `PREMATCH` and its START button shows the countdown ("STARTING N…", accent text on a dark fill); an announced map change shows "MAP CHANGE N…" on the same button and a map change popup (`00-core.md` d.9, `08-lobby.md`). Pending confirmation of the exact look: the local manual checklist (not published) section 45.
+
+3. **One `HUDPaint` iterating the `HUDELEMENT` registry (kind `hud/`).**
+   - An element is a `Draw` function plus subscriptions to events; modes and modules bring their own elements (Domination: points; streaks module: radar).
+   - Element calls go through `PW.Call` (pcall + profiler, `00-core.md` decision 6; `01-extensibility.md` decision 15).
+   - No layers, no animation framework, no themes.
+
+## Interfaces
+
+TBD.
+
+## Performance budget
+
+- No allocations in `HUDPaint`.
+- Fonts, materials and colors are cached.
+- One `HUDPaint` iterates the HUD element registry.
+
+## Security
+
+TBD.
+
+## Open questions
+
+None.

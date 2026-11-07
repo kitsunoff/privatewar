@@ -1,0 +1,31 @@
+---@meta
+-- Types of the weapon catalogue (T-3.3; docs/api/adapter.md "Weapon catalogue"). Code:
+-- lua/privatewar/modules/weapons_catalog/shared.lua.
+
+---Internal: state of the catalogue module.
+---@class PW.WeaponsCatalogStore
+---@field fills table<string, table<string, any>> what the adapters gave in this phase, by class
+
+---Read API and population of the weapons catalogue.
+---@class PW.WeaponsCatalogLib
+---Registers every listed weapon of the available adapters with reg.Register(entry, class, { soft = true }),
+---highest adapter Priority first. Returns the number of classes registered. Called by the module in
+---PW_RegisterWeapons; adapters and call default to the enabled weapon adapters and PW.Call.
+---@field Populate fun(reg: PW.Registry, adapters?: PW.Adapter[], call?: PW.AdapterCallFn): integer
+---The enabled entries (GetEnabledList of the weapons registry) of one category, sorted by class. registry
+---defaults to PW.Weapons.
+---@field GetByCategory fun(category: string, registry?: PW.Registry): PW.Weapon[]
+---Internal, pure: the entry fields a PW.WeaponInfo gives (Name, Category, Kind, Slot); nil without a class.
+---@field _EntryFromInfo fun(weaponInfo: PW.WeaponInfo): table<string, any>?
+---Internal, pure: entries by class from lists in priority order; the first list that gives a field wins it.
+---@field _Entries fun(lists: PW.WeaponInfo[][]): table<string, table<string, any>>
+---Internal, pure: copies into target the fields it lacks; nested tables merged per key; never aliases source.
+---@field _Fill fun(target: table<any, any>, source: table<any, any>)
+---Internal: the lists of the available adapters, highest Priority first.
+---@field _Lists fun(adapters: PW.Adapter[], call: PW.AdapterCallFn): PW.WeaponInfo[][]
+---Internal: forgets the fills of the phase.
+---@field _Release fun()
+
+---@class PW
+---@field WeaponsCatalog PW.WeaponsCatalogLib
+---@field _WeaponsCatalog PW.WeaponsCatalogStore internal

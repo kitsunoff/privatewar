@@ -1,0 +1,70 @@
+---@meta
+-- Types of the teams module (T-1.16, 02-modes.md d.6, 08-lobby.md d.4, 00-core.md d.9).
+-- Source: lua/privatewar/modules/teams/ (shared.lua: API and pure rules; init.lua: server glue).
+
+---One player for the pure assignment: any id (a Player in the glue, a string in tests) and its preferred team.
+---@class PW.TeamEntry
+---@field id any
+---@field pref? integer team the player had before (pending file or last match); ignored outside 1..n
+
+---One row for the pending file: a human's SteamID64 and current team.
+---@class PW.TeamFileRow
+---@field sid string
+---@field team integer
+
+---Internal (server): state of the teams module.
+---@class PW.TeamsStore
+---@field pending table<string, integer> team by SteamID64 restored from pending_match.json, used once at LIVE
+
+---Teams of the active mode (02-modes.md d.6). Team indices are 1..N; there are no TEAM_A / TEAM_B constants.
+---@class PW.TeamsLib
+---The teams of the active mode as a list { 1, ..., N }; empty in FFA (MODE.Teams = 0) and outside a match. On
+---the client N comes from the server (published when LIVE starts). The list is cached per N: do not modify it.
+---@field GetActive fun(): integer[]
+---Server: the team a player joining now would get (the smallest; ties: the lowest index), nil in FFA.
+---@field Smallest fun(): integer?
+---Internal, pure: team count of a mode table: its Teams field floored, 0 for a missing, non-numeric or negative
+---value or a nil mode.
+---@field _TeamCount fun(mode: table?): integer
+---Internal, pure: balanced assignment of entries to teams 1..n, in entry order. A valid preference is kept while
+---the teams can still end balanced (sizes floor(count / n) or one more); everyone else goes to the smallest team
+---(ties: the lowest index). n = 0 (FFA) assigns nobody. Returns team by entry id.
+---@field _Assign fun(n: integer, entries: PW.TeamEntry[]): table<any, integer>
+---Server: swaps the sides (round modes): every player of teams 1..N moves to the next team, the last to 1 (with two
+---teams a plain swap); players outside 1..N stay. players defaults to every connected player. Returns how many
+---players changed team.
+---@field Swap? fun(players?: Player[]): integer
+---Internal, pure: team -> team it moves to on a swap, for teams 1..n.
+---@field _SwapMap fun(n: integer): table<integer, integer>
+---Internal, pure: a swapped copy of an assignment (entry id -> team); teams outside 1..n are kept.
+---@field _SwapAssignment fun(n: integer, assignment: table<any, integer>): table<any, integer>
+---Internal (server): Swap over n teams for the given objects with Team() and SetTeam(team).
+---@field _SwapPlayers? fun(n: integer, players: Player[]): integer
+---Internal, pure: the smallest of teams 1..n by counts (a missing count is 0); ties: the lowest index; nil for n = 0.
+---@field _Smallest fun(counts: table<integer, integer>, n: integer): integer?
+---Internal, pure: sizes of teams 1..n from a list of team indices (indices outside 1..n are ignored).
+---@field _Counts fun(n: integer, list: integer[]): integer[]
+---Internal, pure: the default enemy rule. same: a and b are the same player. FFA (n = 0): not same; team mode:
+---different teams.
+---@field _IsEnemyRule fun(n: integer, same: boolean, teamA: integer, teamB: integer): boolean
+---Internal, pure: team by SteamID64 for the pending file of a mode with n teams (rows outside 1..n dropped).
+---@field _ForFile fun(n: integer, rows: PW.TeamFileRow[]): table<string, integer>
+---Internal, pure: the valid entries of a pending file's teams (SteamID64 digits -> integer >= 1).
+---@field _FromFile fun(raw: table<any, any>): table<string, integer>
+---Internal (server): assigns every given player to a team of the active mode (Player:SetTeam), preferring the
+---restored pending team, then the current team; consumes the restored teams. Nothing in FFA.
+---@field _AssignPlayers? fun(players: Player[])
+---Internal (server): puts ply into the smallest team of the active mode counted over players (ply excluded);
+---returns the team, nil in FFA.
+---@field _PlaceLate? fun(ply: Player, players: Player[]): integer?
+---Internal: a fresh store (tests swap PW._Teams).
+---@field _NewStore fun(): PW.TeamsStore
+---Internal: the NW2 global key carrying the active team count to clients.
+---@field _CountKey string
+
+---@class PW
+---@field Teams? PW.TeamsLib the teams module (nil when the module is missing)
+---Enemy check (02-modes.md d.6): asks PW_IsEnemy (listeners, then the active mode's method); without a boolean
+---answer, team mode: a:Team() ~= b:Team(), FFA: a ~= b. Modules never compare Team() themselves.
+---@field IsEnemy? fun(a: Player, b: Player): boolean
+---@field _Teams PW.TeamsStore internal

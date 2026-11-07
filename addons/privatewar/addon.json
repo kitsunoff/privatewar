@@ -1,0 +1,15 @@
+{
+	"title": "Private War",
+	"description": "Private War gamemode. Licensed under GPL-3.0-or-later; see data_static/privatewar/LICENSE.txt.",
+	"type": "gamemode",
+	"tags": ["fun"],
+	"ignore": [
+		".*",
+		"**/.*",
+		"lua/tests/*",
+		"lua/privatewar_fixtures/*",
+		"*.md",
+		"*.sh",
+		"*.nix"
+	]
+}

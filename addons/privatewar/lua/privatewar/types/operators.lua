@@ -1,0 +1,120 @@
+---@meta
+-- Types of the operators module (06-progression.md d.7; 10-frontend.md d.6; docs/api/operators.md). Source:
+-- lua/privatewar/modules/operators/ (sh_rules.lua pure, shared.lua, init.lua server glue, cl_init.lua client glue).
+
+---One active economy `models` entry as the list sees it.
+---@class PW.OperatorEconomyInput
+---@field id string the entity id (lua/privatewar/models/<id>.lua)
+---@field name string MODEL.Name
+---@field path string MODEL.Model
+---@field price? number MODEL.Price
+---@field unlock? number MODEL.Unlock (player level)
+
+---Input of PW.Operators.List.
+---@class PW.OperatorListInput
+---@field stock? table<string, string> player_manager.AllValidModels(): name -> model path
+---@field economy? PW.OperatorEconomyInput[]
+---@field unlocked? fun(id: string): boolean whether the player may use the economy entry id (default: always)
+
+---One operator of the list. Stock ids are player_manager names; economy ids are "models:<id>".
+---@class PW.OperatorEntry
+---@field id string
+---@field name string display name
+---@field path string model path
+---@field source "stock"|"store"
+---@field locked boolean an economy entry the player neither owns nor reached the level of
+---@field price? number locked only: the price
+---@field unlock? number locked only: the level that unlocks it
+
+---Why a requested choice was not used.
+---@alias PW.OperatorReject "unknown"|"locked"
+
+---Facts for the player colour.
+---@class PW.OperatorColourFacts
+---@field teams integer active teams (0 in FFA and outside a match)
+---@field team integer Player:Team()
+---@field teamColour? Color the engine colour of that team
+---@field own? number[] a colour kept for this player (bots: picked once)
+---@field info? string the player's cl_playercolor ("r g b" in 0..1)
+
+---Options of a server store; every field has an engine default (tests inject their own).
+---@class PW.OperatorsStoreOptions
+---@field log? PW.LogFn
+---@field stock? fun(): table<string, string> default player_manager.AllValidModels
+---@field economy? fun(): PW.OperatorEconomyInput[] default the enabled entries of the models registry
+---@field unlocked? fun(ply: Player, id: string): boolean default PW.Progression.IsUnlocked(ply, "models", id)
+---@field teams? fun(): integer default #PW.Teams.GetActive()
+---@field teamColour? fun(team: integer): Color? default team.GetColor
+---@field phase? fun(): string default PW.Match.GetPhase
+---@field roll? fun(): number default math.random: [0, 1)
+
+---Internal (server): state of the operators module.
+---@class PW.OperatorsStore
+---@field log PW.LogFn
+---@field stock fun(): table<string, string>
+---@field economy fun(): PW.OperatorEconomyInput[]
+---@field unlocked fun(ply: Player, id: string): boolean
+---@field teams fun(): integer
+---@field teamColour fun(team: integer): Color?
+---@field phase fun(): string
+---@field roll fun(): number
+---@field requested table<any, string> the last valid choice per human (weak keys)
+---@field bots table<any, { path: string, colour: number[] }> the model and colour of each bot (weak keys)
+
+---The operators module: one global operator per player, random operators for bots.
+---@class PW.OperatorsLib
+---@field Auto string the choice that means "my GMod model" ("auto")
+---@field FallbackName string stock fallback name ("kleiner")
+---@field FallbackPath string the model used when no entry is usable
+---@field MaxChoiceBytes integer longest accepted choice
+---@field DefaultColour number[] GMod's default player colour
+---@field Setting string full id of the client setting ("operators.model")
+---@field NetName string the client to server message ("pw_operator_model")
+---Pure: lowercase path with forward slashes.
+---@field NormalPath fun(path: string): string
+---Pure: a display name from a player_manager name ("male_07" -> "Male 07").
+---@field Pretty fun(name: string): string
+---Pure: the operator list: economy entries first (by name), then stock entries (by name); a stock entry whose path
+---an economy entry has is dropped.
+---@field List fun(input: PW.OperatorListInput): PW.OperatorEntry[]
+---Pure: "auto" and every entry id (the options of the client setting).
+---@field OptionIds fun(entries: PW.OperatorEntry[]): string[]
+---Pure: the entry a choice gives and, when the choice was not honoured, why. auto is the cl_playermodel name.
+---@field Resolve fun(list: PW.OperatorEntry[], choice: string?, auto: string?): PW.OperatorEntry?, PW.OperatorReject?
+---Pure: whether a requested choice is well formed (1..MaxChoiceBytes bytes, no control characters).
+---@field CheckChoice fun(choice: any): boolean
+---Pure: a random entry (locks ignored); nil for an empty list.
+---@field BotPick fun(entries: PW.OperatorEntry[], roll: fun(): number): PW.OperatorEntry?
+---Pure: "r g b" in 0..1, else nil.
+---@field ParseColour fun(text: string?): number[]?
+---Pure: the player colour { r, g, b } in 0..1: the team colour in team modes, else the kept colour, else
+---cl_playercolor, else the GMod default.
+---@field Colour fun(facts: PW.OperatorColourFacts): number[]
+---Pure: the picker cards (Auto first) and the selected card id.
+---@field Cards fun(entries: PW.OperatorEntry[], choice: string?, auto: string?): PW.UICard[], string
+---Shared: the live input (stock models and the enabled economy entries) with an unlock check.
+---@field LiveInput fun(unlocked?: fun(id: string): boolean): PW.OperatorListInput
+---Client: the operator list of the local player.
+---@field LocalList? fun(): PW.OperatorEntry[]
+---Client: the local choice (the client setting).
+---@field LocalChoice? fun(): string
+---Client: the model path the local player's choice resolves to.
+---@field LocalModel? fun(): string
+---Client: stores a choice in the client setting (which sends it to the server); false for a locked or unknown one.
+---@field Choose? fun(choice: string): boolean
+---Client: sends the current choice to the server.
+---@field Send? fun()
+---Client: opens the picker screen (LOADOUT > OPERATOR).
+---@field OpenPicker? fun()
+---Internal (server): a fresh store (tests use their own; the real one is PW._Operators).
+---@field _NewStore? fun(opts?: PW.OperatorsStoreOptions): PW.OperatorsStore
+---Internal (server): the list of one player on this server.
+---@field _ListFor? fun(store: PW.OperatorsStore, ply: Player): PW.OperatorEntry[]
+---Internal (server): a request arrived; returns whether it was stored and the rejection reason of the resolution.
+---@field _OnRequest? fun(store: PW.OperatorsStore, ply: Player, choice: any): boolean, string?
+---Internal (server): PlayerSetModel: sets the model and the player colour; returns the model path.
+---@field _OnSetModel? fun(store: PW.OperatorsStore, ply: Player): string
+
+---@class PW
+---@field Operators? PW.OperatorsLib
+---@field _Operators PW.OperatorsStore internal (server)

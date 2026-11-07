@@ -1,0 +1,47 @@
+---@meta
+-- Types of the abstract round mode (T-2.3; 00-core.md d.4). Source: lua/privatewar/modes/round_base.lua.
+
+---State of the round loop (plain data, advanced by MODE._Step).
+---@class PW.RoundState
+---@field n integer team count
+---@field toWin integer rounds a team needs to win the match
+---@field swapEvery integer swap the sides after every N completed rounds, 0 = never
+---@field roundTime number seconds, 0 = no round time limit
+---@field intermission number seconds between rounds
+---@field round integer the current round, or the last one in the intermission; 0 before the first
+---@field wins table<integer, integer> rounds won by current team index (they move with the players on a swap)
+---@field phase "starting"|"round"|"intermission"|"over"
+---@field at number CurTime() at which the current round began (in the intermission: when it ends)
+---@field swapPending boolean the sides swap when the intermission ends
+
+---One thing the glue does, in order: "swap" (PW.Teams.Swap), "start" (respawn if asked, then PW_RoundStart),
+---"end" (PW_RoundEnd), "finish" (PW.Match.Finish(result)).
+---@class PW.RoundAction
+---@field kind "swap"|"start"|"end"|"finish"
+---@field round? integer
+---@field swapped? boolean
+---@field respawn? boolean
+---@field winner? integer|false
+---@field wins? table<integer, integer>
+---@field result? PW.MatchResult
+
+---The pure functions of the stored round_base mode (tests and children read them from the table).
+---@class PW.RoundBase
+---@field Abstract boolean
+---@field Teams integer
+---@field Name string
+---@field RoundsToWin integer
+---@field SwapSidesEvery integer
+---Internal, pure: a fresh state at phase "starting".
+---@field _NewState fun(n: integer, toWin: integer, swapEvery: integer, time: number, pause: number): PW.RoundState
+---Internal, pure: one step of the loop at time now with the verdict of RoundWinner (nil: undecided).
+---@field _Step fun(state: PW.RoundState, now: number, verdict: any): PW.RoundAction[]
+---Internal, pure: the round time is up at now.
+---@field _TimedOut fun(state: PW.RoundState, now: number): boolean
+---Internal, pure: the last team alive (index), false when none is left, nil while the round goes on.
+---@field _LastAlive fun(alive: integer[], present: integer[], n: integer): integer|false|nil
+---Internal, pure: the verdict of RoundWinner made valid: a team index in 1..n, false (draw) or nil (undecided).
+---@field _Verdict fun(value: any, n: integer): integer|false|nil
+---Internal, pure: the match result when a team has the rounds needed, else nil.
+---@field _Result fun(state: PW.RoundState): PW.MatchResult?
+---@field PW_CanRespawn fun(): boolean

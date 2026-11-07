@@ -1,0 +1,173 @@
+---@meta
+-- Types of the bots_tactics module (T-5.10, survival and combat behaviours; 07-bots.md d.8, d.13). Code:
+-- lua/privatewar/modules/bots_tactics/ (shared.lua: pure facts helpers, cover scoring, flank and strafe points;
+-- init.lua: the per-bot facts tick, the damage hook, the budgeted cover search, the equipment glue).
+
+---Numbers of a bot's personality the combat behaviours read (07 d.10; defaults until T-5.12 gives personalities).
+---@class PW.BotProfile
+---@field strafe number chance to strafe on each fight leg (07 d.15 strafe chance)
+---@field crouch number chance to crouch on a fight leg that does not strafe
+---@field aggression number 0..1
+---@field engageRange number units; farther visible targets are approached
+---@field coverChance number 0..1, how often a healthy bot fights from cover
+---@field flankRadius number units of the side offset of a flank
+---@field thirdPartyDelay number seconds a bot waits after hearing a fight before it moves
+---@field mobility number 0..1: shorter strafe legs (jitter) and the chance to sprint a long leg (personality, T-11.6)
+---@field slide number chance to slide when a slide condition holds (difficulty slide_chance, 07 d.15; T-11.6)
+
+---A cover point paired with a peek point (07 d.13 take_cover).
+---@class PW.BotCover
+---@field pos Vector the cover point: hidden from the threat when crouched
+---@field peek? Vector where the bot sees the threat: pos itself when standPeek, else a nearby point; nil = none
+---@field standPeek boolean standing up at pos sees the threat
+---@field threatPos Vector the threat position the cover was searched against
+---@field at number CurTime() of the search
+---@field score number
+---@field guessed? boolean the peek is a side step the search did not trace (T-11.6)
+
+---A cover candidate. The glue fills hidden and open with traces against the threat.
+---@class PW.BotCoverCandidate
+---@field pos Vector
+---@field spot boolean a navmesh hiding spot (not only an area centre)
+---@field pre? number cheap score before the traces
+---@field hidden? boolean crouched at pos the threat cannot be seen
+---@field standOpen? boolean standing at pos the threat can be seen
+---@field open? boolean crouched at pos the threat can be seen (a peek point for a neighbour)
+
+---Facts of a bot the combat behaviours read (blackboard field `tactics`, writer: bots_tactics).
+---@class PW.BotCombatFacts
+---@field at number CurTime() of the refresh
+---@field pos Vector the bot's position
+---@field health number
+---@field maxHealth number
+---@field clip integer rounds in the magazine; -1 for a weapon without one
+---@field capacity integer magazine size; 0 or less for a weapon without one
+---@field reserve integer rounds left to reload
+---@field reloading boolean the adapter says the weapon reloads
+---@field hurtAt? number CurTime() of the last damage from an enemy
+---@field attacker? Entity who did that damage
+---@field lethal integer lethal equipment left (0 without the equipment module)
+---@field cover? PW.BotCover the last cover found against the current threat
+---@field profile PW.BotProfile
+---@field speed? number horizontal speed, units per second (T-11.6)
+---@field runSpeed? number the bot's run speed (T-11.6)
+---@field onGround? boolean
+---@field crouching? boolean
+---@field active? string class of the active weapon (T-11.6)
+---@field melee? string class of a melee weapon the bot carries (catalogue Kind "melee"), nil without one (T-11.6)
+
+---What take_cover weighs (T-11.6, PW.BotTactics.CoverWanted).
+---@class PW.BotCoverInput
+---@field hasCover boolean a fresh cover with a peek exists, or take_cover runs (it holds its own cover)
+---@field health number share 0..1
+---@field hurt boolean damage from an enemy within Config.pressureWindow
+---@field visibleCount integer enemies in sight
+---@field engaged boolean an enemy is in sight
+---@field running boolean take_cover is the running behaviour
+---@field dist number units to the threat
+---@field coverChance number the personality's cover chance
+
+---What a slide decision reads (T-11.6, PW.BotTactics.SlideWanted).
+---@class PW.BotSlideFacts
+---@field available boolean the Quick Slide addon was detected
+---@field cooling boolean a slide happened within Config.slideCooldown
+---@field onGround boolean
+---@field crouching boolean
+---@field speed number
+---@field runSpeed number
+---@field roll number in [0, 1)
+---@field chance number the difficulty's slide chance
+---@field dist? number peek: cover to peek point; close: bot to target
+---@field hurtAge? number seconds since the last damage from an enemy
+
+---@class PW.BotBoard
+---@field tactics? PW.BotCombatFacts facts for the combat behaviours (writer: bots_tactics)
+
+---@class PW.BotBrainApi
+---@field useEquipment? fun(bot: any, slot: string): boolean tests inject it; default PW.BotTactics.UseEquipment
+---@field walkable? fun(point: Vector): boolean tests inject it; default a navmesh lookup (PW.BotTactics.Walkable)
+---@field bash? fun(bot: any): boolean tests inject it; default the adapter's BotAction "melee" (PW.BotTactics.Bash)
+
+---The tactics helpers of the survival and combat behaviours (T-5.10).
+---@class PW.BotTacticsLib
+---Gameplay values (units, seconds, shares).
+---@field Config table<string, number>
+---Default personality numbers.
+---@field DefaultProfile PW.BotProfile
+---Profile key to the data field that carries it (difficulty strafe_chance, personality fields).
+---@field ProfileFields table<string, string>
+---Contact sources that mean "a fight is heard" (third_party), not a lost sighting (search).
+---@field FightSounds table<string, boolean>
+---Pure: the profile from a personality and a difficulty entity (numeric fields win) and a tier name.
+---@field ProfileFor fun(personality: table?, difficulty: table?, tier: string?): PW.BotProfile
+---Pure: the facts of the ctx (board.tactics), or empty facts with the default profile.
+---@field FactsOf fun(ctx: PW.BotBrainCtx): PW.BotCombatFacts
+---Pure: health as a share of the maximum, 0..1.
+---@field HealthFrac fun(f: PW.BotCombatFacts): number
+---Pure: whether the magazine is at or below share of its capacity and rounds are left to reload it.
+---@field AmmoLow fun(f: PW.BotCombatFacts, share: number): boolean
+---Pure: seconds since a contact was last known.
+---@field Age fun(ctx: PW.BotBrainCtx, contact: PW.BotContact): number
+---Pure: the nearest visible contact.
+---@field Visible fun(ctx: PW.BotBrainCtx): PW.BotContact?
+---Pure: the freshest contact that is not visible and passes the filter, no older than maxAge.
+---@field Lost fun(ctx: PW.BotBrainCtx, maxAge: number, filter?: fun(c: PW.BotContact): boolean): PW.BotContact?
+---Pure: the visible contact, else the freshest one no older than maxAge.
+---@field Threat fun(ctx: PW.BotBrainCtx, maxAge: number): PW.BotContact?
+---Pure: whether the bot took damage from an enemy within seconds.
+---@field Hurt fun(ctx: PW.BotBrainCtx, seconds: number): boolean
+---Pure: the cover of the facts when it is fresh and was searched against a threat near threatPos.
+---@field CoverFor fun(ctx: PW.BotBrainCtx, threatPos: Vector): PW.BotCover?
+---Pure: the cheap score of a candidate (nil: rejected): near the bot, not toward the threat, not too close to it.
+---@field PreScore fun(cand: PW.BotCoverCandidate, botPos: Vector, threatPos: Vector): number?
+---Pure: the best traced candidate as a cover with its peek point; nil when no candidate is hidden.
+---@field PickCover fun(cands: PW.BotCoverCandidate[], threatPos: Vector, now: number): PW.BotCover?
+---Pure: a point on the way from `from` to `to`, offset sideways by radius (side +1 right, -1 left).
+---@field FlankPoint fun(from: Vector, to: Vector, side: integer, radius: number): Vector
+---Pure: a point dist units sideways of pos, across the line to the threat (side +1 right, -1 left).
+---@field StrafePoint fun(pos: Vector, threatPos: Vector, side: integer, dist: number): Vector
+---Pure: sets or clears one IN_* bit of the intent's buttons.
+---@field SetButton fun(intent: PW.BotIntent, mask: integer, on: boolean)
+---Pure: a per-board mark that lasts until a time (cross-run memory of a behaviour, such as a flank after a reload).
+---@field Mark fun(board: table, key: string, untilTime: number?)
+---@field Marked fun(board: table, key: string, now: number): boolean
+---A number in [0, 1); tests stub it.
+---@field Random fun(): number
+---Uses an equipment slot through the ctx api (tests) or PW.Equipment.Use; false when nothing was used.
+---@field UseEquipment fun(ctx: PW.BotBrainCtx, slot: string): boolean
+---Pure (T-11.6): take_cover's rank and weight; false, 0 when it is not a candidate.
+---@field CoverWanted fun(i: PW.BotCoverInput): PW.BotRank, number
+---Pure (T-11.6): seconds of one fight leg; shorter for a mobile profile (jitter).
+---@field LegLength fun(profile: PW.BotProfile, roll: number): number
+---Pure (T-11.6): whether a leg this long is run at a sprint.
+---@field SprintWanted fun(dist: number, profile: PW.BotProfile, roll: number): boolean
+---Pure (T-11.6): the gun has a magazine, it is empty and nothing is left to reload.
+---@field Dry fun(f: PW.BotCombatFacts): boolean
+---Pure (T-11.6): whether a target this far is fought in melee.
+---@field MeleeWanted fun(dist: number, f: PW.BotCombatFacts): boolean
+---Pure (T-11.6): whether to slide for "peek", "dodge" or "close".
+---@field SlideWanted fun(kind: string, s: PW.BotSlideFacts): boolean
+---T-11.6: slides when SlideWanted agrees (writes intent.slideAt, starts the cooldown); true when it did.
+---@field Slide fun(ctx: PW.BotBrainCtx, kind: string, dist: number?): boolean
+---T-11.6: sprint on or off (intent.sprint); sprinting drops the aim target so the view follows the path.
+---@field Run fun(ctx: PW.BotBrainCtx, on: boolean)
+---T-11.6: a travel leg toward a point: a sprint by SprintWanted (the profile's mobility), else a walk; true: sprint.
+---@field Travel fun(ctx: PW.BotBrainCtx, point: Vector): boolean
+---T-11.6: a direct move relative to the view (intent.drive); 0, 0 clears it.
+---@field Drive fun(ctx: PW.BotBrainCtx, forward: number, side: number)
+---T-11.6: whether a point is on the navmesh (the ctx api in tests).
+---@field Walkable fun(ctx: PW.BotBrainCtx, point: Vector): boolean
+---T-11.6: the adapter's BotAction "melee" of the active weapon (the ctx api in tests); true when it hit.
+---@field Bash fun(ctx: PW.BotBrainCtx): boolean
+---Server: the facts of a bot now (the glue fills board.tactics with it).
+---@field Refresh? fun(bot: Player, board: PW.BotBoard)
+
+---Internal (server): state of the module.
+---@class PW.BotTacticsStore
+---@field hurt table<Player, { at: number, attacker: Entity }> weak keys
+---@field registered table<Player, string> scheduler id per bot (weak keys)
+---@field pending table<Player, boolean> a cover search is queued (weak keys)
+
+---@class PW
+---@field BotTactics? PW.BotTacticsLib
+---@field _BotTactics PW.BotTacticsStore internal (server)

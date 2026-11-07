@@ -1,0 +1,156 @@
+---@meta
+-- Types of the progression storage (T-4.10, 06-progression.md d.5). Source: lua/privatewar/modules/progression/
+-- (sh_storage.lua: pure checks, delta apply, file and wire; sv_storage.lua: batching, upload, match summary;
+-- cl_init.lua: the client file and the local view).
+
+---The id of a delta: session is random per player connection (never 0), seq grows by one per delta.
+---@class PW.ProgressionBatch
+---@field session integer
+---@field seq integer
+
+---The client file data/privatewar/progression.json. batch is the last delta applied.
+---@class PW.ProgressionFile
+---@field v integer file version (1)
+---@field xp number total player XP
+---@field weapons table<string, number> total XP per weapon class
+---@field batch PW.ProgressionBatch
+
+---XP earned since the last delta (server).
+---@class PW.ProgressionPending
+---@field xp number
+---@field weapons table<string, number>
+
+---A 10 s delta, server -> owner: the XP earned since the previous one, with its batch id.
+---@class PW.ProgressionDelta
+---@field session integer
+---@field seq integer
+---@field xp number
+---@field weapons table<string, number>
+
+---What a client needs for its own unlock checks (server -> owner).
+---@class PW.ProgressionLevels
+---@field level integer player level
+---@field weapons table<string, integer> weapon levels above 1
+---@field unlockAll boolean progression.unlockall
+---@field maxAttachments integer loadout.maxattachments of the match
+
+---This match's record of one player (server).
+---@class PW.ProgressionMatch
+---@field xp number XP gained this match
+---@field levelBefore integer player level at the first gain
+---@field weapons table<string, integer> weapon level at the weapon's first gain
+---@field medals table<string, integer> medal event id -> count
+
+---@class PW.ProgressionWeaponGain
+---@field class string
+---@field before integer
+---@field after integer
+
+---@class PW.ProgressionMedalCount
+---@field id string score event id
+---@field count integer
+
+---The postmatch summary of one player: XP gained this match, levels before and after, the weapons that gained a level
+---(sorted by class) and the medals (score events with Medal = true, sorted by id).
+---@class PW.ProgressionSummary
+---@field xp number
+---@field levelBefore integer
+---@field levelAfter integer
+---@field weapons PW.ProgressionWeaponGain[]
+---@field medals PW.ProgressionMedalCount[]
+
+---Explicit wire writer (net.Write* in the game, a buffer in tests).
+---@class PW.ProgressionWriter
+---@field uint fun(value: integer, width: integer)
+---@field string fun(value: string)
+---@field bool fun(value: boolean)
+
+---@class PW.ProgressionReader
+---@field uint fun(width: integer): integer
+---@field string fun(): string
+---@field bool fun(): boolean
+
+---Internal (client): the local player's file, the last levels and summary received.
+---@class PW.ProgressionLocal
+---@field file? PW.ProgressionFile
+---@field levels? PW.ProgressionLevels
+---@field summary? PW.ProgressionSummary
+
+---T-4.10 fields of the server store. The senders and refresh are no-ops in PW.Progression._NewStore unless given;
+---the live store gets the net senders and the loadout refresh (PW.Progression._LiveEdges).
+---@class PW.ProgressionStore
+---@field pending table<Player, PW.ProgressionPending> XP earned since the last delta, weak keys
+---@field batches table<Player, PW.ProgressionBatch> the id of the last delta sent, weak keys
+---@field matches table<Player, PW.ProgressionMatch> this match's records, weak keys
+---@field uploaded table<Player, boolean> players whose join upload was accepted, weak keys
+---@field nextFlush? number time of the next 10 s flush (nil until the first tick)
+---@field sendDelta fun(ply: Player, delta: PW.ProgressionDelta)
+---@field sendLevels fun(ply: Player, levels: PW.ProgressionLevels)
+---@field sendSummary fun(ply: Player, summary: PW.ProgressionSummary)
+---@field refresh fun(ply: Player) re-checks the player's classes after a level change (loadout RefreshClasses)
+---@field isMedal fun(eventId: string): boolean whether a score event is a medal (the fallback count)
+---@field medalsOf fun(ply: Player): table<string, integer>? this match's medals (PW.Medals.Get), nil without it
+
+---@class PW.ProgressionStoreOpts
+---@field medalsOf? fun(ply: Player): table<string, integer>?
+---@field sendDelta? fun(ply: Player, delta: PW.ProgressionDelta)
+---@field sendLevels? fun(ply: Player, levels: PW.ProgressionLevels)
+---@field sendSummary? fun(ply: Player, summary: PW.ProgressionSummary)
+---@field refresh? fun(ply: Player)
+---@field isMedal? fun(eventId: string): boolean
+
+---Storage and transfer (T-4.10). Net: pw_progression_upload (client -> server, once per connection),
+---pw_progression_delta, pw_progression_levels, pw_progression_summary (server -> owner). Client notification
+---PW_ProgressionSummary(summary) when the postmatch summary arrives.
+---@class PW.ProgressionLib
+---Shared. Server: the player's summary of the current or last match. Client: the summary the server sent the local
+---player at POSTMATCH (nil before the first one; ply is ignored).
+---@field MatchSummary fun(ply?: Player): PW.ProgressionSummary?
+---Client. The local player's progression file as last loaded or updated (nil before the join upload).
+---@field GetLocalFile fun(): PW.ProgressionFile?
+---@field FileVersion integer
+---@field FilePath string "privatewar/progression.json" (DATA)
+---@field FlushInterval number seconds between deltas (10)
+---@field MaxXP number an XP total above this is absurd: rejected
+---@field MaxDeltaXP number a delta value above this is absurd: rejected
+---@field MaxWeapons integer weapons per upload or message
+---@field MaxClassLength integer longest weapon class accepted
+---@field MaxMedals integer medal entries per summary
+---@field UploadMaxBytes integer maxLen of pw_progression_upload
+---Internal, pure: a whole non-negative number within limit, else nil.
+---@field _CheckXP fun(value: any, limit: number): integer?
+---Internal, pure: the sanity check of an upload or a file (bad entries dropped, the top maxWeapons by XP kept).
+---@field _CheckState fun(raw: any, maxWeapons?: integer): PW.ProgressionState
+---Internal, pure: adds a delta to a file (a new table); the same file and false for a duplicate batch.
+---@field _ApplyDelta fun(current: PW.ProgressionFile, delta: PW.ProgressionDelta): PW.ProgressionFile, boolean
+---@field _FileFromJson fun(decoded: any): PW.ProgressionFile
+---@field _FileToJson fun(stored: PW.ProgressionFile): table
+---@field _ViewFromLevels fun(levels: PW.ProgressionLevels, lookup: PW.LoadoutLookup,
+---owned?: fun(key: string): boolean): PW.ProgressionView
+---@field _RegistryLookup PW.LoadoutLookup
+---@field _NetWriter fun(): PW.ProgressionWriter
+---@field _NetReader fun(): PW.ProgressionReader
+---@field _EncodeState fun(state: PW.ProgressionState, writer: PW.ProgressionWriter)
+---@field _DecodeState fun(reader: PW.ProgressionReader): PW.ProgressionState
+---@field _EncodeDelta fun(delta: PW.ProgressionDelta, writer: PW.ProgressionWriter)
+---@field _DecodeDelta fun(reader: PW.ProgressionReader): PW.ProgressionDelta
+---@field _EncodeLevels fun(levels: PW.ProgressionLevels, writer: PW.ProgressionWriter)
+---@field _DecodeLevels fun(reader: PW.ProgressionReader): PW.ProgressionLevels
+---@field _EncodeSummary fun(summary: PW.ProgressionSummary, writer: PW.ProgressionWriter)
+---@field _DecodeSummary fun(reader: PW.ProgressionReader): PW.ProgressionSummary
+---Internal (server): batching, upload, match records.
+---@field _Track fun(store: PW.ProgressionStore, ply: Player, xp: number, weaponClass?: string)
+---@field _CountMedal fun(store: PW.ProgressionStore, ply: Player, eventId: string)
+---@field _LevelsChanged fun(store: PW.ProgressionStore, ply: Player)
+---@field _LevelsOf fun(store: PW.ProgressionStore, ply: Player): PW.ProgressionLevels
+---@field _Flush fun(store: PW.ProgressionStore, ply: Player): PW.ProgressionDelta?
+---@field _FlushAll fun(store: PW.ProgressionStore)
+---@field _Tick fun(store: PW.ProgressionStore, now: number)
+---@field _OnUpload fun(store: PW.ProgressionStore, ply: Player, raw: any): boolean
+---@field _BeginMatch fun(store: PW.ProgressionStore)
+---@field _Summary fun(store: PW.ProgressionStore, ply: Player): PW.ProgressionSummary
+---@field _OnPostmatch fun(store: PW.ProgressionStore)
+---@field _LiveEdges fun(): PW.ProgressionStoreOpts
+---Internal (client): the view and the summary of the local player.
+---@field _LocalView fun(): PW.ProgressionView
+---@field _LocalSummary fun(): PW.ProgressionSummary?

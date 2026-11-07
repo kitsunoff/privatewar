@@ -1,0 +1,15 @@
+# Markdown gate (TASKS.md, "Toolchain"). Covers project documents only; research notes (notes/)
+# are reference material and are not gated.
+config:
+  # Disabled with the user's approval (2026-11-06): long prose lines and tables in technical
+  # documentation; hard wrapping breaks tables and makes diffs noisy.
+  MD013: false
+  # Disabled with the user's approval (2026-11-06): decisions in design/ are numbered continuously
+  # across sections and cited as "d.N"; renumbering lists would break those citations.
+  MD029: false
+globs:
+  - "*.md"
+  - "design/**/*.md"
+  - "docs/**/*.md"
+ignores:
+  - "tests/gates/fixtures/**"

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && nix develop --quiet --command bash scripts/check/claude-hook.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

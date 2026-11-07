@@ -1,0 +1,25 @@
+# Local-only material that never goes into the repository (reference files, scratch notes)
+/private/
+*.gma
+
+# Tool state
+/.claude/worktrees/
+/.playwright-mcp/
+
+# Empty artefacts left by a research agent
+/design/*.lua.lua
+
+# OS
+.DS_Store
+
+# Screenshots pulled from the Steam Deck
+/.deck-shots/
+/.nix/
+/.pre-commit-config.yaml
+/gluatest-run.log
+
+# Local Deck connection (host is never committed)
+/.deck.env
+
+# Local Workshop build output (scripts/package/build.sh)
+/dist/

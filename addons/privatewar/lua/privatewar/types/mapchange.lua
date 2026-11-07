@@ -1,0 +1,115 @@
+---@meta
+-- Types of the map change (T-1.14, 00-core.md d.9). Server only: gamemodes/privatewar/gamemode/core/sv_mapchange.lua.
+
+---The next match, persisted in data/privatewar/pending_match.json before changelevel (00-core.md d.9).
+---@class PW.PendingMatch
+---@field v integer format version (PW.MapChange._Version)
+---@field map string target map
+---@field mode string mode id (ClassName) in the modes registry
+---@field settings table<string, any> match settings snapshot (empty until T-1.5)
+---@field bots integer target bot count (the bots lane reconciles against it)
+---Team by SteamID64 string: the answer to the question hook PW_PendingTeams(mode) (the teams module, T-1.16),
+---{} when nobody answers with a table.
+---@field teams table<string, integer>
+---@field createdAt integer os.time() when the file was written
+---@field mapChangeCount integer game.GetMapChangeCount() on the map that wrote the file
+
+---What the new map knows when it checks a pending match.
+---@class PW.PendingFacts
+---@field map string game.GetMap()
+---@field mapChangeCount integer game.GetMapChangeCount()
+---@field now integer os.time()
+
+---Why a pending match was not applied.
+---@alias PW.PendingReason "missing"|"corrupt"|"version"|"map"|"count"|"age"|"mode"|"start"
+
+---What PW.Match.Start does with a target map.
+---@alias PW.MapChangeStep "busy"|"prematch"|"changelevel"
+
+---A changelevel in progress.
+---@class PW.MapChangeTarget
+---@field map string
+---@field deadline number store clock time after which the change counts as failed
+
+---A map change announced and waiting for its delay (lib.Schedule).
+---@class PW.MapChangeScheduled
+---@field mode table
+---@field map string
+---@field at number store clock time at which _Begin runs
+
+---Options of a map change store; every field has an engine default (tests inject their own).
+---@class PW.MapChangeStoreOptions
+---@field path? string DATA path of the pending file (default "privatewar/pending_match.json")
+---@field log? PW.LogFn
+---@field clock? fun(): number default CurTime (the failed-changelevel timeout)
+---@field time? fun(): integer default os.time (createdAt and the age check)
+---@field map? fun(): string default game.GetMap
+---@field mapChangeCount? fun(): integer default game.GetMapChangeCount
+---@field bots? fun(settings: table<string, any>): integer bot target written to the file from the file's settings
+---(default: PW.BotsManager.PendingTarget when the bots manager is loaded, else the current bot count)
+---@field resolveMode? fun(id: string): table? default PW.Registries.modes.Get(id)
+---@field changelevel? fun(map: string) default RunConsoleCommand("changelevel", map)
+---@field ack? fun(ply: Player) default: sends pw_client_ready_ack to a human
+---@field delay? fun(): number seconds between the announcement and changelevel (default pw_mapchange_delay)
+---@field announce? fun(map: string, mode: string, at: number) default: the NW2 globals of PW.Phase._ChangeKeys
+
+---Internal (00-core.md d.9): state of the map change.
+---@class PW.MapChangeStore
+---@field path string
+---@field changing? PW.MapChangeTarget the guard: set while a changelevel is in progress
+---@field log PW.LogFn
+---@field clock fun(): number
+---@field time fun(): integer
+---@field map fun(): string
+---@field mapChangeCount fun(): integer
+---@field bots fun(settings: table<string, any>): integer
+---@field resolveMode fun(id: string): table?
+---@field changelevel fun(map: string)
+---@field ack fun(ply: Player)
+---@field delay fun(): number
+---@field announce fun(map: string, mode: string, at: number)
+---@field scheduled? PW.MapChangeScheduled a change announced and not yet begun
+
+---Map change and the client ready handshake (T-1.14, 00-core.md d.9). Server only. PW.Match.Start(mode, map)
+---is the entry point; this library does the file, the guard, the fallback and the handshake.
+---@class PW.MapChangeLib
+---True while a map change is announced or a changelevel is in progress (between the command and the new map, or
+---the 10 s fallback).
+---@field IsChanging fun(): boolean
+---Announces a change to `map` for `mode` (NW2: map, mode id, end time) and begins it pw_mapchange_delay seconds
+---later (_Tick); with no delay it begins at once. Returns true (or _Begin's result without a delay).
+---@field Schedule fun(mode: table, map: string): boolean
+---Internal: drops an announced change that has not begun and clears the announcement; false when none waits.
+---@field _Cancel fun(reason: string): boolean
+---Internal: the pending file format version.
+---@field _Version integer
+---Internal: a pending file this old (seconds) or older is rejected.
+---@field _MaxAge number
+---Internal: seconds after the changelevel command after which, still on the old map, the change has failed.
+---@field _FailAfter number
+---Internal, pure: busy while changing; prematch for no map or the current one; changelevel otherwise.
+---@field _Decide fun(current: string, target: string?, changing: boolean): PW.MapChangeStep
+---Internal, pure: whether a decoded pending file may be applied to this map, and why not.
+---@field _Validate fun(pending: any, facts: PW.PendingFacts): boolean, PW.PendingReason?
+---Internal, pure: JSON text of a pending match.
+---@field _Encode fun(pending: PW.PendingMatch): string
+---Internal, pure: the table in a JSON text (string keys kept as strings), nil for anything that is not an object.
+---@field _Decode fun(text: string): table<string, any>?
+---Internal: writes the pending file, sets the guard and runs changelevel (called by PW.Match.Start). Returns true.
+---@field _Begin fun(mode: table, map: string): boolean
+---Internal: one step (the Think hook): begins a scheduled change that is due (a failure in a match phase aborts to
+---the lobby); then the failed-changelevel check: after _FailAfter s, back to the lobby state
+---with the abort reason "map change to <map> failed ...", the guard cleared and the pending file deleted.
+---@field _Tick fun()
+---Internal: on the new map (server InitPostEntity): reads and deletes the pending file; when it is valid and its
+---mode is known, starts the match (PREMATCH) and fires PW_PendingMatchApplied(pending). Otherwise stays in LOBBY
+---(one log line, none for a missing file). Returns whether the match was started, and why not.
+---@field _Apply fun(): boolean, PW.PendingReason?
+---Internal: the pw_client_ready handler: marks the player loaded (PW.Match._SetLoaded) and acknowledges.
+---@field _OnClientReady fun(ply: Player)
+---Internal: a fresh store (tests swap PW._MapChange).
+---@field _NewStore fun(opts?: PW.MapChangeStoreOptions): PW.MapChangeStore
+
+---@class PW
+---@field MapChange? PW.MapChangeLib server only
+---@field _MapChange PW.MapChangeStore internal (server)

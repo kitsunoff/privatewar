@@ -1,0 +1,22 @@
+-- Server entry point of the Private War gamemode.
+
+AddCSLuaFile("cl_init.lua")
+AddCSLuaFile("shared.lua")
+AddCSLuaFile("core/sh_hooks.lua")
+AddCSLuaFile("core/sh_registry.lua")
+AddCSLuaFile("core/sh_call.lua")
+AddCSLuaFile("core/sh_instance.lua")
+AddCSLuaFile("core/sh_loader.lua")
+AddCSLuaFile("core/sh_privileges.lua")
+AddCSLuaFile("core/sh_settings.lua")
+AddCSLuaFile("core/sh_settings_store.lua")
+AddCSLuaFile("core/sh_phase.lua")
+AddCSLuaFile("core/sh_reload.lua")
+AddCSLuaFile("core/sh_weapon_phase.lua")
+AddCSLuaFile("core/sh_enable.lua")
+AddCSLuaFile("core/cl_enable.lua")
+AddCSLuaFile("core/cl_phase.lua")
+AddCSLuaFile("core/cl_ready.lua")
+include("shared.lua")
+
+print("[PW] Private War " .. PW.Version .. " server loaded")

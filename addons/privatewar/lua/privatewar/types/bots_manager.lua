@@ -1,0 +1,144 @@
+---@meta
+-- Types of the bots manager (T-5.1; 07-bots.md d.3, 00-core.md d.9, 02-modes.md d.5a, 08-lobby.md d.4) and of the
+-- per-bot blackboard (docs/api/bots-blackboard.md). Source: lua/privatewar/modules/bots_manager/ (shared.lua: the
+-- pure rules; init.lua: the server glue).
+
+---The per-bot blackboard (docs/api/bots-blackboard.md, "Blackboard"). Server only. The manager writes bot, team,
+---personality and difficulty; the other fields belong to the other layers and are added by them.
+---@class PW.BotBoard
+---@field bot Player the bot
+---@field team integer? its team (Player:Team()) while it is in an active team, refreshed by the manager
+---@field personality table<string, any>? a full copy of the bot_personalities entity; nil until its team is known
+---@field difficulty table<string, any>? a full copy of the bot_difficulties entity of its tier
+
+---One connected player as the pure rules see it: any id (a Player in the glue, a string in tests), its team and
+---whether it is a bot.
+---@class PW.BotsEntry
+---@field ent any
+---@field team integer
+---@field bot boolean
+---@field spectating? boolean a join-in-progress spectator: not a human of the quota until they play
+---@field id integer join order (UserID in the glue); the newest bot is kicked first
+---@field name? string Player:Nick() (the glue sets it; a new bot's name must differ from every one of them)
+
+---Facts for the quota (02-modes.md d.4, d.5a).
+---@class PW.BotsQuotaFacts
+---@field fill integer bots.fill: players in total, humans included
+---@field maxPlayers integer game.MaxPlayers()
+---@field humans integer connected humans
+---@field freeSlots? integer slots kept free for a joining human (default PW.BotsManager._FreeSlots)
+
+---What one reconciliation step does: how many bots to create and which entries to kick, in order.
+---@class PW.BotsPlan
+---@field create integer
+---@field kick any[] ent of the kicked entries
+
+---Facts for the gate: whether the manager may act now.
+---@class PW.BotsGateFacts
+---@field singlePlayer boolean
+---@field paused boolean a GLuaTest run is in progress (the manager never touches bots during tests)
+---@field generating boolean the navmesh is being generated (navgen kicks the bots, creation pauses)
+---@field phase string the match phase
+
+---Why the manager does nothing now; nil when it may act.
+---@alias PW.BotsIdleReason "singleplayer"|"tests"|"navgen"|"phase"
+
+---Options of a manager store; every field has an engine default (tests inject their own).
+---@class PW.BotsStoreOptions
+---@field log? PW.LogFn
+---@field singlePlayer? fun(): boolean default game.SinglePlayer
+---@field maxPlayers? fun(): integer default game.MaxPlayers
+---@field players? fun(): PW.BotsEntry[] default: every connected player
+---@field create? fun(name: string): Player? default player.CreateNextBot (may return NULL)
+---@field kick? fun(ent: any, reason: string) default Player:Kick (never Entity:Remove)
+---@field phase? fun(): string default PW.Match.GetPhase
+---@field fill? fun(): integer default the setting bots.fill
+---@field generating? fun(): boolean default PW.NavGen.IsGenerating (nil-safe)
+---@field teams? fun(): integer default #PW.Teams.GetActive() (0 without the teams module)
+---@field smallest? fun(): integer? default PW.Teams.Smallest (nil-safe)
+---@field clock? fun(): number default CurTime
+---@field tier? fun(): any default the setting bots.difficulty (a tier id or "mix")
+---@field roll? fun(): number default math.random: [0, 1) rolls for "mix" and the personality pick
+
+---Internal (server): state of the manager.
+---@class PW.BotsStore
+---@field log PW.LogFn
+---@field singlePlayer fun(): boolean
+---@field maxPlayers fun(): integer
+---@field players fun(): PW.BotsEntry[]
+---@field create fun(name: string): Player?
+---@field kick fun(ent: any, reason: string)
+---@field phase fun(): string
+---@field fill fun(): integer
+---@field generating fun(): boolean
+---@field teams fun(): integer
+---@field smallest fun(): integer?
+---@field clock fun(): number
+---@field tier fun(): any
+---@field roll fun(): number
+---@field boards table<any, PW.BotBoard> blackboard by bot (weak keys)
+---@field kicking table<any, boolean> bots kicked and not gone yet (weak keys); not counted
+---@field pinned integer? the bot target from pending_match.json, used during PREMATCH after a map change
+---@field paused boolean a GLuaTest run is in progress
+---@field resumeInLobby boolean the run finished outside LOBBY: resume on the next LOBBY entry
+---@field refused boolean the Singleplayer refusal was logged
+---@field createFailed boolean a failed creation was logged (once until a creation succeeds)
+---@field serial integer bots created by this store (counts creation attempts)
+---@field nextStep number clock time of the next periodic step
+
+---The bots manager (T-5.1). Shared: the pure rules; server: the glue.
+---@class PW.BotsManagerLib
+---Internal: slots kept free for a joining human (08-lobby.md d.4: a join during LIVE replaces a bot).
+---@field _FreeSlots integer
+---Internal: seconds between periodic steps.
+---@field _Interval number
+---Internal: phases in which bots exist (PREMATCH to VOTE; the lobby shows only humans).
+---@field _ActivePhases table<string, boolean>
+---Pure: the bot count for the facts: min(fill, maxPlayers - freeSlots) - humans, never below 0; 0 when
+---maxPlayers is 1 or less (Singleplayer).
+---@field _Quota fun(facts: PW.BotsQuotaFacts): integer
+---Pure: why the manager must stay idle, nil when it may act.
+---@field _Gate fun(facts: PW.BotsGateFacts): PW.BotsIdleReason?
+---Pure: the index in entries of the bot to kick: a bot of team prefer if there is one, else a bot of the team with
+---the most players (ties: the lowest index; n = 0: any team); the newest (highest id) wins inside a team. nil
+---without bots.
+---@field _PickKick fun(entries: PW.BotsEntry[], n: integer, prefer: integer?): integer?
+---The bot name pool (sh_name_pool.lua, 06-progression.md d.7): about 100 original names; unique, editable.
+---@field NamePool string[]
+---Pure: a pool name not in taken (lowercase names in use; roll in [0, 1) picks among the free ones); when every pool
+---name is taken, a pool name with the lowest free number ("Viper 2").
+---@field _PickName fun(pool: string[], taken: table<string, boolean>, roll: fun(): number): string
+---Pure: the lowercase names of the entries (entries without a name are skipped).
+---@field _TakenNames fun(entries: PW.BotsEntry[]): table<string, boolean>
+---Pure: the step that brings the bots of entries to target.
+---@field _Plan fun(target: integer, entries: PW.BotsEntry[], n: integer, prefer: integer?): PW.BotsPlan
+---Server: the bot count the manager aims for now (0 while it is idle).
+---@field Target? fun(store?: PW.BotsStore): integer
+---Server: the bot target written to pending_match.json for the next match: the quota with the file's bots.fill
+---(else the current setting) and the humans connected now.
+---@field PendingTarget? fun(settings: table<string, any>?): integer
+---Internal (server): a fresh store (tests use their own; the real one is PW._BotsManager).
+---@field _NewStore? fun(opts?: PW.BotsStoreOptions): PW.BotsStore
+---Internal (server): one reconciliation step; returns the created and the kicked count.
+---@field _Step? fun(store: PW.BotsStore, prefer?: integer): integer, integer
+---Internal (server): kicks every bot (entering LOBBY, a map that stays in LOBBY); returns the kicked count.
+---@field _KickAll? fun(store: PW.BotsStore, reason: string): integer
+---Internal (server): a human joined: one step that kicks a bot of the team the human will get.
+---@field _OnHumanJoined? fun(store: PW.BotsStore): integer, integer
+---Internal (server): PW_PendingMatchApplied: re-creates the Lua state of the surviving bots, pins the file's
+---target for PREMATCH and reconciles.
+---@field _OnPendingApplied? fun(store: PW.BotsStore, pending: PW.PendingMatch): integer, integer
+---Internal (server): the phase changed (LOBBY: kick every bot; leaving PREMATCH: drop the pinned target).
+---@field _OnPhase? fun(store: PW.BotsStore, phase: string)
+---Internal (server): GLuaTest started (true) or finished (false).
+---@field _SetTestRun? fun(store: PW.BotsStore, running: boolean)
+
+---Blackboard access for the bot layers (docs/api/bots-blackboard.md). Server only.
+---@class PW.BotLib
+---The blackboard of a managed bot; nil for a player that is not one (a human included).
+---@field Get fun(bot: Player): PW.BotBoard?
+
+---@class PW
+---@field BotsManager? PW.BotsManagerLib
+---@field Bot? PW.BotLib server only
+---@field _BotsManager PW.BotsStore internal (server)

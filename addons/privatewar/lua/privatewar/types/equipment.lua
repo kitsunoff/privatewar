@@ -1,0 +1,206 @@
+---@meta
+-- Types of equipment (T-4.5; 05-loadout.md d.11). Source: lua/privatewar/kinds/equipment.lua (the kind),
+-- lua/privatewar/modules/equipment/ (shared.lua: slots, pure rules; sh_grenades.lua: grenade rules and ammo types;
+-- init.lua: per-player state, spawn and death hooks, the grenade SWEPs; cl_init.lua: slot keys select the grenade),
+-- lua/privatewar/equipment/ (frag, flash) and gamemodes/privatewar/entities/weapons/weapon_pw_*.lua (T-11.4).
+
+---One equipment item, a file in lua/privatewar/equipment/ with an EQUIPMENT table. Data plus OnUse; never
+---auto-subscribed. On spawn it becomes a per-player instance (PW.Instance), so OnUse may keep state on self and use
+---self:Hook / self:Timer, which end with the life.
+---@class PW.EquipmentItem : PW.Entity
+---Required. Display name.
+---@field Name string
+---Required. Uses per life; refilled on spawn. Rounded down; negative counts as 0.
+---@field Count number
+---Required. Runs on the instance when the slot is used (the grenade SWEP's release, or a bot), through PW.Call.
+---Returning false refuses the use: the count is kept and the cooldown does not start.
+---@field OnUse fun(self: PW.EquipmentItem, owner: Player, opts?: PW.EquipmentUse): boolean?
+---The grenade SWEP class the item gives (T-11.4): the count is that SWEP's ammo; nil means no weapon (used through
+---PW.Equipment.Use only).
+---@field Weapon? string
+---Whether holding attack cooks the grenade (its fuse runs in hand, capped at PW.Equipment.CookCap).
+---@field Cook? boolean
+---Slot filter value ("lethal", "tactical"); the built-in slots accept only their own category.
+---@field Category? string
+---Pick X cost (05-loadout.md d.2); default 1.
+---@field Cost? number
+
+---How a slot is used: the cook time and whether the grenade goes off in hand (T-11.4).
+---@class PW.EquipmentUse
+---@field cooked? number seconds the grenade was cooked in hand (0 when it does not cook)
+---@field drop? boolean the cook reached the cap: the grenade is dropped where the owner stands
+---@field death? boolean the owner died while cooking: the live grenade is dropped at the body with the remaining fuse
+---@field weapon? Weapon the grenade SWEP that threw it (the blast credits it, so weapon XP goes to the grenade)
+
+---State of one equipped slot of one player (server).
+---@class PW.EquipmentEntry : PW.EquipmentUseFacts
+---@field id string item id
+---@field weapon? string the item's grenade SWEP class
+---@field armed? boolean the SWEP was given once this life (the count answer applies only then)
+---@field count integer uses left
+---@field instance PW.Instance the item's instance for this life
+---@field last number clock of the last use, -math.huge when never used
+
+---What _CanUse reads of an entry.
+---@class PW.EquipmentUseFacts
+---@field count integer
+---@field last number
+---@field instance any an instance (IsValid checked) or nil
+
+---Internal (server): per-player state and injectable engine calls.
+---@class PW.EquipmentStore
+---@field players table<any, table<string, PW.EquipmentEntry>> weak-keyed: player -> slot -> entry
+---@field lookup fun(id: string): PW.EquipmentItem? the item definition; default the equipment registry (valid only)
+---@field resolve fun(ply: any): PW.Loadout the player's loadout now; default PW.Loadout.Resolve
+---@field publish fun(ply: any, slot: string, id: string, count: integer) mirrors a slot to the client (NW2)
+---@field clock fun(): number
+---@field phase fun(): string the match phase; Use works in LIVE only
+---@field alive fun(ply: any): boolean
+---@field afterThrow fun(ply: any, slot: string, count: integer) after a release: schedules the switch back
+---@field previous table<any, string> weak-keyed: player -> class of the weapon held before a grenade
+
+---Options of PW.Equipment._NewStore; every field defaults to the engine.
+---@class PW.EquipmentStoreOptions
+---@field lookup? fun(id: string): PW.EquipmentItem?
+---@field resolve? fun(ply: any): PW.Loadout
+---@field publish? fun(ply: any, slot: string, id: string, count: integer)
+---@field clock? fun(): number
+---@field phase? fun(): string
+---@field alive? fun(ply: any): boolean
+---@field afterThrow? fun(ply: any, slot: string, count: integer)
+
+---Server: uses an entry of a slot with options; returns whether a grenade (or the item) was used.
+---@alias PW.EquipmentSpend fun(ply: Player, slot: string, entry: PW.EquipmentEntry, opts?: PW.EquipmentUse): boolean
+
+---Grenade SWEP class per slot id.
+---@alias PW.SlotWeapons table<string, string>
+
+---Key code per slot id.
+---@alias PW.SlotCodes table<string, integer>
+
+---Ammo per grenade SWEP class.
+---@alias PW.GrenadeAmmo table<string, integer>
+
+---Slot key of one equipment slot.
+---@class PW.EquipmentKey
+---@field command string console command that uses the slot (bindable: bind x pw_lethal)
+---@field convar string client ConVar holding the default key name
+---@field default string default key name (input.GetKeyCode form)
+
+---@class PW
+---@field Equipment? PW.EquipmentLib the equipment module (nil when the module is missing)
+
+---Equipment module. No net message of its own: the slot keys select the grenade SWEP on the client.
+---@class PW.EquipmentLib
+---Equipment slots in wire order.
+---@field Slots string[]
+---Slot keys per slot id.
+---@field Keys table<string, PW.EquipmentKey>
+---Seconds between two uses of one slot.
+---@field Cooldown number
+---Seconds a grenade may be cooked; reaching it sets the grenade off in hand.
+---@field CookCap number
+---Seconds after the last grenade before the switch back to the previous weapon.
+---@field SwitchDelay number
+---Seconds a bot holds the grenade after the bot path threw it, before switching back.
+---@field BotHold number
+---The shortest fuse of a grenade dropped on death (the owner died while cooking it).
+---@field DeathMinFuse number
+---The ammo types of the grenade SWEPs, added at load.
+---@field AmmoTypes string[]
+---Uses left in a slot: the server state on the server (mirrored into the grenade SWEP's ammo); on the client the
+---ammo of the grenade SWEP when the player holds it, else the networked value; 0 when the slot is empty.
+---@field Count fun(ply: Player, slot: string): integer
+---The item id in a slot (server state or the networked value), nil when empty.
+---@field Item fun(ply: Player, slot: string): string?
+---Server. Uses a slot: in LIVE, for a living player with uses left and the cooldown passed, calls OnUse on the
+---slot's instance through PW.Call; the slot is equipped from the loadout first when the player has no state yet.
+---For an item with a grenade SWEP it selects the SWEP, throws and switches back to the previous weapon after
+---BotHold. Returns true when the item was used (count decreased). Bots call it directly.
+---@field Use? fun(ply: Player, slot: string, opts?: PW.EquipmentUse): boolean
+---Server: the release of a grenade SWEP (the SWEP calls it): uses the SWEP's slot with the cook options; after the
+---last grenade the player returns to the previous weapon. Returns whether a grenade was thrown.
+---@field _Release? fun(ply: Player, wep: Weapon, opts?: PW.EquipmentUse): boolean
+---Server: gives the grenade SWEP of every equipped slot with ammo = count. On the first give of a life the count is
+---the answer of PW_EquipmentCount (a perk or wildcard may change it).
+---@field _GiveWeapons? fun(ply: Player)
+---Server: the slot's entry when the player may use it now (LIVE, alive; equipped first when not yet), else nil.
+---@field _UsableEntry? fun(ply: Player, slot: string): PW.EquipmentEntry?
+---Server: uses an entry (the use rule, OnUse with the options, the count, the cooldown, the publish).
+---@field _Spend? PW.EquipmentSpend
+---Server: the bot path of an item with a grenade SWEP: select it, throw, switch back after BotHold.
+---@field _BotThrow? PW.EquipmentSpend
+---Server: the default afterThrow of the store: after the last grenade, switch back after SwitchDelay.
+---@field _AfterThrow? fun(ply: Player, slot: string, count: integer)
+---Server: the PlayerSwitchWeapon body: remembers the weapon held before a grenade.
+---@field _Remember? fun(ply: Player, old: Weapon?, new: Weapon?)
+---Server: selects the weapon held before the grenade (or another non-grenade weapon). Returns the class.
+---@field _ReturnTo? fun(ply: Player): string?
+---Pure: the cook state of a grenade: "idle" (start 0), "hold", "throw" (released) or "overcook" (the cap reached
+---while cooking), and the seconds cooked (0 for an item that does not cook, at most cap).
+---@field _CookState fun(start: number, now: number, held: boolean, cooks: boolean, cap: number): string, number
+---Pure: the fuse left after cooking (may be 0 or less; PW.Throwables._Fuse clamps it).
+---@field _CookedFuse fun(fuse: number, cooked: number): number
+---Pure: the fuse of a grenade dropped on death: the fuse less the time cooked, never below min.
+---@field _RemainingFuse fun(fuse: number, cooked: number, min: number): number
+---Pure: the decision to drop on death: the seconds cooked (at most cap) when the pin was pulled (start > 0) on an
+---item that cooks, else nil (nothing is dropped).
+---@field _DeathDrop fun(start: number, now: number, cooks: boolean, cap: number): number?
+---Server: the death hook body: when the dying player holds a grenade SWEP being cooked, calls the item's OnUse with
+---death = true (the live grenade drops at the body). Returns whether a grenade was dropped.
+---@field _DropOnDeath? fun(ply: Player): boolean
+---Pure: whether the player returns to the previous weapon after a throw left this count.
+---@field _ShouldSwitchBack fun(count: integer): boolean
+---Pure: the weapon to return to: the first candidate the player owns that is no grenade, else the first owned
+---weapon that is no grenade, else nil.
+---@field _ReturnWeapon fun(candidates: string[], owned: string[], grenades: table<string, boolean>): string?
+---Pure: the grenade SWEP class of a slot when it has ammo, else nil.
+---@field _SlotWeapon fun(slot: string, weapons: PW.SlotWeapons, ammo: PW.GrenadeAmmo): string?
+---Pure: the grenade SWEP a pressed key selects (key -> slot -> SWEP with ammo), else nil.
+---@field _KeyWeapon fun(button: integer, codes: PW.SlotCodes, weapons: PW.SlotWeapons, ammo: PW.GrenadeAmmo): string?
+---Pure: the count after a PW_EquipmentCount answer: a number rounded down and at least 0, anything else keeps base.
+---@field _CountFor fun(base: integer, answer: any): integer
+---Pure: the grenade SWEP class of an item definition, nil when none.
+---@field _WeaponOf fun(def: { Weapon: any }?): string?
+---Throw options of a grenade from its fuse and the use: the cooked time comes off the fuse when the item cooks;
+---a drop (the cook cap reached) throws with no speed; a death drop has the remaining fuse (at least DeathMinFuse) and
+---drop = true (PW.Throw places it at the body).
+---@field _ThrowOptions fun(fuse: number, cooks: boolean, use?: PW.EquipmentUse): PW.ThrowOptions
+---Server: the inflictor of a grenade's damage: the SWEP that threw it while its owner holds it, else the owner's
+---SWEP of that class, else the fallback (the projectile). Weapon XP of a grenade kill goes to the grenade SWEP.
+---@field _Inflictor? fun(owner: Entity, wep?: Weapon, class?: string, fallback: Entity): Entity
+---The ammo type of a SWEP class (its Primary.Ammo), nil when unknown or "none".
+---@field _AmmoOf fun(class: string): string?
+---The definition of a registered, valid item id.
+---@field _Lookup fun(id: string): PW.EquipmentItem?
+---The grenade SWEP class of an item id.
+---@field _ItemWeapon fun(id: string?): string?
+---Pure: uses per life of an item (Count rounded down, at least 0).
+---@field _Refill fun(def: { Count: any }): integer
+---Pure: whether an entry can be used now; false and a reason ("empty", "invalid", "cooldown").
+---@field _CanUse fun(entry: PW.EquipmentUseFacts, now: number, cooldown: number): boolean, string?
+---Pure: the slot of a pressed button, given the key code per slot; nil when the button is no slot key.
+---@field _KeySlot fun(button: integer, codes: table<string, integer>): string?
+---Pure: NW2 key of a slot's item id.
+---@field _ItemKey fun(slot: string): string
+---Pure: NW2 key of a slot's count.
+---@field _CountKey fun(slot: string): string
+---Declares the equipment slots in the loadout module (when it exists). Runs at load and on PW_RegistriesLoaded.
+---@field _DeclareSlots fun()
+---Server: a store over injected engine calls.
+---@field _NewStore? fun(opts?: PW.EquipmentStoreOptions): PW.EquipmentStore
+---Server: ends the player's instances and equips every equipment slot of the resolved loadout with a full count.
+---@field _Equip? fun(ply: Player)
+---Server: ends the player's instances and empties the slots.
+---@field _Clear? fun(ply: Player)
+---Server: the spawn hook body; equips in LIVE only. Returns true when it equipped.
+---@field _OnSpawn? fun(ply: Player): boolean
+
+---Internal state of the module (server).
+---@class PW
+---@field _Equipment? PW.EquipmentStore
+---@field _GrenadeAmmo? table<string, true> the ammo types already added (a pw_reload must not add them again)
+
+---Class table inside an equipment/ file.
+---@type PW.EquipmentItem
+EQUIPMENT = nil

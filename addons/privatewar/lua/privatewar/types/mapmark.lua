@@ -1,0 +1,33 @@
+---@meta
+-- Types of the mapmark module (T-2.10; 03-mapdata.md d.5; docs/api/map.md "pw_mark").
+-- Module: lua/privatewar/modules/mapmark/ (shared.lua: privilege, pure formatter, parser, argument rules;
+-- init.lua: the pw_mark console command).
+
+---A parsed pw_mark subcommand.
+---@class PW.MapMarkArgs
+---@field kind "spawn"|"dom"|"header"
+---@field team? integer spawn: the team index the point belongs to (0 = any team), 1 by default
+---@field letter? string dom: the flag letter, uppercase
+
+---A pw_mark entry line read back into data.
+---@class PW.MapMarkEntry
+---@field kind "spawn"|"dom" spawn: { pos, yaw }; dom: a bare Vector
+---@field pos Vector
+---@field yaw? number only for spawn
+
+---@class PW.MapMarkLib
+---Privilege of the command: "pw.map.mark", default superadmin (00-core.md d.7).
+---@field Privilege string
+---Pure: one entry line for a position and a yaw. kind "spawn": `{ pos = Vector(x, y, z), yaw = n }`;
+---kind "dom": a bare `Vector(x, y, z)` (03-mapdata.md d.5). Numbers have at most two decimals.
+---@field Format fun(kind: "spawn"|"dom", pos: Vector, yaw: number): string
+---Pure: reads an entry line back (the inverse of Format). nil and a reason when the text is not an entry line.
+---@field Parse fun(line: string): PW.MapMarkEntry?, string?
+---Pure: console arguments to a subcommand. nil and a reason (usage text) when they are not valid.
+---@field ParseArgs fun(args: string[]): PW.MapMarkArgs?, string?
+---Pure: the output lines of a subcommand: a comment naming the target slot, then the entry line; "header" gives the
+---file path comment and `MAP.Name = "..."`.
+---@field _Build fun(args: PW.MapMarkArgs, pos: Vector, yaw: number, mapName: string): string[]?
+---Command logic. ply nil is the server console (refused: no position). Output lines go to out(ply, line)
+---(default: the caller's console and the server log). Returns whether the lines were produced.
+---@field _Command fun(ply: Player?, args: string[], out?: fun(ply: Player, line: string)): boolean

@@ -1,0 +1,64 @@
+---@meta
+-- Types of the throwables module (T-4.5; 05-loadout.md d.11: quick throw is a helper, PW.Throw). Source:
+-- lua/privatewar/modules/throwables/ (shared.lua: the pure throw, fuse and flash rules, the pw_grenade entity;
+-- init.lua: PW.Throw, PW.Throwables.Blind; cl_init.lua: the blinding white screen).
+
+---Options of PW.Throw.
+---@class PW.ThrowOptions
+---@field cook? number seconds from the throw to detonation (a grenade SWEP passes the fuse less the time cooked)
+---@field fuse? number the same as cook, used when cook is nil
+---@field speed? number throw speed along the aim, units per second
+---@field lift? number extra upward speed, units per second
+---@field forward? number spawn distance in front of the eye, units
+---@field model? string world model of the projectile
+---@field color? Color tint of the projectile
+---@field detonate? fun(ent: Entity, owner: Player) runs at the end of the fuse; the projectile is removed after it
+---@field drop? boolean dropped at the owner's body, not thrown from the eye; allowed for a dead owner (death drop)
+
+---@class PW
+---@field Throwables? PW.ThrowablesLib the throwables module (nil when the module is missing)
+---Server. Throws a projectile entity of class entClass from the eye of ply along the aim, with physics and a
+---fuse. Returns the entity, or nil when ply is not a living player (a dead one only with opts.drop) or the entity
+---could not be made.
+---@field Throw? fun(ply: Player, entClass: string, opts?: PW.ThrowOptions): Entity?
+---@field _Throwables? PW.ThrowablesStore internal
+
+---Internal (server): live projectiles, removed without detonating at the end of a match.
+---@class PW.ThrowablesStore
+---@field live table<Entity, true>
+
+---Throwables module. Wire: server to client "pw_blind", one UInt(8): the blind strength times 255.
+---@class PW.ThrowablesLib
+---Default throw values.
+---@field Defaults { speed: number, lift: number, forward: number, fuse: number, minFuse: number, maxFuse: number }
+---Flash rules: radius (units), near (full strength inside), the angle floor (strength factor when facing away),
+---the longest blind (seconds) and the shortest one worth sending.
+---@field Flash { radius: number, near: number, behind: number, maxTime: number, minStrength: number }
+---Class of the generic projectile entity.
+---@field EntityClass string
+---Pure: the spawn position and the velocity of a throw from eye along aim (normalized here), plus the thrower's
+---own velocity.
+---@field _Launch fun(eye: Vector, aim: Vector, ownerVel: Vector?, opts: PW.ThrowOptions?): Vector, Vector
+---Pure: seconds from the throw to detonation (cook, else fuse, else the default), clamped.
+---@field _Fuse fun(opts: PW.ThrowOptions?): number
+---Pure: blind strength 0..1 from the distance to the flash, the dot of the view direction with the direction to
+---the flash, and the line of sight.
+---@field _FlashStrength fun(dist: number, dot: number, visible: boolean): number
+---Pure: seconds a blind of the given strength lasts.
+---@field _BlindTime fun(strength: number): number
+---Pure: white screen alpha 0..1 of a blind of the given strength at the given age: held, then fading.
+---@field _BlindAlpha fun(age: number, strength: number): number
+---Pure: strength to the wire byte and back.
+---@field _EncodeStrength fun(strength: number): integer
+---@field _DecodeStrength fun(byte: integer): number
+---Server: blinds a player (a client white screen for humans) and notifies PW_Blinded(ply, strength, seconds).
+---Strengths below Flash.minStrength do nothing; returns whether it blinded.
+---@field Blind? fun(ply: Player, strength: number): boolean
+---Server: blinds every player around pos by line of sight, angle and distance; returns how many.
+---@field FlashAt? fun(pos: Vector, inflictor: Entity?): integer
+---Server: the same function as PW.Throw.
+---@field Throw? fun(ply: Player, entClass: string, opts?: PW.ThrowOptions): Entity?
+---Server: removes every live projectile without detonating it (match end, tests).
+---@field _RemoveAll? fun()
+---Client: the blind being shown (strength 0 = none) and the CurTime it started.
+---@field Blinded? { strength: number, at: number }

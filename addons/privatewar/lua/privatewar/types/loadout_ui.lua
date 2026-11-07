@@ -1,0 +1,223 @@
+---@meta
+-- Types of the LOADOUT tab editors (T-7.4; 05-loadout.md d.2-d.5, d.12, d.13, d.15; 10-frontend.md d.1): the class
+-- list actions, the class editor and the gunsmith. Source: lua/privatewar/modules/loadout_ui/ (sh_names.lua,
+-- sh_editor.lua, sh_gunsmith.lua pure and shared; cl_init.lua client glue) and the screens
+-- lua/privatewar/screens/loadout_classes.lua, loadout_editor.lua, loadout_gunsmith.lua.
+
+---What the class editor model reads. Everything is injected, so tests use a fake catalogue.
+---@class PW.LoadoutUIEditorInput
+---@field declared table<string, PW.LoadoutSlot> the declared slots (PW._Loadout.slots)
+---@field order string[] slot ids in declaration order (PW._Loadout.order)
+---@field loadout PW.Loadout the class being edited
+---@field ctx PW.LoadoutContext lookup, budget, cap, bans; isUnlocked when progression is present
+---@field list fun(kind: string): table<string, any>[] the enabled entities of a kind (each with ClassName)
+
+---One row of the editor: one position of a slot of the effective slot set.
+---@class PW.LoadoutUIRow
+---@field id string "<slot>" or "<slot>#<n>" for a slot that holds several items
+---@field slot string the slot id
+---@field index integer the position in the slot (1 for a single slot)
+---@field kind string
+---@field label string display label, upper case
+---@field group? number the perk group of the slot
+---@field item? string the picked id at this position
+---@field itemName string the display name, "EMPTY" when nothing is picked
+---@field cost number the Pick X cost of the pick (0 when empty or a streak)
+---@field costText string
+---@field gunsmith boolean the first position of a weapon slot holding a weapon (the build belongs to it)
+---@field problem? string why the pick is not valid here (does not fit, locked, wrong group, unknown)
+
+---One choice of a slot picker.
+---@class PW.LoadoutUIOption
+---@field id string the entity id; "" is the empty choice
+---@field name string
+---@field description? string
+---@field cost number
+---@field costText string
+---@field selected boolean the current pick of the row
+---@field locked boolean focusable, cannot be picked; see reason
+---@field reason? string why it is locked (unlock level, store, banned, already picked)
+---@field lockText? string short text next to the lock glyph ("LV 12", "STORE")
+
+---@alias PW.LoadoutUIBudgetState "unlimited"|"ok"|"full"|"over"
+
+---The budget meter.
+---@class PW.LoadoutUIBudget
+---@field cost number
+---@field budget number 0 = unlimited
+---@field state PW.LoadoutUIBudgetState
+---@field text string "8 / 10", or "8 (no limit)"
+---@field fraction number 0..1 filled part of the bar
+
+---@class PW.LoadoutUIEditor
+---@field rows PW.LoadoutUIRow[]
+---@field slots table<string, PW.LoadoutSlot> the effective slot set
+---@field cost number the total Pick X cost (attachments included)
+---@field meter PW.LoadoutUIBudget
+---@field check? string the first rule the class breaks (slot rules and Pick X), nil when it passes
+
+---@alias PW.LoadoutUISaveStatus "waiting"|"accepted"|"repaired"|"unavailable"|"missing"
+
+---The server's answer to a saved class, as the editor shows it.
+---@class PW.LoadoutUISaveResult
+---@field status PW.LoadoutUISaveStatus
+---@field title string
+---@field lines string[] "<id> (<why>)" removals, and the reason of an unavailable class
+
+---What the gunsmith model reads.
+---@class PW.LoadoutUIGunsmithInput
+---@field weaponId string
+---@field weapon table<string, any> the catalogue entry (Attachments, Camos curation), {} when absent
+---@field weaponName string
+---@field build table<string, string|false>
+---@field slots PW.Slot[] ADAPTER:GetSlots(weaponId, build); empty = no gunsmith
+---@field options fun(slotId: string): PW.Option[] ADAPTER:GetOptions(weaponId, slotId)
+---@field weaponLevel integer
+---@field unlockAll boolean
+---@field cap integer the match cap of the weapon slot (loadout.maxattachments, wildcards included)
+---@field banned table<string, boolean> loadout.bannedattachments
+
+---One option of a gunsmith slot.
+---@class PW.LoadoutUIGunsmithOption
+---@field id string the option id; "" is the default (nothing installed by us)
+---@field name string
+---@field cosmetic boolean
+---@field cost number
+---@field costText string
+---@field selected boolean
+---@field locked boolean
+---@field reason? string
+---@field lockText? string
+---@field unlock? integer the weapon level of a curated option
+
+---@class PW.LoadoutUIGunsmithSlot
+---@field id string the adapter's build slot id
+---@field name string
+---@field cosmetic boolean
+---@field current? string the picked option id
+---@field currentName string
+---@field options PW.LoadoutUIGunsmithOption[]
+
+---@class PW.LoadoutUIGunsmith
+---@field gunsmith boolean the weapon's adapter offers build slots
+---@field title string
+---@field slots PW.LoadoutUIGunsmithSlot[]
+---@field count integer non-cosmetic attachments (the match cap counts these)
+---@field cap integer
+---@field levelCount integer uncurated, non-cosmetic attachments (the weapon level counts these)
+---@field levelLimit? integer the weapon level limit; nil with unlockall
+---@field countText string "2 / 5"
+---@field over boolean over the cap or over the weapon level limit
+---@field problems string[] the client-side preview: "<option> (<why>)"
+---@field note string
+
+---The class being edited (client).
+---@class PW.LoadoutUIDraft
+---@field index integer the position in classes.json (the ref is custom:<index>)
+---@field name string
+---@field loadout PW.Loadout
+---@field dirty boolean changed since the last save
+---@field weaponSlot? string the weapon slot the gunsmith edits
+---@field savedState? PW.LoadoutClassState|false the class state seen when the last save went out (false: there was
+---none yet; nil: the upload has not gone out)
+---@field navigating? boolean the editor is being left for the gunsmith (no save on removal)
+---@field saved boolean a save was sent and its answer is shown
+---@field focusName? boolean the editor puts the keyboard into the name field when it opens (RENAME)
+
+---@alias PW.LoadoutUIActionId "edit"|"copy"|"rename"|"delete"|"new"
+
+---One action of the class list.
+---@class PW.LoadoutUIAction
+---@field id PW.LoadoutUIActionId
+---@field label string
+---@field locked boolean
+---@field reason? string
+
+---A slot row of the editor screens (cl_widgets.lua): a PWButton painted as label, value and a right-hand note.
+---@class PWLoadoutRow : PWButton
+---@field pwLabel string
+---@field pwValue string
+---@field pwSide string
+---@field pwProblem? string shown instead of pwSide, in the warning colour
+---@field pwChosen boolean the row whose choices the centre shows
+
+---@class PW.LoadoutUISaveIO
+---@field write fun(data: table<string, any>) writes classes.json
+---@field upload fun() sends the classes to the server
+
+---@class PW.LoadoutUILib
+---Longest class name, in bytes (PW.Loadout.ClassNameMax).
+---@field NameMax integer
+---A trimmed valid name, or nil and the reason. others: the names of the other custom classes.
+---@field ValidateName fun(name: any, others: string[]): string?, string?
+---base when no other class has it, else "base 2", "base 3", ... (cut to NameMax).
+---@field FreeName fun(base: string, others: string[]): string
+---The label of a slot position: the slot's label unless it is a language key, else the id spelled out.
+---@field SlotLabel fun(slot: PW.LoadoutSlot, index: integer): string
+---The editor rows over the effective slot set, the cost, the meter and the first broken rule.
+---@field Editor fun(input: PW.LoadoutUIEditorInput): PW.LoadoutUIEditor
+---The choices of one row: the empty choice, then every enabled item of the slot's kind that fits the filter and
+---(for a perk slot with a group) the group; locked ones carry the reason.
+---@field Options fun(input: PW.LoadoutUIEditorInput, row: PW.LoadoutUIRow, slots: table<string, PW.LoadoutSlot>):
+---PW.LoadoutUIOption[]
+---The meter state of a cost against a budget.
+---@field Budget fun(cost: number, budget: number): PW.LoadoutUIBudget
+---The level an Unlock field asks for (an integer or { level = N }); 0 without one.
+---@field _Required fun(unlock: any): number
+---Display text of an entity's lock: "LV <n>", "STORE" or "LOCKED", and the longer reason.
+---@field LockText fun(entity: table<string, any>): string, string
+---A copy of the loadout with one row set (id nil or "" clears it); a new weapon drops the old build; then Normalize.
+---@field SetItem fun(input: PW.LoadoutUIEditorInput, rowId: string, id?: string): PW.Loadout
+---Drops slots the effective set no longer has, positions past a slot's count and builds of slots without a weapon.
+---@field Normalize fun(input: PW.LoadoutUIEditorInput, loadout: PW.Loadout): PW.Loadout
+---The answer to a save: answered is false until a new class state arrived after the save.
+---@field SaveResult fun(state?: PW.LoadoutClassState, ref: string, answered: boolean): PW.LoadoutUISaveResult
+---The classes.json table of a list of classes (copies).
+---@field ToFile fun(classes: PW.LoadoutClass[]): table<string, any>
+---The class list actions for the viewed class ref (nil: none), the number of custom classes and the server's limit.
+---@field ClassActions fun(ref?: string, count: integer, max: integer): PW.LoadoutUIAction[]
+---The pick to send after deleting custom class <deleted>: nil when the pick is unaffected, else the new ref.
+---@field PickAfterDelete fun(selected: string, deleted: integer, fallback: string): string?
+---The gunsmith model of a weapon.
+---@field Gunsmith fun(input: PW.LoadoutUIGunsmithInput): PW.LoadoutUIGunsmith
+---A copy of a build with one build slot set (option nil or "" removes the key: the weapon's default).
+---@field SetOption fun(build: table<string, string|false>, slotId: string, option?: string):
+---table<string, string|false>
+---Writes the draft into a copy of classes at its index, then io.write(ToFile(copy)) and io.upload(); returns the copy.
+---@field _Save fun(classes: PW.LoadoutClass[], draft: PW.LoadoutUIDraft, io: PW.LoadoutUISaveIO): PW.LoadoutClass[]
+---Seconds to wait before the next upload (the server takes one pw_loadout_classes per 2 s); 0 when it may go now.
+---@field UploadDelay fun(now: number, last?: number, gap: number): number
+---Client: the class being edited, nil outside the editor.
+---@field Draft? PW.LoadoutUIDraft
+---Client: the custom classes of classes.json.
+---@field ReadClasses? fun(): PW.LoadoutClass[]
+---Client: writes classes.json and uploads it (at most one upload per 2.1 s; a later one waits).
+---@field WriteClasses? fun(classes: PW.LoadoutClass[])
+---Client: the editor input from the live registries, progression and the lobby's match settings.
+---@field LiveInput? fun(loadout: PW.Loadout): PW.LoadoutUIEditorInput
+---Client: the gunsmith input of the draft's weapon slot.
+---@field LiveGunsmith? fun(draft: PW.LoadoutUIDraft): PW.LoadoutUIGunsmithInput?
+---Client: pushes the gunsmith of a weapon slot of the draft.
+---@field OpenGunsmith? fun(slotId: string)
+---Client: starts editing custom class <index>.
+---@field Edit? fun(index: integer, focusName?: boolean): boolean
+---Client: a new custom class (a copy of loadout, named from base); returns its index or nil and why.
+---@field Create? fun(base: string, loadout: PW.Loadout): integer?, string?
+---Client: removes custom class <index>, moving the server pick when needed.
+---@field Delete? fun(index: integer)
+---Client: saves the draft (name and loadout) into classes.json and uploads it.
+---@field SaveDraft? fun()
+---Client: how many custom classes the server keeps (loadout.classes).
+---@field MaxClasses? fun(): integer
+---Client: the save answer of the draft.
+---@field DraftResult? fun(): PW.LoadoutUISaveResult?
+---Client: a slot row of the editor screens (a focusable PWButton painted as label, value and note).
+---@field RowButton? fun(parent: Panel, group: string, id: string): PWLoadoutRow
+---Client: paints a meter (budget, attachments).
+---@field PaintMeter? fun(w: number, h: number, title: string, text: string, fraction: number, state: string,
+---note?: string)
+---Client: focuses a panel of the open root on the next frame.
+---@field FocusLater? fun(panel?: Panel)
+
+---@class PW
+---@field LoadoutUI? PW.LoadoutUILib
