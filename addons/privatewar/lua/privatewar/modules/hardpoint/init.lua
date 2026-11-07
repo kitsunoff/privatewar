@@ -6,15 +6,17 @@ local players = player.Iterator
 
 ---@param runtime PW.HardpointRuntime
 local function invalidate(runtime)
-    local commander = PW.BotCommander
-    local fn = commander ~= nil and rawget(commander, "InvalidateObjective") or nil
-    if fn ~= nil then fn(runtime.objectiveId, runtime.objectiveRevision) end
+    if runtime.invalidated then return end
+    runtime.invalidated = true
+    -- The commander consumes this notification through its public invalidation helper; the brain can end its frame.
+    PW.Notify("PW_ObjectiveInvalidated", runtime.objectiveId, runtime.objectiveRevision)
 end
 
 ---@param runtime PW.HardpointRuntime
 local function identity(runtime)
     runtime.objectiveId = "hp_" .. runtime.state.generation .. "_" .. runtime.state.visit
     runtime.objectiveRevision = runtime.state.visit
+    runtime.invalidated = false
 end
 
 ---@param runtime PW.HardpointRuntime
@@ -49,7 +51,7 @@ function hp.Start(mode)
         actors[index] = { team = 0, pos = Vector(), alive = false, observer = false, eligible = false }
     end
     local runtime = { state = state, revision = 0, nextSample = now, actors = actors,
-        sample = { at = now, actors = actors }, objectiveId = "", objectiveRevision = 0,
+        sample = { at = now, actors = actors }, objectiveId = "", objectiveRevision = 0, invalidated = false,
         lastControl = 0, lastContested = false, lastFirst = 0, lastSecond = 0 }
     mode._Hardpoint = runtime
     identity(runtime)
@@ -78,13 +80,13 @@ function hp.Think(mode)
     runtime.nextSample, runtime.sample.at = now + 0.1, now
     sampleActors(runtime)
     local effects = hp.Step(runtime.state, runtime.sample)
-    if effects.rotated then invalidate(runtime); identity(runtime) end
+    if effects.rotated or effects.finish ~= nil then invalidate(runtime) end
+    if effects.rotated then identity(runtime) end
     local state = runtime.state
     if effects.rotated or effects.finish ~= nil or state.control ~= runtime.lastControl
         or state.contested ~= runtime.lastContested or state.scores[1] ~= runtime.lastFirst
         or state.scores[2] ~= runtime.lastSecond then publish(runtime) end
     if effects.finish ~= nil then
-        invalidate(runtime)
         assert(PW.Match).Finish(effects.finish)
     end
 end
@@ -105,8 +107,8 @@ function hp.Objectives(mode, side)
     local runtime = mode._Hardpoint
     local commander = PW.BotCommander
     if runtime == nil or runtime.state.finished or commander == nil
-        or rawget(commander, "InvalidateObjective") == nil or rawget(commander, "Sanitize") == nil
-        or rawget(commander, "Eligible") == nil then return {} end
+        or commander.InvalidateObjective == nil or commander.Sanitize == nil
+        or commander.Eligible == nil then return {} end
     local zone = runtime.state.layout.zones[runtime.state.index]
     ---@type table<integer, boolean>
     local eligible = {}

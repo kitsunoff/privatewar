@@ -86,8 +86,9 @@ and explicit gaps; no latest snapshot is retrospectively replayed over a stall.
 
 ## Shared bot integration and map ownership
 
-The S&D/shared owner supplies `PW.BotCommander.Sanitize`, `Eligible` and `InvalidateObjective(id, revision)`;
-the latter emits `PW_ObjectiveInvalidated(id, revision)`. Objectives carry a current UserID `eligible` allowset,
+The S&D/shared owner supplies `PW.BotCommander.Sanitize`, `Eligible` and `InvalidateObjective(id, revision)`.
+Hardpoint emits `PW_ObjectiveInvalidated(id, revision)`; the commander consumes it through its helper, and the
+brain can end the old frame. Objectives carry a current UserID `eligible` allowset,
 `revision` and `zone = { pos, radius, above, below }`. Generic followers enforce projected **and actual**
 cylinder containment. Invalidating a visit releases commander orders **and** goals through public `ClearGoal`.
 Hardpoint emits one `hold` objective for the active visit, wants every eligible living bot of the requested team,
