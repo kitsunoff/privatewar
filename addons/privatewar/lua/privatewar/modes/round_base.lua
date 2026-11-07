@@ -192,17 +192,31 @@ function MODE:_Prepare(round, swapped)
     return self._Rounds == state and match.GetAbortReason() == reason
 end
 
+---@param value any
+---@return boolean
+local function positiveInteger(value)
+    return isnumber(value) and value >= 1 and value < math.huge and value == math.floor(value)
+end
+
+---@param id any
+---@param teams boolean
+---@return integer?
+local function identityKey(id, teams)
+    if positiveInteger(id) then return id end
+    if teams or not isentity(id) or not id:IsPlayer() then return nil end
+    -- The existing result publisher also accepts saved UserIDs when a participant's entity has departed.
+    local value = (id --[[@as Player]]):UserID()
+    return positiveInteger(value) and value or nil
+end
+
 ---@param standing any
 ---@param teams boolean
----@return boolean
-local function validStanding(standing, teams)
+---@return integer?
+local function standingKey(standing, teams)
     ---@cast standing table<string, any>
     if not istable(standing) or not isnumber(standing.score) or standing.score ~= standing.score
-        or math.abs(standing.score) == math.huge or standing.score ~= math.floor(standing.score) then return false end
-    local id = standing.id
-    if teams then return isnumber(id) and id >= 1 and id < math.huge and id == math.floor(id) end
-    -- Do not require IsValid: a disconnected participant may remain in personal final standings.
-    return isentity(id) and id:IsPlayer()
+        or math.abs(standing.score) == math.huge or standing.score ~= math.floor(standing.score) then return nil end
+    return identityKey(standing.id, teams)
 end
 
 ---@param result any
@@ -220,20 +234,25 @@ function MODE._ValidResult(result)
     end
     if count ~= length then return false end
     if length == 0 then return result.draw end
-    ---@type table<any, boolean>
+    ---@type table<integer, boolean>
     local ids = {}
     local winnerPresent = false
+    local winnerKey = identityKey(result.winner, result.teams)
+    ---@type integer?
+    local firstKey
     local previous = math.huge
     for _, standing in ipairs(standings --[[@as table<string, any>[] ]]) do
-        if not validStanding(standing, result.teams) or ids[standing.id] or standing.score > previous then
+        local key = standingKey(standing, result.teams)
+        if key == nil or ids[key] or standing.score > previous then
             return false
         end
-        ids[standing.id], previous = true, standing.score
-        if standing.id == result.winner then winnerPresent = true end
+        ids[key], previous = true, standing.score
+        firstKey = firstKey or key
+        if key == winnerKey then winnerPresent = true end
     end
     local tied = length > 1 and standings[1].score == standings[2].score
     if result.draw then return tied end
-    if not winnerPresent or tied or standings[1].id ~= result.winner then return false end
+    if not winnerPresent or tied or firstKey ~= winnerKey then return false end
     return true
 end
 

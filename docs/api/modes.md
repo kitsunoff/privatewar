@@ -365,8 +365,10 @@ addon's direct `ply:Spawn()` path; a post-base fallback for such calls needs sep
 
 `FinalizeRounds` may return only a dense, best-first standings array with unique identities and finite integer
 scores. Team identities are positive finite integers; personal identities are Player entities, not SteamID
-strings (the existing match-result publisher reads the winner's `UserID`). A connection-validity requirement is
-not added: a departed participant may remain in standings. A non-draw winner must be a member at the unique top;
+strings. Saved positive integer UserIDs remain valid personal identities: the existing `_ResultFields` publisher
+already accepts a numeric winner independently of its `teams` flag. Player/numeric aliases are normalized to
+UserID for duplicate and membership checks, not to calculate standings. A connection-validity requirement is
+not added: a departed participant may remain through its saved identity. A non-draw winner must be a member at the unique top;
 a draw has no winner and represents a shared top or empty standings. This validates the existing shape; it does
 not calculate or replace a child's standings, award rewards or reinterpret its result.
 
