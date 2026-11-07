@@ -136,7 +136,7 @@
 ---@field _ScoreLayout fun(width: number, height: number, count: integer, limited: boolean, out: table): PW.ScoreLayout
 ---Pure: the fill, the L outline and the number centre of row `slot` with a fill fraction. Fills and returns out.
 ---@field _ScoreBarRects fun(layout: PW.ScoreLayout, slot: integer, fraction: number, out: table): PW.ScoreBarRects
----Client: HL2 HUD elements (HUDShouldDraw names) hidden while the module is on. Empty: 09 d.1 keeps the vanilla HUD.
+---Client: legacy additional hide list, empty by default. Vitals/ammo replacement uses _NativeHidden instead.
 ---@field Hidden? table<string, true>
 
 ---@class PW

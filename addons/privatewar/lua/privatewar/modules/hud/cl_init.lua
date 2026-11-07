@@ -1,6 +1,6 @@
 -- HUD module, client (T-6.1; 09-hud.md d.1, d.3). The single HUDPaint over the hud registry (the paint loop is
 -- shared.lua: _Paint), design-unit scaling for 1920x1080, cached fonts and the HUDShouldDraw list. Visual style is
--- the ui lane's (D1 is open): elements read PW.UI.Style when ui_kit is on.
+-- the ui lane's: elements read PW.UI.Style when ui_kit is on.
 
 ---A file-local class: methods of the global MODULE defined in two files are reported as duplicates.
 ---@class PW.HudModuleClient : PW.Module
@@ -8,8 +8,8 @@ local module = MODULE --[[@as PW.HudModuleClient]]
 
 local lib = PW.HUD --[[@as PW.HudLib]]
 
--- HL2 HUD elements to hide (HUDShouldDraw names). Empty: 09 d.1 keeps the vanilla health, ammo, crosshair and
--- killfeed, and the overlay only adds to them.
+-- Additional legacy hide list stays empty. T-11.11 replaces only health/battery and primary/secondary ammo,
+-- conditionally on a healthy, visible replacement; crosshair, killfeed and Tab stay native.
 lib.Hidden = lib.Hidden or {}
 
 local hudVar = CreateClientConVar("pw_hud", "1", true, false, "Draw the Private War HUD overlay (0 hides it)", 0, 1)
@@ -27,9 +27,11 @@ local fontSpecs = {}
 ---@param id string
 ---@param spec PW.HudFontSpec
 local function createFont(id, spec)
+    local ui = rawget(PW, "UI") --[[@as PW.UILib?]]
     surface.CreateFont("PW_HUD_" .. id, {
-        font = "Roboto", size = math.max(1, math.floor(spec.size * scaleS + 0.5)), weight = spec.weight,
-        antialias = true
+        font = ui ~= nil and ui.FontFamilies.body or "Roboto",
+        size = math.max(1, math.floor(spec.size * scaleS + 0.5)), weight = spec.weight,
+        antialias = true, extended = true
     })
 end
 
@@ -74,5 +76,45 @@ PW.HookFor(module, "HUDPaint", function()
 end)
 
 PW.HookFor(module, "HUDShouldDraw", function(_, name)
-    if lib.Hidden[name] then return false end
+    if not hudVar:GetBool() then return end
+    if lib._NativeHidden(name, PW.Hud, PW.Phase.GetPhase(), true) or lib.Hidden[name] then return false end
+end)
+
+function lib.PlayerVisible()
+    local ply = LocalPlayer()
+    if not IsValid(ply) then return false end
+    local jip = rawget(PW, "Jip") --[[@as PW.JipLib?]]
+    local observing = ply:GetObserverMode() ~= OBS_MODE_NONE or ply:Team() == TEAM_SPECTATOR
+        or (jip ~= nil and ply:GetNW2Bool(jip.NetBool, false))
+    return lib._PlayerVisible(PW.Phase.GetPhase(), true, ply:Alive(), observing)
+end
+
+-- Adapter calls can allocate internally. Collect outside HUDPaint; the element verifies player/weapon identity
+-- again before drawing, so a switch, death or spectator transition can never show the previous owner's values.
+---@type PW.HudWeaponModel
+local weaponState = { name = "", text = "" }
+lib.WeaponState = weaponState
+
+PW.HookFor(module, "Think", function()
+    local ply = LocalPlayer()
+    local wep = IsValid(ply) and ply:GetActiveWeapon() or nil
+    if not lib.PlayerVisible() or not IsValid(wep) then
+        lib._WeaponModel(false, "", nil, nil, nil, weaponState)
+        weaponState.player, weaponState.weapon = nil, nil
+        return
+    end
+    local active = wep --[[@as Weapon]]
+    local adapters = rawget(PW, "Adapters") --[[@as PW.AdaptersLib?]]
+    local clip, ammo = active:Clip1(), active:GetPrimaryAmmoType()
+    ---@type string?
+    local adapterName
+    if adapters ~= nil then
+        clip = adapters.CallFor(active, "GetClip", active)
+        ammo = adapters.CallFor(active, "GetAmmoType", active)
+        adapterName = adapters.CallFor(active, "GetDisplayName", active)
+    end
+    local name = lib._WeaponName(adapterName, active:GetPrintName(), active:GetClass(), language.GetPhrase)
+    local reserve = type(ammo) == "number" and ammo >= 0 and ply:GetAmmoCount(ammo) or nil
+    lib._WeaponModel(true, name, clip, ammo, reserve, weaponState)
+    weaponState.player, weaponState.weapon = ply, active
 end)

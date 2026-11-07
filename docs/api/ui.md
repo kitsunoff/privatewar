@@ -487,15 +487,47 @@ Folder `hud/`, class table `HUDELEMENT`, one file per element in `lua/privatewar
 | `PW.HUD.X(value)`, `Y(value)` | Design units to pixels along one axis (stretch: `value * ScrW() / 1920`, `value * ScrH() / 1080`) |
 | `PW.HUD.S(value)` | Design units to pixels with the uniform scale (`min(sx, sy)`), for sizes that must stay square or keep the aspect |
 | `PW.HUD.Refresh() -> boolean` | Recomputes the scale and re-creates the fonts when `ScrW()` or `ScrH()` changed since the last call; returns `true` when it did. The paint loop calls it every frame |
-| `PW.HUD.Font(id, size, weight?) -> string` | The font name `"PW_HUD_<id>"` for a size in design units (Roboto, antialiased, default weight 500), created on the first call and re-created on a resolution change. The size of the first call is kept for a given `id` |
-| `PW.HUD.Hidden` | `table<string, true>` of HL2 `HUDShouldDraw` names the module hides while it is on. Empty: the vanilla health, ammo, crosshair and killfeed stay (`09-hud.md` d.1) |
+| `PW.HUD.Font(id, size, weight?) -> string` | The font name `"PW_HUD_<id>"` for a size in design units (the kit's body family, Roboto fallback, antialiased and extended for Cyrillic, default weight 500), created on the first call and re-created on a resolution change. The size of the first call is kept for a given `id` |
+| `PW.HUD.Hidden` | Legacy additional hide list, empty by default. Health/battery and ammo replacement is conditional, not stored here; crosshair, killfeed and Tab remain native (`09-hud.md` d.1 and revision 2026-11-08) |
 
 The functions `X`, `Y`, `S`, `Refresh`, `Font` and `Hidden` exist on the client only.
 
 ### ConVar `pw_hud`
 
 Client ConVar, archived, default `1`, range 0..1, `Draw the Private War HUD overlay (0 hides it)`. At `0` the loop selects no
-element. It does not touch the vanilla HUD.
+element and restores native health/ammo. Conditional replacement also stops when the module or corresponding element is
+missing, disabled, not visible or has failed. No crosshair, killfeed or scoreboard replacement is introduced.
+
+### Player vitals and weapon (T-11.11)
+
+User-approved `09-hud.md` revision 2026-11-08 replaces native health/ammo only. Elements `vitals` (`Order = 25`) and
+`weapon` (`Order = 26`) run through the existing registry/`PW.Call` paint loop, in `LIVE` only. Both require a valid,
+alive, non-observing local player (including the join-in-progress spectator flag). No observed player's data is used.
+
+- Bottom left: nickname above three continuous armor segments of 50 each, above health. Armor presentation clamps
+  to 0..150; health is health / actual maximum, clamped to 0..1, with invalid/non-positive maximum giving 0.
+  No numerical health/armor, portrait or gameplay changes.
+- Bottom right: localized active weapon name, then `CLIP / RESERVE` for primary ammo. Zero magazine and zero reserve
+  remain `0`; no primary ammo means name only; a negative/invalid clip with primary ammo shows `- / RESERVE`.
+  Names are measured, ellipsized and cached without splitting UTF-8. Colors use `PW.UI.Style` with cached fallbacks;
+  fonts use the existing body-family indirection and extended Cyrillic rendering.
+- Sizes use uniform scale and positions anchor to their own screen edge. At 1920x1080 the bottom edge is 1016,
+  margin 40, vitals width 300, weapon width 360; nickname/name top 950, armor top 982, health top 1000. The weapon's
+  ammo top is 984. This leaves the grenade equipment (lowest baseline 900) above and the XP strip below intact.
+- Weapon sampling runs in the module's `Think`, outside `HUDPaint`, through `PW.Adapters.CallFor` (`GetClip`,
+  `GetAmmoType`, `GetDisplayName`), with engine primary-ammo/name fallback when the adapter module is absent.
+  The element checks player and weapon identity again before drawing, so switches cannot show a previous snapshot.
+- `CHudHealth`/`CHudBattery` are hidden only for active `vitals`; `CHudAmmo`/`CHudSecondaryAmmo` only for active
+  `weapon`. Suppression requires a successful previous draw and current validity/visibility; errors fail open on the
+  next native panel query. The first frame can retain vanilla until a custom draw succeeds.
+
+Shared pure helpers (`PW.HUD`, types `types/hud_player.lua`): `_HealthFraction(health, maximum)`,
+`_ArmorSegments(armor, out)` (always three fractions), `_PlayerVisible(phase, valid, alive, spectating)`,
+`_PlayerLayout(width, height, out)`, `_FitText(text, width, measure)`, `_WeaponModel(valid, name, clip, ammoType,
+reserve, out)`, `_WeaponName(adapterName, engineName, class, localize)`, `_WeaponReady(state, player, weapon, visible)`
+and `_NativeHidden(name, registry, phase, active)`. Output tables are reused; ammo text changes only with its values.
+Client helpers: `PlayerVisible()` and `WeaponState` (current owner/weapon identity, name, optional clip/reserve and text).
+`HUDELEMENT._HudPainted` records whether its last eligible draw completed without disabling the element.
 
 ### Two names: `PW.Hud` and `PW.HUD`
 
@@ -615,9 +647,9 @@ d.2, `design/06-progression.md` d.1. Types: `types/hud_xpbar.lua`, `types/hud_po
 
 Layout (design units, 1920x1080): a bar `6` high (at least 2 pixels), `10` above the bottom edge, from `64` to `1856`
 across; the shown level is centred in the left `64` units, the next level (or `MAX` at the cap) in the right `64`, font
-`xpbar_level` (24, weight 800). Colours: track `bg_panel`, fill `accent`, numbers `text`. The vanilla health and ammo
-panels end near y `1053`, the streak lines at `830` and the equipment lines at `900` (right side), so nothing overlaps at
-1920x1080 or 1280x800.
+`xpbar_level` (24, weight 800). Colours: track `bg_panel`, fill `accent`, numbers `text`. The custom vitals and weapon
+end at y `1016`, the streak lines at `830` and the equipment lines at `900` (right side), leaving the XP strip clear at
+1920x1080, 1280x720 and 1280x800. Native health/ammo remain the fallback when the replacements are inactive.
 
 Bar (`PW.HUD._XpBarStep(bar, level, fraction, dt, animate)`, state `_XpBarNew()`, kept in `PW._HudXpBar`):
 
@@ -1005,7 +1037,8 @@ network traffic. It draws the notice `PW.Jip.Notice` (`Spectating — you join n
 
 `lua/privatewar/hud/equipment.lua` (T-4.5; `05-loadout.md` d.11), `Order = 30`, `Phases = { "LIVE" }`. One line per held
 equipment slot at the bottom right (design position: right edge 1880, lowest baseline 900, 30 units per line), above the
-HL2 ammo panel: the key hint in brackets, the item name and the uses left, for example `[G] FRAG x1`. The key is the value
+custom weapon panel (or native ammo fallback): the key hint in brackets, the item name and the uses left, for example
+`[G] FRAG x1`. The key is the value
 of the slot's client ConVar (`pw_key_lethal`, `pw_key_tactical`), so a rebind shows at once. An empty slot is not drawn; a
 spent one (count 0) is drawn in `text_muted`. The data are the player's NW2 values (`equipment.md`), so the element causes
 no traffic; the text of a slot is rebuilt only when its item, count or key changes. Nothing is drawn for a dead player.
