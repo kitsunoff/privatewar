@@ -4,6 +4,9 @@ ADAPTER.Priority = 50
 
 function ADAPTER:IsAvailable() return weapons.GetStored("weapon_fists") ~= nil end
 
+-- The ordinary SWEP catalogue already lists fists. This adapter only specializes their input.
+function ADAPTER:ListWeapons() return {} end
+
 function ADAPTER:Claims(class) return class == "weapon_fists" end
 
 function ADAPTER:GetInputRules()

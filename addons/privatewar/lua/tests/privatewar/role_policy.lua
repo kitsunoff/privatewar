@@ -97,7 +97,7 @@ return {
                 PW._Throwables = { live = { [unrelated] = true } }
                 stub(ents, "Create").with(function() return ent end)
                 stub(util, "TraceLine").with(function() return { Hit = false } end)
-                stub(timer, "Simple").with(function(_, callback) fuse = callback end)
+                stub(_G.timer, "Simple").with(function(_, callback) fuse = callback end)
                 expect(must(lib.Throw)(ply, "prop_physics", { fuse = 1,
                     detonate = function() exploded = exploded + 1 end })).to.equal(ent)
                 must(lib.Revoke)(ply)
