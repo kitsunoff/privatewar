@@ -43,6 +43,43 @@ return {
             end
         },
         {
+            name = "Hardpoint: visit cleanup notifies shared invalidation once, including repeated cleanup",
+            func = function()
+                local hp, mode = lib(), fixture()
+                local calls, seenId, seenRevision = 0, "", 0
+                local name = "PW.HardpointLifecycleInvalidation"
+                hook.Add("PW_ObjectiveInvalidated", name, function(id, revision)
+                    calls, seenId, seenRevision = calls + 1, id, revision
+                end)
+                stub(hp, "Send").with(function() end)
+                local ok, err = pcall(function()
+                    hp.Start(mode)
+                    local runtime = assert(mode._Hardpoint)
+                    local id, revision = runtime.objectiveId, runtime.objectiveRevision
+                    hp.Cleanup(mode)
+                    hp.Cleanup(mode)
+                    expect(calls).to.equal(1)
+                    expect(seenId).to.equal(id)
+                    expect(seenRevision).to.equal(revision)
+                end)
+                hook.Remove("PW_ObjectiveInvalidated", name)
+                hp.Cleanup(mode)
+                assert(ok, tostring(err))
+            end
+        },
+        {
+            name = "Hardpoint: request wrapper rejects non-LIVE senders and payload without sending state",
+            func = function()
+                expect(assert(PW.Match).GetPhase() ~= "LIVE").to.beTrue()
+                local sender = assert(player.GetHumans()[1])
+                local sends = 0
+                stub(lib(), "Send").with(function() sends = sends + 1 end)
+                expect(assert(PW.Net)._Dispatch("pw_hp_request", 0, sender)).to.beFalse()
+                expect(assert(PW.Net)._Dispatch("pw_hp_request", 8, sender)).to.beFalse()
+                expect(sends).to.equal(0)
+            end
+        },
+        {
             name = "Hardpoint: activation failure creates no runtime score or snapshot and keeps remote schema valid",
             func = function()
                 local hp, mode = lib(), fixture()

@@ -109,6 +109,7 @@
 ---@field sample PW.HardpointSample
 ---@field objectiveId string
 ---@field objectiveRevision integer
+---@field invalidated boolean once-only invalidation of this visit, including finish followed by Cleanup
 ---@field lastControl integer
 ---@field lastContested boolean
 ---@field lastFirst integer

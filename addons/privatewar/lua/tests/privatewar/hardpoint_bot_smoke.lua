@@ -2,7 +2,8 @@
 -- Only the public board provider is injected; no foreign private stores, teleport, damage or fabricated contacts.
 ---@return Player, boolean
 local function acquireBot()
-    for _, bot in ipairs(player.GetBots()) do if IsValid(bot) then return bot, false end end
+    -- Other groups kick their pool in afterAll; IsValid stays true until that queued kick completes.
+    -- Reusing such a doomed entity is unsafe. This group creates exactly one bot and owns it throughout the case.
     local bot = player.CreateNextBot("PW Hardpoint smoke")
     assert(IsValid(bot), "Hardpoint smoke needs one free player slot")
     return bot, true
@@ -55,6 +56,7 @@ return {
                 local runtime = assert(mode._Hardpoint)
                 local start = bot:GetPos()
                 local started, firstHeld, secondHeld = CurTime(), 0, 0
+                local nextReport = started + 5
                 local firstAt, secondAt, rotated = nil, nil, false
                 local commands = 0
                 local hookName, timerName = "PW.HardpointInputSmoke", "PW.HardpointHoldSmoke"
@@ -64,6 +66,7 @@ return {
                     end
                 end)
                 local function advance()
+                    assert(IsValid(bot), "Hardpoint smoke bot disconnected during the asserted journey")
                     local oldVisit, oldGoal = runtime.state.visit, board.goal
                     hp.Think(mode)
                     local state = runtime.state
@@ -74,6 +77,12 @@ return {
                         assert(oldGoal == nil or board.goal ~= oldGoal, "old goal survived invalidation")
                     end
                     local now = CurTime()
+                    if now >= nextReport then
+                        nextReport = now + 5
+                        print(string.format("[PW] HP_INPUT_PROGRESS visit %d pos %s order %s goal %s commands %d",
+                            state.visit, tostring(bot:GetPos()), board.order ~= nil and board.order.id or "none",
+                            board.goal ~= nil and board.goal.status or "none", commands))
+                    end
                     local inside = hp.Inside(state.layout.zones[state.index], bot:GetPos()) and bot:Alive()
                     if state.visit == 1 then
                         firstAt = inside and (firstAt or now) or nil
@@ -93,15 +102,16 @@ return {
                     api.ClearGoal(bot)
                     hp.Cleanup(mode)
                     PW.ActiveMode = originalMode
-                    bot:SetTeam(originalTeam)
+                    if IsValid(bot) then bot:SetTeam(originalTeam) end
                     testState.mode = nil
+                    local travel = IsValid(bot) and start:Distance2D(bot:GetPos()) or 0
                     print(string.format("[PW] HP_INPUT_SMOKE held %.1f/%.1f, commands %d, travel %.0f, visit %d",
-                        firstHeld, secondHeld, commands, start:Distance2D(bot:GetPos()), runtime.state.visit))
+                        firstHeld, secondHeld, commands, travel, runtime.state.visit))
                     if not ok then print("[PW] HP_INPUT_SMOKE error: " .. tostring(complete)) end
                     expect(ok).to.beTrue()
                     expect(complete).to.beTrue()
                     expect(commands > 0).to.beTrue()
-                    expect(start:Distance2D(bot:GetPos()) > 64).to.beTrue()
+                    expect(travel > 64).to.beTrue()
                     expect(runtime.state.scores[1] >= 2).to.beTrue()
                     done()
                 end)
