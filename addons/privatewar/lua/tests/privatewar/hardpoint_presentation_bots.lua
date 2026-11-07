@@ -1,11 +1,10 @@
--- Phase 1 TEST-FIRST contract scaffold; no bots, engine input, net handlers or private stores are touched.
--- Runtime RED and the real normal-input smoke remain pending the orchestrator's Deck grant.
+-- TEST-FIRST presentation contracts. Real-input movement is in hardpoint_bot_smoke.lua.
 
 ---@generic T
 ---@param value T?
 ---@return T
 local function must(value)
-    assert(value ~= nil, "Hardpoint dependency is absent; implementation and runtime RED are pending")
+    assert(value ~= nil, "Hardpoint dependency is absent")
     return value
 end
 
@@ -119,8 +118,4 @@ return {
     }
 }
 
--- Deferred runtime intent (not a passing/skipped placeholder case):
--- Hardpoint: bot holds then rotates through normal inputs
--- After schema/geometry/allocation freeze and an explicit Deck grant, reuse a shared bot. Observe authoritative
--- occupancy at visit A, withdraw its objective on rotation, then observe occupancy at B via normal StartCommand.
--- No SetPos, direct movement/damage, fabricated contacts or private store access in the asserted action path.
+-- See hardpoint_bot_smoke.lua for the executable normal-input hold/rotation scenario.
