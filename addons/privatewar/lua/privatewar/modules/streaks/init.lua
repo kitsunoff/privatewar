@@ -103,6 +103,7 @@ end
 function lib._OnSpawn(ply)
     if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
+    if s.deathSnapshots ~= nil then s.deathSnapshots[ply] = nil end
     if s.phase() ~= "LIVE" then return false end
     local st = stateOf(s, ply)
     refreshSet(s, ply, st)
@@ -128,17 +129,27 @@ function lib._OnScore(ply, eventId, points)
     return earned
 end
 
+function lib.SnapshotDeath(ply)
+    local s = store()
+    s.deathSnapshots = s.deathSnapshots or setmetatable({}, { __mode = "k" })
+    if s.deathSnapshots[ply] == nil then
+        s.deathSnapshots[ply] = s.setting("persist") == true or s.persist(ply)
+    end
+    return s.deathSnapshots[ply]
+end
+
 function lib._OnDeath(ply)
     local s = store()
     local st = s.players[ply]
     if st == nil then return end
-    local persist = s.setting("persist") == true or s.persist(ply)
+    local persist = lib.SnapshotDeath(ply)
     st.progress = lib._AfterDeath(st.progress, persist)
     s.publish(ply, lib.ProgressKey, st.progress)
 end
 
 function lib._Clear(ply)
     local s = store()
+    if s.deathSnapshots ~= nil then s.deathSnapshots[ply] = nil end
     if s.players[ply] == nil then return end
     s.players[ply] = nil
     publishAll(s, ply, { progress = 0, inventory = {}, set = {} })

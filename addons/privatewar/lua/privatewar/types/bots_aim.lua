@@ -1,4 +1,6 @@
 ---@meta
+---@class PW.BotAimLib
+---@field _FlashCanFire fun(ply: Player, now: number): boolean
 -- Types of the bots_aim module (T-5.8; 07-bots.md d.8, d.10, d.15; docs/api/bots-blackboard.md). Code:
 -- lua/privatewar/modules/bots_aim/ (shared.lua: the pure controller math; sh_step.lua: one aim step and the dev
 -- command parser; init.lua: the Tick glue and the line-of-fire trace; sv_command.lua: pw_bot_aim).

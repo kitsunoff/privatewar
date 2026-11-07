@@ -46,13 +46,15 @@ end
 local function apply(ply, spawned)
     if not IsValid(ply) or not ply:IsPlayer() then return false, "invalid player" end
     local profile = PW.Ask("PW_PlayerOverrides", ply)
-    if profile == nil then lib.Release(ply) return false, "no provider" end
+    local speed = PW.Stat ~= nil and PW.Stat(ply, "move_speed", 1) or 1
+    if profile == nil and speed == 1 then lib.Release(ply) return false, "no provider" end
+    profile = profile or {}
     local baseline = held[ply] or capture(ply)
     if not valid(profile, baseline) then return false, "invalid profile" end
     held[ply] = baseline
     ply:SetMaxHealth(profile.maxHealth or baseline.max)
-    ply:SetWalkSpeed(baseline.walk * (profile.walkSpeedMult or 1))
-    ply:SetRunSpeed(baseline.run * (profile.runSpeedMult or 1))
+    ply:SetWalkSpeed(baseline.walk * (profile.walkSpeedMult or 1) * speed)
+    ply:SetRunSpeed(baseline.run * (profile.runSpeedMult or 1) * speed)
     if spawned and profile.spawnHealth ~= nil and ply:Alive() then ply:SetHealth(profile.spawnHealth) end
     return true
 end
@@ -60,6 +62,18 @@ end
 function lib.Refresh(ply)
     return apply(ply, false)
 end
+
+function MODULE:PW_PlayerStatsChanged(ply)
+    if IsValid(ply) and isfunction(ply.GetWalkSpeed) and isfunction(ply.IsPlayer) then lib.Refresh(ply) end
+end
+
+PW.HookFor(MODULE, "GetFallDamage", function(_, ply, speed)
+    local mult = PW.Stat ~= nil and PW.Stat(ply, "fall_damage", 1) or 1
+    if mult == 1 then return end
+    local baseline = PW.Ask("PW_FallDamageBaseline", ply, speed)
+    if not isnumber(baseline) then baseline = GAMEMODE:GetFallDamage(ply, speed) end
+    return baseline * mult
+end)
 
 ---@param ply Player
 function MODULE:PW_PlayerSpawned(ply)

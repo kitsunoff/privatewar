@@ -84,23 +84,7 @@ function lib.Revoke(owner)
     end
 end
 
-function lib.Blind(ply, strength)
-    if not IsValid(ply) or strength < lib.Flash.minStrength then return false end
-    local seconds = lib._BlindTime(strength)
-    local store = assert(PW._Throwables)
-    store.blind = store.blind or setmetatable({}, { __mode = "k" })
-    local previous = store.blind[ply]
-    store.blind[ply] = { untilTime = CurTime() + seconds,
-        dsp = strength >= 0.5 or (previous ~= nil and previous.dsp and previous.untilTime > CurTime()) }
-    if not ply:IsBot() then
-        net.Start("pw_blind")
-        net.WriteUInt(lib._EncodeStrength(strength), 8)
-        net.Send(ply)
-        if strength >= 0.5 then ply:SetDSP(35, false) end
-    end
-    PW.Notify("PW_Blinded", ply, strength, seconds)
-    return true
-end
+include("privatewar/modules/throwables/sv_blind.lua")
 
 ---@param pos Vector
 ---@param ply Player
@@ -155,6 +139,7 @@ local function clearBlind()
 end
 
 function MODULE:PW_MatchEnd()
+    lib.ClearBlinds()
     lib._RemoveAll()
     clearBlind()
 end

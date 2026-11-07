@@ -1,4 +1,8 @@
 ---@meta
+---@class PW.ThrowablesLib
+---@field Impairment fun(ply: Player, now?: number): number
+---@field ClearBlind fun(ply: Player)
+---@field ClearBlinds fun()
 -- Types of the throwables module (T-4.5; 05-loadout.md d.11: quick throw is a helper, PW.Throw). Source:
 -- lua/privatewar/modules/throwables/ (shared.lua: the pure throw, fuse and flash rules, the pw_grenade entity;
 -- init.lua: PW.Throw, PW.Throwables.Blind; cl_init.lua: the blinding white screen).

@@ -92,6 +92,8 @@ function lib.Dispatch(botOrTeam, kind, data)
     end
     if not isstring(kind) or not istable(data) then return 0 end
     local stimulus = data --[[@as PW.BotStimulusData]]
+    if kind == "footstep" and PW.Perks ~= nil and IsValid(stimulus.ent)
+        and not PW.Perks.FootstepsAudible(stimulus.ent --[[@as Player]]) then return 0 end
     local fed = 0
     for _, target in ipairs(targets(botOrTeam)) do
         if isEnemy(target.key, stimulus.ent) and lib.AddStimulus(target.state, kind, stimulus) then
@@ -109,6 +111,8 @@ end
 ---@param random PW.BotRandomFn?
 ---@return integer heard
 function lib.HearSound(listeners, kind, pos, source, random)
+    if kind == "footstep" and PW.Perks ~= nil and IsValid(source)
+        and not PW.Perks.FootstepsAudible(source) then return 0 end
     local heard = 0
     for _, listener in ipairs(listeners) do
         if listener.key ~= source and lib.CanHear(kind, listener.ear, pos) then

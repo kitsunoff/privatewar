@@ -103,6 +103,7 @@ end
 ---@return integer candidates
 ---@return integer traces
 local function gatherSeen(ply, params)
+    if not lib._FlashCanSee(ply, CurTime()) then return {}, 0, 0 end
     local eye, forward = ply:EyePos(), ply:EyeAngles():Forward()
     ---@type PW.BotCandidate[]
     local list = {}
@@ -165,6 +166,10 @@ local function tickBot(ply, board, now)
         local params = paramsOf(board)
         local seen, candidates, traces = gatherSeen(ply, params)
         local fresh = lib.Think(state, { params = params, seen = seen, valid = IsValid, random = randomFn }, now)
+        if not lib._FlashCanSee(ply, now) then
+            for _, contact in ipairs(state.contacts) do contact.visible = false end
+            fresh = {}
+        end
         for _, sighting in ipairs(fresh) do
             lib.Share({ state = state, team = state.team, pos = ply:GetPos() }, mates(), sighting, now)
         end
@@ -253,6 +258,7 @@ end)
 
 PW.HookFor(MODULE, "PlayerFootstep", function(_, plyArg)
     local ply = plyArg --[[@as Player]]
+    if PW.Perks ~= nil and not PW.Perks.FootstepsAudible(ply) then return end
     if not ply:IsSprinting() or ply:GetVelocity():Length2DSqr() <= 150 * 150 then return end
     broadcast("footstep", ply:GetPos(), ply)
 end)

@@ -27,15 +27,13 @@ function lib._GiveWeapons(ply)
     local slots = s.players[ply]
     if slots == nil or not IsValid(ply) then return end
     for slot, entry in pairs(slots) do
-        local class = entry.weapon
-        if class ~= nil then
-            if not entry.armed then
-                entry.armed = true
-                entry.count = lib._CountFor(entry.count, PW.Ask("PW_EquipmentCount", ply, slot, entry.id, entry.count))
-            end
-            if not ply:HasWeapon(class) then ply:Give(class, true) end
-            s.publish(ply, slot, entry.id, entry.count)
+        if not entry.armed then
+            entry.armed = true
+            entry.count = lib._ResolveCount(ply, slot, entry.id, entry.count)
         end
+        local class = entry.weapon
+        if class ~= nil and not ply:HasWeapon(class) then ply:Give(class, true) end
+        s.publish(ply, slot, entry.id, entry.count)
     end
 end
 

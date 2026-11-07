@@ -6,6 +6,8 @@
 
 local lib = PW.Perks --[[@as PW.PerksLib]]
 
+include("privatewar/modules/perks/sv_effects.lua")
+
 ---@param id string
 ---@return PW.Perk?
 local function defaultLookup(id)
@@ -110,6 +112,7 @@ function lib._Recompute(ply)
     local stats = lib._Multiply(sourceLists(s, ply))
     s.stats[ply] = stats
     sendMods(s, ply, lib._WeaponMods(stats, statKeys()))
+    lib._PublishEffects(ply, s.players[ply])
 end
 
 ---@param s PW.PerksStore
@@ -127,6 +130,7 @@ function lib._Clear(ply)
     s.stats[ply] = nil
     sendMods(s, ply, {})
     s.sent[ply] = nil
+    lib._PublishEffects(ply, nil)
 end
 
 function lib.Revoke(ply)
@@ -185,6 +189,8 @@ function lib._OnDamaged(victim, attacker, dmg)
 end
 
 function lib._OnDeath(ply)
+    local streaks = rawget(PW, "Streaks") --[[@as PW.StreaksLib?]]
+    if streaks ~= nil and streaks.SnapshotDeath ~= nil then streaks.SnapshotDeath(ply) end
     lib._Clear(ply)
 end
 

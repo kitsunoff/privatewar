@@ -185,6 +185,12 @@ end
 
 function lib.Options(input, row, slots)
     local slot, ctx = slots[row.slot], input.ctx
+    ---@type string[]
+    local selectedWeapons = {}
+    for _, id in ipairs({ "primary", "secondary" }) do
+        local value = input.loadout[id]
+        if isstring(value) then selectedWeapons[#selectedWeapons + 1] = value --[[@as string]] end
+    end
     ---@type PW.LoadoutUIOption[]
     local options = { { id = "", name = "NONE", cost = 0, costText = "", selected = row.item == nil, locked = false } }
     if slot == nil then return options end
@@ -204,6 +210,7 @@ function lib.Options(input, row, slots)
                 description = isstring(entity.Description) and entity.Description or nil
             }
             lockOption(slot, entity, id, ctx, taken, option)
+            if slot.kind == "perks" then option.description = lib.PerkDescription(entity, selectedWeapons) end
             options[#options + 1] = option
         end
     end

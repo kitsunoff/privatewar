@@ -8,6 +8,7 @@
 
 local lib = PW.Equipment --[[@as PW.EquipmentLib]]
 
+include("privatewar/modules/equipment/sh_counts.lua")
 include("privatewar/modules/equipment/sv_grenades.lua")
 
 ---@param ply Player
