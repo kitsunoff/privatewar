@@ -17,6 +17,7 @@ local function actor()
         SetDTFloat = function(_, _, value) d.cooked = value end } --[[@as Weapon]]
     return { IsValid = function() return true end, IsPlayer = function() return true end,
         IsBot = function() return false end, Alive = function() return true end,
+        EntIndex = function() return 1 end, GetPos = function() return Vector() end,
         GetWeapon = function() return grenade end, HasWeapon = function() return false end,
         Give = function() d.given = d.given + 1 end,
         StripWeapon = function(_, class) d.stripped[class] = true end,
@@ -48,6 +49,26 @@ return {
         PW._BotsManager = state.manager
     end,
     cases = {
+        {
+            name = "Revocation: ending one owner removes its jam and radar pulse but replays another owner's pulse",
+            func = function()
+                local lib, owner, other, viewer, target = must(PW.Streaks), actor(), actor(), actor(), actor()
+                local sent, resets = 0, 0
+                PW._Reveal = must(lib._NewRevealStore)({ clock = function() return 10 end,
+                    isEnemy = function() return true end, players = function() return { viewer } end,
+                    members = function() return { viewer } end, stimulus = function() end,
+                    send = function() sent = sent + 1 end, jamSend = function() end,
+                    reset = function() resets = resets + 1 end })
+                must(PW.Reveal)(viewer, { target }, 5, owner)
+                must(PW.Reveal)(viewer, { target }, 5, other)
+                expect(sent).to.equal(2)
+                must(lib.Jam)(owner, 20)
+                must(lib.EndEffects)(owner)
+                expect(must(PW._Reveal).jams).to.deepEqual({})
+                expect(resets).to.equal(1)
+                expect(sent).to.equal(3) -- only the still-active other source was replayed
+            end
+        },
         {
             name = "Quota: managed midround joins never create or kick; preparation reconciles waiting humans once",
             func = function()
@@ -126,7 +147,7 @@ return {
             name = "Revocation: delayed equipment grants cannot cross revoke and replacement generation",
             async = true,
             timeout = 2,
-            func = function(_, done)
+            func = function()
                 local lib, ply = must(PW.Equipment), actor()
                 PW._Equipment = must(lib._NewStore)({ lookup = function() return nil end,
                     resolve = function() return {} end, publish = function() end,
