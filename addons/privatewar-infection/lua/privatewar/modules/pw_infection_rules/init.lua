@@ -2,6 +2,23 @@ local lib = PW.Infection --[[@as PW.InfectionLib]]
 include("privatewar/modules/pw_infection_rules/sv_round.lua")
 include("privatewar/modules/pw_infection_rules/sv_snapshot.lua")
 
+local dependencies = { pw_infection_rules = true, teams = true, loadout = true, operators = true,
+    player_overrides = true, match_rules = true, lobby = true }
+
+-- A stable cleanup-only listener survives the rules module's own unsubscription on disable.
+---@param kind string
+---@param id string
+---@param definition table
+hook.Add("PW_EntityDisabled", "PW.Infection.DisableCleanup", function(kind, id, definition)
+    local s = lib.State
+    if s == nil then return end
+    local ownMode = kind == "modes" and definition == s.mode
+    local dependency = kind == "modules" and dependencies[id] and PW.Modules.Get(id) == definition
+    if not ownMode and not dependency then return end
+    local ok, err = pcall(lib.Clear)
+    if not ok then print("[PW] infection disable cleanup: " .. tostring(err)) end
+end)
+
 ---@param phase PW.PhaseName
 function MODULE:PW_PhaseChange(phase)
     if phase == "LOBBY" or phase == "PREMATCH" then SetGlobal2Bool("pw_infection_results", false) end

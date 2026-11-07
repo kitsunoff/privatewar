@@ -30,6 +30,14 @@ function MODE:PrepareRound(round)
     lib.Prepare(round)
 end
 
+function MODE:Think()
+    if lib.State == nil then
+        assert(PW.Match).Abort("Infection rules became unavailable")
+        return
+    end
+    assert(self.BaseClass).Think(self)
+end
+
 function MODE:PW_RoundStart()
     local s = lib.State
     if s == nil or s.current == nil then return end

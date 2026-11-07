@@ -38,6 +38,11 @@ revokes remaining role effects and sends a revisioned inactive snapshot. It is i
 spawns, heals or restores an old life's health. Generic match-end reset belongs to each base bot owner.
 Ordinary next-match assignment/loadout remains owned by teams/loadout, including FFA's free team.
 
+A stable cleanup-only `PW_EntityDisabled` listener survives rules-module unsubscription. It releases
+addon state on exact active-mode or required-owner disable, ignores unrelated definitions, and does not
+spawn, grant effects or drive gameplay. A still-running mode observes missing state on its next ordinary
+Think and requests a safe abort outside the cleanup notification. Repeated disable is idempotent.
+
 ## Addon API
 
 `PW.Infection.Role(ply) -> "survivor" | "infected" | nil` returns a role only for the currently bound,
