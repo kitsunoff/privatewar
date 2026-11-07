@@ -203,6 +203,38 @@ return {
                 expect(obj.action == "collect").to.beFalse()
             end
         end },
+        { name = "SND: missing ground out-of-world blocked and unreachable drops recover at the authored point",
+            func = function()
+                local s = round()
+                local point, hit, inWorld, blocked, disconnected = Vector(400, 0, 0), false, true, false, false
+                local victim = { GetPos = function() return point end }
+                stub(util, "TraceLine").with(function()
+                    return { Hit = hit, StartSolid = false, HitPos = point, HitNormal = Vector(0, 0, 1) }
+                end)
+                stub(util, "IsInWorld").with(function() return inWorld end)
+                stub(util, "TraceHull").with(function() return { StartSolid = blocked } end)
+                ---@param id integer
+                local function area(id)
+                    return { IsValid = function() return true end, GetID = function() return id end,
+                        GetClosestPointOnArea = function(_, pos) return pos end,
+                        GetAdjacentAreas = function() return {} end }
+                end
+                local first, other = area(1), area(2)
+                stub(navmesh, "GetNearestNavArea").with(function(pos)
+                    ---@cast pos Vector
+                    return disconnected and pos.x > 100 and other or first
+                end)
+                local function drop() return lib().DropPoint(s, victim --[[@as Player]]) end
+                expect(drop()).to.equal(s.map.bomb)
+                hit, inWorld = true, false
+                expect(drop()).to.equal(s.map.bomb)
+                inWorld, disconnected = true, true
+                expect(drop()).to.equal(s.map.bomb)
+                disconnected, blocked = false, true
+                expect(drop()).to.equal(s.map.bomb)
+                blocked = false
+                expect(drop()).to.equal(point + Vector(0, 0, 2))
+            end },
         { name = "SND HUD: planted timer round end and local held-action labels use only approved snapshot facts",
             func = function()
                 local s = round()
