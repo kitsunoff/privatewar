@@ -492,6 +492,39 @@ Setting (full id `weapons_ammo.magazines`, scope `match`, the default scope):
 The setting is read when `Give` runs, as a non-negative integer (a non-number reads as 3). Internal: `_ReserveFor`,
 `_Magazines`.
 
+### Ordinary-reserve resupply extension
+
+Approved consumer requirements: `design/05-loadout.md` d.16 and support-streak cache.
+The following contract is implemented after observed GLuaTest RED; mounted verification is pending.
+Spawn-only `Give` and delayed base-default-ammo suppression remain unchanged.
+
+- `PW.WeaponAmmo.Resupply(ply, weapons, opts?) -> table<integer, integer>`: server-authoritative
+  ordinary reserve only. `weapons` is an explicit list of the recipient's existing weapons;
+  `opts.fraction` is the requested magazine fraction (default 1), `opts.maxMagazines` the
+  reserve ceiling in magazines (default 3). Return only ammo types actually supplied, mapped
+  to rounds added. The cache requests fraction 1; Scavenger requests fraction 0.5.
+- Read live capacity and primary ammo through the adapter. Reject invalid, foreign, clipless
+  and grenade weapons, negative/unknown ammo types and the equipment ammo types. No `Give`,
+  no clip mutation and no grenade-count mutation. Human and bot recipients follow one path.
+- Deduplicate before mutation by ammo type. For shared ammo, use the largest eligible capacity
+  in the explicit list, independent of list order. Requested rounds are
+  `max(1, floor(capacity * fraction))`; add only up to `capacity * maxMagazines`. Existing
+  excess reserve is never reduced. Invalid/nonfinite/nonpositive requests supply nothing.
+- Pure test seams: `_ResupplyAmount(capacity, reserve, fraction, maxMagazines)` and
+  `_ResupplyPlan(entries, fraction, maxMagazines)`, with entries `{ ammo, capacity, reserve }`.
+  The plan maps ammo ids to positive additions, not new absolute totals.
+- `PW.WeaponAmmo.DamageWeapon(owner, dmg) -> Weapon?, boolean`: proven scoring weapon and
+  direct-weapon eligibility. A valid owned weapon inflictor may retain weapon attribution
+  without qualifying for scavenging (for example grenade/delayed explosive damage). An
+  unrelated held gun is never substituted for world/projectile/streak damage. The active
+  weapon fallback is allowed only when the inflictor is the player and the damage is a
+  direct weapon hit, not an autonomous or delayed nonweapon effect.
+- `_DamageSource(facts)` is the pure provenance classifier used by the engine wrapper.
+  Match kill scoring uses proven attribution without changing player score/XP rewards.
+
+The support-streak owner owns receipt cooldowns, device charges and deployment; this service
+owns only bounded ordinary-reserve mutation. Tests: `ammo_resupply.lua`, `perk_rewards.lua`.
+
 ## Weapon catalogue (kind `weapons`)
 
 The kind exists (`core.md` "Built-in kind `weapons`"): folder `weapons/`, class table `WEAPON`, id = SWEP class, no

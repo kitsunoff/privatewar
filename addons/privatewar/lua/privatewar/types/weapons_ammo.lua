@@ -16,6 +16,29 @@
 ---@field _ReserveFor fun(capacity: number, magazines: number): integer
 ---Internal: the configured magazines (the setting, a non-negative integer).
 ---@field _Magazines fun(): integer
+---@field Resupply fun(ply: Player, weapons: Weapon[], opts?: PW.ResupplyOptions): table<integer, integer>
+---@field DamageWeapon fun(owner: Player, dmg: CTakeDamageInfo?): Weapon?, boolean
+---@field _ResupplyAmount fun(capacity: number, reserve: number, fraction: number, maxMagazines: number): integer
+---@field _ResupplyPlan fun(entries: PW.ResupplyEntry[], fraction: number,
+---maxMagazines: number): table<integer, integer>
+---@field _DamageSource fun(facts: PW.DamageSourceFacts): string?, boolean
+
+---@class PW.ResupplyOptions
+---@field fraction? number magazine fraction, default one
+---@field maxMagazines? number ordinary reserve ceiling, default three
+
+---@class PW.ResupplyEntry
+---@field ammo integer
+---@field capacity number
+---@field reserve number
+
+---@class PW.DamageSourceFacts
+---@field weapon? boolean
+---@field owned? boolean
+---@field grenade? boolean
+---@field playerInflictor? boolean
+---@field active? boolean
+---@field direct? boolean
 
 ---@class PW
 ---@field WeaponAmmo PW.WeaponAmmoLib

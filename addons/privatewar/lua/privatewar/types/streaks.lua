@@ -1,4 +1,5 @@
 ---@meta
+---@alias PW.CanRevealQuestion fun(viewer: integer|Player, target: Player, sourceOwner?: Player): boolean?
 -- Types of killstreaks and the deliberate reveal (T-4.6; 05-loadout.md d.9, d.10). Source:
 -- lua/privatewar/kinds/streaks.lua (the kind), lua/privatewar/modules/streaks/ (shared.lua: slots, earning rules,
 -- inventory, wire; sh_reveal.lua: reveal and airstrike rules; init.lua: per-player state, earning hooks,
