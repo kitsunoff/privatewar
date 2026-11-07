@@ -97,6 +97,11 @@ function lib.Step(state, now, actors)
         return 2, false
     end
     pickup(state, actors)
+    if state.phase == "carried" then
+        for _, actor in ipairs(actors) do
+            if actor.id == state.carrier and valid(state, actor) then state.pos = actor.pos end
+        end
+    end
     hold(state, now, actors)
     complete(state, now)
     if state.phase == "resolved" then return state.winner, false end
@@ -115,10 +120,11 @@ end
 
 function lib.Snapshot(state, viewerTeam, viewerId, now)
     ---@type PW.SNDSnapshot
-    local out = { generation = state.generation, phase = state.phase, deadline = state.deadline,
+    local out = { generation = state.generation, phase = state.phase,
+        deadline = state.deadline < math.huge and state.deadline or 0,
         fuse = state.phase == "planted" and state.fuse or 0, site = state.site, progress = 0 }
     if viewerTeam == 1 and state.carrier ~= nil then out.carrier = state.roster[state.carrier].userId end
-    if state.phase == "planted" or (viewerTeam == 1 and state.phase == "dropped") then out.pos = state.pos end
+    if state.phase == "planted" or (viewerTeam == 1 and state.phase ~= "resolved") then out.pos = state.pos end
     local interaction = state.interaction
     if interaction ~= nil and interaction.id == viewerId then
         out.action = interaction.action

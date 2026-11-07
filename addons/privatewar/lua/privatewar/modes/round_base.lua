@@ -191,6 +191,19 @@ function MODE:_Prepare(round, swapped)
     return self._Rounds == state and match.GetAbortReason() == reason
 end
 
+---@param standing any
+---@param teams boolean
+---@return boolean
+local function validStanding(standing, teams)
+    ---@cast standing table<string, any>
+    if not istable(standing) or not isnumber(standing.score) or standing.score ~= standing.score
+        or math.abs(standing.score) == math.huge or standing.score ~= math.floor(standing.score) then return false end
+    local id = standing.id
+    if teams then return isnumber(id) and id >= 1 and id < math.huge and id == math.floor(id) end
+    -- Do not require IsValid: a disconnected participant may remain in personal final standings.
+    return isentity(id) and id:IsPlayer()
+end
+
 ---@param result any
 ---@return boolean
 function MODE._ValidResult(result)
@@ -198,10 +211,28 @@ function MODE._ValidResult(result)
         or not isbool(result.draw) or not istable(result.standings) then return false end
     if not result.draw and result.winner == nil then return false end
     if result.draw and result.winner ~= nil then return false end
-    for _, standing in ipairs(result.standings --[[@as table<string, any>[] ]]) do
-        if not istable(standing) or standing.id == nil or not isnumber(standing.score)
-            or standing.score ~= standing.score or math.abs(standing.score) == math.huge then return false end
+    local standings = result.standings --[[@as table<any, any>]]
+    local length, count = #standings, 0
+    for key in pairs(standings) do
+        if not isnumber(key) or key < 1 or key > length or key ~= math.floor(key) then return false end
+        count = count + 1
     end
+    if count ~= length then return false end
+    if length == 0 then return result.draw end
+    ---@type table<any, boolean>
+    local ids = {}
+    local winnerPresent = false
+    local previous = math.huge
+    for _, standing in ipairs(standings --[[@as table<string, any>[] ]]) do
+        if not validStanding(standing, result.teams) or ids[standing.id] or standing.score > previous then
+            return false
+        end
+        ids[standing.id], previous = true, standing.score
+        if standing.id == result.winner then winnerPresent = true end
+    end
+    local tied = length > 1 and standings[1].score == standings[2].score
+    if result.draw then return tied end
+    if not winnerPresent or tied or standings[1].id ~= result.winner then return false end
     return true
 end
 

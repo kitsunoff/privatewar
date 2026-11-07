@@ -44,6 +44,7 @@ return {
             local events = state.events --[[@as string[] ]]
             events[#events + 1] = name
              if name == "PW_MatchStart" then state.rolesAtSpawn = state.rolesReady == true end
+             if name == "PW_RoundPreparing" and state.abortBeforePrepare then match().Abort("preparing aborted") end
         end)
     end,
     afterEach = function(state)
@@ -79,6 +80,19 @@ return {
                     end
                     expect(match().GetPhase()).to.equal("LOBBY")
                     expect(PW._Match.matchStarted).to.beFalse()
+                end
+            end
+        },
+        {
+            name = "Initial round: abort from Preparing notification prevents child role mutation",
+            func = function(state)
+                state.abortBeforePrepare = true
+                match().Start(modeOf(state))
+                match()._SetPhase("LIVE")
+                expect(match().GetPhase()).to.equal("LOBBY")
+                expect(state.rolesReady).to.beNil()
+                for _, name in ipairs(state.events --[[@as string[] ]]) do
+                    expect(name == "PW_RoundPrepared" or name == "PW_MatchStart").to.beFalse()
                 end
             end
         },

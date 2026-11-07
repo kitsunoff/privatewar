@@ -68,7 +68,7 @@ Lint, type and test tools come from `flake.nix` (`nix develop`, or direnv `use f
 
 | Tool | Source | Notes |
 | --- | --- | --- |
-| `lua-language-server` (LuaLS) | nixpkgs (3.17.1) | Language server and **type checker** (`--check`) on every platform |
+| `lua-language-server` (LuaLS) | nixpkgs (3.19.2, verified 2026-11-08) | Language server and **type checker** (`--check`) on every platform |
 | `markdownlint-cli2` | nixpkgs (0.21.0) | Docs |
 | `luajit` | nixpkgs | Same Lua as GMod for quick scripts |
 | `glualint-bin` | Release binary `FPtje/GLuaFixer` 1.30.0 | Assets: `OSX-x86_64` (runs through Rosetta on Apple Silicon), `x86_64-linux`; no native arm64 macOS build |

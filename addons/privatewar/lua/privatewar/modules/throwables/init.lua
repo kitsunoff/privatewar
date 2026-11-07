@@ -120,3 +120,7 @@ end
 function MODULE:PW_MatchEnd()
     lib._RemoveAll()
 end
+
+function MODULE:PW_RoundEnd()
+    lib._RemoveAll()
+end

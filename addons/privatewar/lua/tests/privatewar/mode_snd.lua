@@ -182,6 +182,23 @@ return {
                 expect(obj.pos == s.pos).to.beFalse()
                 expect(obj.action == "collect").to.beFalse()
             end
-        end }
+        end },
+        { name = "SND HUD: planted timer round end and local held-action labels use only approved snapshot facts",
+            func = function()
+                local s = round()
+                local title, line = lib().HudText(lib().Snapshot(s, 2, "defender", 0), 0)
+                expect(title).to.equal("SEARCH AND DESTROY")
+                expect(line).to.equal("SITES A / B")
+                local p = planted()
+                title, line = lib().HudText(lib().Snapshot(p, 2, "defender", 6), 6)
+                expect(title).to.equal("BOMB PLANTED  44s")
+                expect(line).to.equal("SITES A / B")
+                local view = lib().Snapshot(p, 2, "defender", 6)
+                view.action = "defuse"
+                local _, action = lib().HudText(view, 6)
+                expect(action).to.equal("HOLD E TO DEFUSE")
+                view.phase, view.fuse = "resolved", 0
+                expect(lib().HudText(view, 999)).to.equal("ROUND OVER")
+            end }
     }
 }

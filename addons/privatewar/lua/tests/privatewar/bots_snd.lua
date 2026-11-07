@@ -108,6 +108,25 @@ return {
             end
         },
         {
+            name = "SND bots: duplicate objective ids are rejected instead of aliasing assignment slots",
+            func = function()
+                expect(lib().Sanitize({ objective("plant"), objective("plant") })).to.deepEqual({})
+            end
+        },
+        {
+            name = "Objective arrival: projected disc and actual height stay inside the authoritative cylinder",
+            func = function()
+                local obj = objective("hold")
+                obj.zone = { pos = Vector(0, 0, 0), radius = 100, above = 80, below = 8 }
+                expect(lib().ArrivalFits(obj, Vector(0, 0, 0), 24)).to.beTrue()
+                expect(lib().ArrivalFits(obj, Vector(90, 0, 0), 24)).to.beFalse()
+                expect(lib().ArrivalFits(obj, Vector(0, 0, 81), 24)).to.beFalse()
+                expect(lib().Inside(obj, Vector(0, 0, -9))).to.beFalse()
+                expect(lib().Inside(obj, Vector(101, 0, 0))).to.beFalse()
+                expect(lib().Inside(obj, Vector(100, 0, 0))).to.beTrue()
+            end
+        },
+        {
             name = "SND bots: malformed present restrictions never become unrestricted",
             func = function()
                 for _, invalid in ipairs({ false, "all", 1 }) do
@@ -121,6 +140,8 @@ return {
                 raw.eligible, raw.revision = {}, -1
                 expect(lib().Sanitize({ raw })).to.deepEqual({})
                 raw.revision, raw.radius = 1, 0
+                expect(lib().Sanitize({ raw })).to.deepEqual({})
+                raw.radius = nil
                 expect(lib().Sanitize({ raw })).to.deepEqual({})
                 local legacy = objective("capture")
                 legacy.eligible, legacy.revision = nil, nil
