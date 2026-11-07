@@ -238,17 +238,31 @@ local function bashRifle()
     error("no ARC9 rifle of the installed packs has its bash on")
 end
 
----Whether a second player fits 48 units from a standing spot along yaw. Players do not count as obstacles.
+---A standing hull on walkable ground, not a spawn or a recently moved player's still-airborne origin.
+---@param point Vector
+---@return Vector?
+local function groundAt(point)
+    local tr = util.TraceHull({ mins = Vector(-16, -16, 0), maxs = Vector(16, 16, 64),
+        filter = player.GetAll(), mask = MASK_PLAYERSOLID,
+        start = point + Vector(0, 0, 8), endpos = point - Vector(0, 0, 256) })
+    if not tr.Hit or tr.StartSolid or tr.HitNormal.z < 0.7 then return nil end
+    return tr.HitPos
+end
+
+---Whether two grounded players fit 48 units apart along yaw. Players do not count as obstacles.
 ---@param from Vector
 ---@param yaw number
----@return Vector? spot, string why
+---@return Vector? spot, string why, Vector? stand
 local function roomAt(from, yaw)
-    local spot = from + Angle(0, yaw, 0):Forward() * 48
+    local stand = groundAt(from)
+    if stand == nil then return nil, "no standing ground", nil end
+    local spot = groundAt(stand + Angle(0, yaw, 0):Forward() * 48)
+    if spot == nil or math.abs(spot.z - stand.z) > 4 then return nil, "no level target ground", nil end
     local hull = { mins = Vector(-16, -16, 0), maxs = Vector(16, 16, 64), filter = player.GetAll(),
-        mask = MASK_PLAYERSOLID, start = from + Vector(0, 0, 8), endpos = spot + Vector(0, 0, 8) }
+        mask = MASK_PLAYERSOLID, start = stand + Vector(0, 0, 8), endpos = spot + Vector(0, 0, 8) }
     local tr = util.TraceHull(hull)
-    if tr.Hit then return nil, "blocked by " .. tostring(tr.Entity) end
-    return spot, ""
+    if tr.Hit then return nil, "blocked by " .. tostring(tr.Entity), nil end
+    return spot, "", stand
 end
 
 ---Puts ply on a standing spot (where it is, else a player spawn point) with room for a target 48 units along its
@@ -266,9 +280,10 @@ local function roomAhead(ply)
     ---@type string[]
     local tried = {}
     for _, from in ipairs(spots) do
-        local spot, why = roomAt(from, yaw)
+        local spot, why, stand = roomAt(from, yaw)
         if spot ~= nil then
-            ply:SetPos(from)
+            ply:SetPos(must(stand))
+            ply:SetLocalVelocity(vector_origin)
             return spot
         end
         if #tried < 3 then tried[#tried + 1] = tostring(from) .. ": " .. why end
@@ -291,6 +306,21 @@ return {
         end
     end,
     cases = {
+        {
+            name = "Bash fixture: airborne positions are grounded before placing either player",
+            func = function()
+                stub(util, "TraceHull").with(function(trace)
+                    if trace.endpos.z < trace.start.z then
+                        return { Hit = true, HitPos = Vector(trace.start.x, trace.start.y, 0),
+                            HitNormal = Vector(0, 0, 1), StartSolid = false }
+                    end
+                    return { Hit = false }
+                end)
+                local spot, _, stand = roomAt(Vector(0, 0, 128), 0)
+                expect(must(spot).z).to.equal(0)
+                expect(must(stand).z).to.equal(0)
+            end
+        },
         {
             name = "Helpers: slot ids are address paths, parents ordered before children",
             skip = noAddon,
@@ -858,6 +888,16 @@ return {
             skip = noArc9,
             async = true,
             timeout = 12,
+            cleanup = function(state)
+                hook.Remove("EntityTakeDamage", "PW test arc9 bash")
+                for _, ply in pairs(state.pool --[[@as table<string, Player>]]) do
+                    PW.BotInput.SetScripted(ply, nil)
+                    if IsValid(ply) then
+                        ply:SetTeam(TEAM_UNASSIGNED)
+                        ply:Spawn()
+                    end
+                end
+            end,
             func = function(state)
                 local class = bashRifle()
                 local a, b = bot(state, "a"), bot(state, "b")
@@ -870,8 +910,11 @@ return {
                 local wep = give(a, class)
                 call("PrepareForBot", a, wep)
                 a:SelectWeapon(class)
-                -- Both stand still: an intent without a view keeps the eye angles.
-                PW.BotInput.SetScripted(a, { buttons = 0, weapon = class })
+                -- Regression: spawning/teleporting need not leave a grounded origin or a level eye angle.
+                a:SetPos(a:GetPos() + Vector(0, 0, 128))
+                a:SetEyeAngles(Angle(-89, a:EyeAngles().y, 0))
+                -- Aim horizontally through CUserCmd; a reused bot can inherit a steep pitch from its last spawn.
+                PW.BotInput.SetScripted(a, { buttons = 0, weapon = class, view = Angle(0, a:EyeAngles().y, 0) })
                 PW.BotInput.SetScripted(b, { buttons = 0 })
                 local hits = 0
                 hook.Add("EntityTakeDamage", "PW test arc9 bash", function(target, dmg)
@@ -885,31 +928,33 @@ return {
                     -- A moved player's hitboxes follow on the next ticks: a fresh move waits for the next try.
                     local spot = roomAhead(a)
                     local placed = b:GetPos():Distance(spot) <= 4
-                    if not placed then b:SetPos(spot) end
+                    if not placed then
+                        b:SetPos(spot)
+                        b:SetLocalVelocity(vector_origin)
+                    end
                     b:SetHealth(100)
-                    local started = placed and a:GetActiveWeapon() == wep
-                        and call("BotAction", a, wep, "melee", nil) == true
+                    local active = a:GetActiveWeapon() == wep
+                    local started = placed and active and call("BotAction", a, wep, "melee", nil) == true
                     if not started and tries < 24 then
                         timer.Simple(0.25, try)
                         return
                     end
                     if not started then
                         local s = lib().BashState(a, wep)
+                        print(string.format("[PW] ARC9 bash setup: placed=%s active=%s weapon=%d activeWeapon=%d " ..
+                            "owner=%s spot=%s targetDistance=%.3f", tostring(placed), tostring(active), wep:EntIndex(),
+                            a:GetActiveWeapon():EntIndex(), tostring(wep:GetOwner() == a), tostring(spot),
+                            b:GetPos():Distance(spot)))
                         print(string.format("[PW] ARC9 bash refused: %s; eye %s aim %s, target at %s, %s alive %s",
                             tostring(lib()._BashRefusal(s)), tostring(a:EyePos()), tostring(a:GetAimVector()),
                             tostring(b:GetPos()), tostring(a:GetActiveWeapon()), tostring(b:Alive())))
                     end
+                    expect(placed).to.beTrue()
+                    expect(active).to.beTrue()
                     expect(started).to.beTrue()
                     expect(wep:GetInMeleeAttack()).to.beTrue()
                     timer.Simple(1.5, function()
-                        hook.Remove("EntityTakeDamage", "PW test arc9 bash")
-                        PW.BotInput.SetScripted(a, nil)
-                        PW.BotInput.SetScripted(b, nil)
                         expect(wep:GetInMeleeAttack()).to.beFalse()
-                        a:SetTeam(TEAM_UNASSIGNED)
-                        b:SetTeam(TEAM_UNASSIGNED)
-                        a:Spawn()
-                        b:Spawn()
                         expect(hits).to.equal(1)
                         done()
                     end)
