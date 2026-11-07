@@ -29,6 +29,15 @@
 ---@field matchTime number finite 60..3600 seconds, configurable default 600
 
 ---@class PW.HardpointState
+---@field layout PW.HardpointLayout
+---@field rules PW.HardpointRules
+---@field startedAt number
+---@field matchEndsAt number
+---@field lastAt? number
+---@field fraction number
+---@field control integer
+---@field contested boolean
+---@field effects? PW.HardpointEffects
 ---@field generation integer match generation
 ---@field visit integer monotonic visit, not merely the repeating zone id
 ---@field index integer active authored zone index
