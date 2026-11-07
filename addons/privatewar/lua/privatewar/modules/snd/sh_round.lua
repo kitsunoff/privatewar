@@ -132,3 +132,15 @@ function lib.Snapshot(state, viewerTeam, viewerId, now)
     end
     return out
 end
+
+function lib.HudText(view, now)
+    local title = "SEARCH AND DESTROY"
+    if view.phase == "planted" then
+        title = "BOMB PLANTED  " .. math.ceil(math.max(0, view.fuse - now)) .. "s"
+    elseif view.phase == "resolved" then
+        title = "ROUND OVER"
+    elseif view.carrier ~= nil then
+        title = "BOMB CARRIER  #" .. view.carrier
+    end
+    return title, view.action ~= nil and ("HOLD E TO " .. string.upper(view.action)) or "SITES A / B"
+end

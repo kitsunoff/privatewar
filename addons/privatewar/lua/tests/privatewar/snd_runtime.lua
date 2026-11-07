@@ -80,5 +80,26 @@ return { groupName = "PW SND runtime policy",
             end)
             expect(snd:PW_SelectSpawn(NULL)).to.equal(pool[1][1])
             expect(called).to.equal(1)
+        end },
+    { name = "SND runtime: round cleanup cancels owned active flash overlay and DSP without replaying an effect",
+        func = function()
+            PW._Throwables = { live = {} }
+            local dsp = 0
+            ---@type integer[]
+            local strengths = {}
+            local target = { IsValid = function() return true end, IsBot = function() return false end,
+                SetDSP = function(_, value) dsp = value end }
+            stub(net, "Start").with(function(name) expect(name).to.equal("pw_blind") end)
+            stub(net, "WriteUInt").with(function(value) strengths[#strengths + 1] = value end)
+            stub(net, "Send").with(function(ply) expect(ply).to.equal(target) end)
+            stub(PW, "Notify").with(function() end)
+            expect(must(must(PW.Throwables).Blind)(target --[[@as Player]], 1)).to.beTrue()
+            expect(dsp).to.equal(35)
+            local module = must(PW.Modules.Get("throwables"))
+            PW.Call(module, "PW_RoundEnd", 1, 1, { 1, 0 })
+            expect(dsp).to.equal(0)
+            expect(strengths).to.deepEqual({ 255, 0 })
+            PW.Call(module, "PW_RoundEnd", 1, 1, { 1, 0 })
+            expect(strengths).to.deepEqual({ 255, 0 })
         end }
 } }

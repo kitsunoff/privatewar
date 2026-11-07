@@ -185,6 +185,7 @@ function MODE:_Prepare(round, swapped)
     local match = assert(PW.Match)
     local reason = match.GetAbortReason()
     PW.Notify("PW_RoundPreparing", round, swapped)
+    if self._Rounds ~= state or PW._Call.failed[self] or match.GetAbortReason() ~= reason then return false end
     PW.Call(self, "PrepareRound", round, swapped)
     if self._Rounds ~= state or PW._Call.failed[self] or match.GetAbortReason() ~= reason then return false end
     PW.Notify("PW_RoundPrepared", round, swapped)

@@ -167,6 +167,26 @@ return {
             local p = planted()
             expect(must(lib().Objectives(p, 1)[1]).action).to.equal("hold")
         end },
+        { name = "SND: authored site and side spawn arrays reject holes metadata and any-team fallback injection",
+            func = function()
+                local broken = layout()
+                broken.spawns[0] = { { pos = Vector(999, 999, 0), yaw = 0 } }
+                expect(lib().Validate(broken)).to.beFalse()
+                broken = layout()
+                broken.spawns[3] = broken.spawns[1]
+                expect(lib().Validate(broken)).to.beFalse()
+                broken = layout()
+                local row = broken.spawns[1][1]
+                broken.spawns[1] = { row, row, row }
+                broken.spawns[1][2] = nil
+                expect(lib().Validate(broken)).to.beFalse()
+                broken = layout()
+                rawset(broken.sites, "hidden", broken.sites[1])
+                expect(lib().Validate(broken)).to.beFalse()
+                broken = layout()
+                broken.sites[1] = nil
+                expect(lib().Validate(broken)).to.beFalse()
+            end },
         { name = "SND bots: sole defender holds use to defuse and death promptly reassigns", func = function()
             local p = planted()
             local obj = must(lib().Objectives(p, 2)[1])

@@ -9,7 +9,7 @@ local display = { title = "", line = "", progress = 0, markers = {} }
 local nextDisplay = 0
 
 function lib.View()
-    if assert(PW.Match).GetPhase() ~= "LIVE" then return nil end
+    if PW.Phase.GetPhase() ~= "LIVE" then return nil end
     return current
 end
 
@@ -33,15 +33,7 @@ PW.HookFor(MODULE, "Think", function()
     nextDisplay = now + 0.05
     local view = lib.View()
     if view == nil then return end
-    display.title = "SEARCH AND DESTROY"
-    if view.phase == "planted" then
-        display.title = "BOMB PLANTED  " .. math.ceil(math.max(0, view.fuse - now)) .. "s"
-    elseif view.phase == "resolved" then
-        display.title = "ROUND OVER"
-    elseif view.carrier ~= nil then
-        display.title = "BOMB CARRIER  #" .. view.carrier
-    end
-    display.line = view.action ~= nil and ("HOLD E TO " .. string.upper(view.action)) or "SITES A / B"
+    display.title, display.line = lib.HudText(view, now)
     display.progress = view.action ~= nil and view.progress or 0
     local data = PW.Map ~= nil and PW.Map.GetModeData("snd") or nil
     local count = 0
@@ -87,6 +79,6 @@ net.Receive("pw_snd_state", function(length)
 end)
 
 ---@param phase PW.PhaseName
-function MODULE:PW_PhaseChange(phase)
+function MODULE:PW_PhaseChanged(phase)
     if phase ~= "LIVE" then current = nil end
 end

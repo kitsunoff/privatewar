@@ -37,7 +37,8 @@ local function clean(raw)
         return nil
     end
     if raw.eligible ~= nil and not istable(raw.eligible) then return nil end
-    if (raw.action == "plant" or raw.action == "defuse") and (raw.eligible == nil or revision == nil) then
+    if (raw.action == "plant" or raw.action == "defuse")
+        and (raw.eligible == nil or revision == nil or not finite(raw.radius) or raw.radius <= 0) then
         return nil
     end
     ---@type PW.BotObjective
@@ -60,11 +61,14 @@ end
 function lib.Sanitize(raw)
     ---@type PW.BotObjective[]
     local out = {}
+    ---@type table<string, boolean>
+    local seen = {}
     if not istable(raw) then return out end
     for i, entry in ipairs(raw --[[@as any[] ]]) do
         if i > 64 then break end
         local obj = istable(entry) and clean(entry) or nil
-        if obj ~= nil then out[#out + 1] = obj end
+        if obj ~= nil and seen[obj.id] then return {} end
+        if obj ~= nil then seen[obj.id] = true out[#out + 1] = obj end
     end
     return out
 end

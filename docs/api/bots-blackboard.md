@@ -687,10 +687,10 @@ mode field. The commander calls it through `PW.Call` at 1 Hz per team and stores
   `defend` 0.3 (`want` 1). KC derivation: an enemy tag is `collect` 0.6, a tag of the team's own dead `deny` 0.5
   (`want` 1 each; radius 24). Flag radius 160.
 
-### Eligible objective actions extension (frozen, implementation pending)
+### Eligible objective actions extension (frozen, implemented)
 
 Orchestrator-approved extension (2026-11-08); tests precede implementation. The six existing objective fields,
-legacy callers and Domination behavior stay valid; no new allocations or secret information are introduced.
+legacy callers and Domination behavior stay valid; no additional engine scans or secret information are introduced.
 
 | Field/signature | Meaning |
 | --- | --- |
@@ -700,6 +700,7 @@ legacy callers and Domination behavior stay valid; no new allocations or secret 
 | `PW.BotCommander.Sanitize(raw: any) -> PW.BotObjective[]` | Promote the existing private sanitizer to a pure shared function; copy only documented fields, including a copied allow-set/revision; no callbacks, roles, entity references, enemy positions or arbitrary metadata. Reject malformed new fields and duplicate ids; never mutate the source. Legacy actions keep their existing behavior/defaults. |
 | `PW.BotCommander.Eligible(objective: PW.BotObjective, botId: integer) -> boolean` | Shared pure allow-set predicate used before every assignment/retention and local fallback choice, and rechecked by the behavior before holding use. Missing module must fail closed for restricted/new actions, not make them unrestricted. |
 | `PW.BotObjective.zone?: PW.BotObjectiveZone` | Optional authoritative cylinder `{ pos: Vector, radius: number, above: number, below: number }`, finite position/dimensions, positive radius, nonnegative vertical bounds. Whitelist and copy it through sanitizer/fallback. Actual and projected nav arrival must be inside this cylinder; never trust a projected `arrived` flag alone. |
+| `PW.BotCommander.ArrivalFits(objective, projected, radius) -> boolean` | Shared pure helper: the entire horizontal arrival disc and projected height must fit the authoritative cylinder. The objective behavior validates immediately after `SetGoal`, clearing an invalid projected goal synchronously, and separately checks actual position/height before holding. Legacy objectives without a cylinder keep their existing behavior. |
 | `PW_PlayerTeamChanging(ply, from, to, reason)` | Synchronous server notification before team mutation; brain stops its stack. Humans and bots both trigger invalidation because every bot's relationships may change. |
 | `PW_PlayerTeamChanged(ply, from, to, reason)` | Synchronous server notification after team/manager-board mirror update. Commander clears orders/hunt and its retained assignment state for all managed bots; each other owner clears only its own state. |
 | `PW_ObjectiveInvalidated(id: string, revision: integer)` | Server notification invalidating one old objective visit. Commander calls its own `InvalidateObjective(id, revision)` helper, releasing matching orders and goals through public `PW.Bot.ClearGoal`. Other revisions/objectives are untouched. The mode invalidates before publishing the next visit. |
@@ -707,7 +708,7 @@ legacy callers and Domination behavior stay valid; no new allocations or secret 
 Eligibility overrides all assignment passes, including active capture/hold and hysteresis. Ineligible retained
 orders release immediately, even with the same id/action/revision. For local fallback, filter before ranking;
 an ineligible best candidate must not hide an eligible second candidate. Preserve approved fields through
-`PW.BotObjectives.Resolve`; its current copy strips them. Re-resolve current generation/eligibility before
+`PW.BotObjectives.Resolve`, including its fallback. Re-resolve current generation/eligibility before
 interaction rather than trusting a one-second-old commander order. No new defend-cap bypass is proposed.
 
 For plant/defuse the behavior approaches through `SetGoal`, verifies actual distance (not only projected nav
@@ -717,11 +718,13 @@ input conflict rules still forbid use with attack. Release objective-owned use o
 changed id/action/revision, lost eligibility or leaving range; resume must revalidate. Mode-side validation
 remains authoritative on every input tick. Capture/hold drift, collect/deny and Domination caps stay unchanged.
 
-Tests-first scaffold in `tests/privatewar/bots_snd.lua`: carrier-only assignment despite a nearer ineligible
+Tests-first cases in `tests/privatewar/bots_snd.lua`: carrier-only assignment despite a nearer ineligible
 bot; eligibility removes even sticky holds; revision releases a hold immediately; sanitizer copies eligibility
-and rejects malformed restrictions without forwarding secret fields. Implementation follow-up must add the
-sole-attacker plant/guard and sole-defender defuse `CUserCmd` smokes, use cleanup on suspension/death/generation,
-local-fallback second-candidate filtering and synchronous role-event cleanup. No engine pass is claimed.
+and rejects malformed restrictions without forwarding secret fields. `snd_input.lua` additionally exercises
+held-use cleanup, actual StartCommand plant/defuse input and travel from an authored spawn through planting and
+guarding. The behavior records `ctx.state.id` / `revision`; matching `PW_ObjectiveInvalidated` synchronously ends
+running/suspended objective frames through the brain owner and normal OnEnd cleanup. Test evidence does not pass
+the human bot-quality or visual checkpoint.
 
 **Narrow ownership request before implementation:** the S&D agent also needs
 `modules/bots_objectives/shared.lua`, only `PickObjective`/`Resolve`, to preserve/validate these fields and filter
