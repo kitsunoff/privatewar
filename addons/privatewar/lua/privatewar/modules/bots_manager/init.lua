@@ -338,6 +338,20 @@ function botLib.Get(bot)
     return PW._BotsManager.boards[bot]
 end
 
+local function mirrorTeams()
+    local n = engineTeams()
+    for key, board in pairs(PW._BotsManager.boards) do
+        local ply = key --[[@as Player]]
+        if IsValid(ply) then
+            local index = ply:Team()
+            board.team = index >= 1 and index <= n and index or nil
+        end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() mirrorTeams() end
+function MODULE:PW_RoundPrepared() mirrorTeams() end
+
 ---@param phase PW.PhaseName
 function MODULE:PW_PhaseChange(phase)
     lib._OnPhase(PW._BotsManager, phase)

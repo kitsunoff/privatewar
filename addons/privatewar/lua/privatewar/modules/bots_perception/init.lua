@@ -28,6 +28,18 @@ end
 local botLib = (rawget(PW, "Bot") or {}) --[[@as PW.BotLib]]
 PW.Bot = botLib
 
+local function clearAll()
+    for ply, state in pairs(lib.States) do
+        lib.Clear(state)
+        state.team = IsValid(ply) and ply:Team() or nil
+        local board = botLib.Get(ply)
+        if board ~= nil then board.contacts, board.memory = state.contacts, state.memory end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+
 function botLib.AddStimulus(botOrTeam, kind, data)
     return lib.Dispatch(botOrTeam, kind, data)
 end

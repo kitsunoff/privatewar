@@ -1,6 +1,6 @@
 # Player overrides API
 
-Status: frozen by the orchestrator; declarations/tests first, runtime implementation pending observed RED.
+Status: implemented after scoped GLuaTest RED; generic API frozen by the orchestrator.
 Generic optional module `player_overrides`; types `lua/privatewar/types/player_overrides.lua`.
 
 - Question `PW_PlayerOverrides(ply) -> PW.PlayerOverrideProfile?`: finite positive `maxHealth`,
