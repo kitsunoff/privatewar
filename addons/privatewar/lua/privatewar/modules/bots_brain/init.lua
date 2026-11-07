@@ -105,6 +105,16 @@ function MODULE:PW_RoundPreparing() stopAll() end
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
 
+---@param id string
+---@param revision integer
+function MODULE:PW_ObjectiveInvalidated(id, revision)
+    local now = CurTime()
+    for ply, state in pairs(store.states) do
+        local board = botLib.Get(ply)
+        if board ~= nil then lib._InvalidateObjective(state, envFor(ply, board, now), now, id, revision) end
+    end
+end
+
 ---@param ply Player
 local function register(ply)
     local scheduler = rawget(PW, "BotScheduler") --[[@as PW.BotSchedulerLib?]]
