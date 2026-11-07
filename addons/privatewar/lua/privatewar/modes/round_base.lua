@@ -42,14 +42,16 @@ end
 ---@param swapEvery integer
 ---@param roundTime number
 ---@param intermission number
+---@param roundLimit? integer
 ---@return PW.RoundState
-function MODE._NewState(n, toWin, swapEvery, roundTime, intermission)
+function MODE._NewState(n, toWin, swapEvery, roundTime, intermission, roundLimit)
     ---@type table<integer, integer>
     local wins = {}
     for i = 1, n do wins[i] = 0 end
     return {
         n = n, toWin = toWin, swapEvery = swapEvery, roundTime = roundTime, intermission = intermission,
-        round = 0, wins = wins, phase = "starting", at = 0, swapPending = false
+        round = 0, wins = wins, phase = "starting", at = 0, swapPending = false,
+        roundLimit = math.max(0, math.floor(tonumber(roundLimit) or 0))
     }
 end
 
@@ -84,11 +86,14 @@ end
 ---@param state PW.RoundState
 ---@return PW.MatchResult?
 function MODE._Result(state)
+    local fixed = (state.roundLimit or 0) > 0
+    if fixed and state.round < state.roundLimit then return nil end
     ---@type PW.Standing[]
     local standings = {}
     for i = 1, state.n do standings[i] = { id = i, score = state.wins[i] or 0 } end
     local result = assert(PW.MatchRules)._Evaluate({
-        standings = standings, teams = true, scorelimit = state.toWin, timelimit = 0, elapsed = 0
+        standings = standings, teams = true, scorelimit = fixed and 0 or state.toWin,
+        timelimit = fixed and 1 or 0, elapsed = fixed and 1 or 0
     })
     if result ~= nil then result.reason = "roundlimit" end
     return result
@@ -131,8 +136,9 @@ end
 ---@param state PW.RoundState
 ---@param now number
 ---@param verdict any
+---@param deferTimeout? boolean
 ---@return PW.RoundAction[]
-function MODE._Step(state, now, verdict)
+function MODE._Step(state, now, verdict, deferTimeout)
     local phase = state.phase
     if phase == "starting" or (phase == "intermission" and now >= state.at) then
         ---@type PW.RoundAction[]
@@ -151,7 +157,7 @@ function MODE._Step(state, now, verdict)
     end
     if phase ~= "round" then return {} end
     local winner = base._Verdict(verdict, state.n)
-    if winner == nil and base._TimedOut(state, now) then winner = false end
+    if winner == nil and deferTimeout ~= true and base._TimedOut(state, now) then winner = false end
     if winner == nil then return {} end
     return endRound(state, now, winner)
 end
@@ -168,13 +174,57 @@ end
 function MODE:_RespawnAll()
     local list = player.GetAll()
     table.sort(list, function(a, b) return a:UserID() < b:UserID() end)
-    for _, ply in ipairs(list) do ply:Spawn() end
+    for _, ply in ipairs(list) do assert(PW.MatchRules).Spawn(ply) end
+end
+
+---@param round integer
+---@param swapped boolean
+---@return boolean
+function MODE:_Prepare(round, swapped)
+    local state = self._Rounds
+    local match = assert(PW.Match)
+    local reason = match.GetAbortReason()
+    PW.Notify("PW_RoundPreparing", round, swapped)
+    PW.Call(self, "PrepareRound", round, swapped)
+    if self._Rounds ~= state or PW._Call.failed[self] or match.GetAbortReason() ~= reason then return false end
+    PW.Notify("PW_RoundPrepared", round, swapped)
+    return self._Rounds == state and match.GetAbortReason() == reason
+end
+
+---@param result any
+---@return boolean
+function MODE._ValidResult(result)
+    if not istable(result) or not isstring(result.reason) or not isbool(result.teams)
+        or not isbool(result.draw) or not istable(result.standings) then return false end
+    if not result.draw and result.winner == nil then return false end
+    if result.draw and result.winner ~= nil then return false end
+    for _, standing in ipairs(result.standings --[[@as table<string, any>[] ]]) do
+        if not istable(standing) or standing.id == nil or not isnumber(standing.score)
+            or standing.score ~= standing.score or math.abs(standing.score) == math.huge then return false end
+    end
+    return true
+end
+
+---@param defaultResult PW.MatchResult
+---@return PW.MatchResult?
+function MODE:_Finalize(defaultResult)
+    local state = self._Rounds
+    local match = assert(PW.Match)
+    local reason = match.GetAbortReason()
+    local result = PW.Call(self, "FinalizeRounds", defaultResult)
+    if self._Rounds ~= state or match.GetAbortReason() ~= reason then return nil end
+    if PW._Call.failed[self] or (result ~= nil and not base._ValidResult(result)) then
+        match.Abort("invalid round result transform")
+        return nil
+    end
+    return result or defaultResult
 end
 
 ---Executes the actions of _Step.
 ---@param actions PW.RoundAction[]
 function MODE:_Run(actions)
     for _, action in ipairs(actions) do
+        if action.kind == "start" and action.respawn and not self:_Prepare(action.round, action.swapped) then return end
         if action.kind == "swap" then
             assert(PW.Teams).Swap()
         elseif action.kind == "start" then
@@ -183,7 +233,9 @@ function MODE:_Run(actions)
         elseif action.kind == "end" then
             PW.Notify("PW_RoundEnd", action.round, action.winner, action.wins)
         elseif action.kind == "finish" then
-            assert(PW.Match).Finish(action.result)
+            ---@type PW.MatchResult?
+            local result = self:_Finalize(action.result)
+            if result ~= nil then assert(PW.Match).Finish(result) end
         end
     end
     if self._Rounds ~= nil then publish(self._Rounds) end
@@ -214,7 +266,8 @@ function MODE:Start()
     local toWin = math.max(1, math.floor(tonumber(self.RoundsToWin) or 6))
     local swapEvery = math.max(0, math.floor(tonumber(self.SwapSidesEvery) or 0))
     self._Rounds = base._NewState(n, toWin, swapEvery, tonumber(self:Setting("roundtime")) or 0,
-        tonumber(self:Setting("intermission")) or 5)
+        tonumber(self:Setting("intermission")) or 5, self.RoundLimit)
+    self:_Prepare(1, false)
 end
 
 function MODE:Think()
@@ -223,10 +276,14 @@ function MODE:Think()
     local now = CurTime()
     ---@type integer|false|nil
     local verdict = nil
+    ---@type boolean?
+    local deferTimeout = false
     if state.phase == "round" then
-        verdict = self:RoundWinner(base._TimedOut(state, now)) --[[@as integer|false|nil]]
+        local child = self --[[@as PW.RoundBase]]
+        verdict, deferTimeout = child:RoundWinner(base._TimedOut(state, now))
     end
-    local actions = base._Step(state, now, verdict)
+    if self._Rounds ~= state then return end
+    local actions = base._Step(state, now, verdict, deferTimeout)
     if #actions > 0 then self:_Run(actions) end
 end
 
