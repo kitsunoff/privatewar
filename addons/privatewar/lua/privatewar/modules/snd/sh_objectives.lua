@@ -38,7 +38,7 @@ function lib.Objectives(state, team)
         obj.pos = state.pos
         if team == 2 then
             obj.radius = 72
-            obj.zone = { pos = state.pos, radius = 64, above = 48, below = 16 }
+            obj.zone = { pos = state.pos, radius = 48, above = 48, below = 16 }
         end
         return { obj }
     end

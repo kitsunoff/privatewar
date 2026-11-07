@@ -11,6 +11,13 @@ BEHAVIOR.MinRun = 2
 
 local inZone = { capture = true, hold = true }
 local guard = { defend = true }
+local interact = { plant = true, defuse = true }
+
+---@param ctx PW.BotBrainCtx
+local function releaseUse(ctx)
+    local intent = ctx:Intent()
+    intent.buttons = bit.band(intent.buttons or 0, bit.bnot(IN_USE))
+end
 
 ---@return PW.BotObjectivesLib
 local function lib()
@@ -49,6 +56,7 @@ end
 
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnStart(_, ctx)
+    releaseUse(ctx)
     ctx:ClearGoal()
 end
 
@@ -60,8 +68,14 @@ end
 
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnEnd(_, ctx)
+    releaseUse(ctx)
     lib().LookAt(ctx, nil)
     ctx:Intent().stance = "stand"
+end
+
+---@param ctx PW.BotBrainCtx
+function BEHAVIOR:OnSuspend(_, ctx)
+    releaseUse(ctx)
 end
 
 ---Starts the next leg of an action: approach the objective, or (arrived) move to the next point inside or around it.
@@ -76,11 +90,13 @@ local function nextLeg(ctx, st, target, arrived)
         point, radius, priority, wait = lib().PointIn(target.pos, target.radius * 1.5, random), 48, "guard",
             6 + 6 * random()
     elseif inZone[target.action] and arrived then
-        point, radius, wait = lib().PointIn(target.pos, target.radius * 0.6, random), 40, 3 + 3 * random()
+        local center = target.zone ~= nil and target.zone.pos or target.pos
+        point, radius, wait = lib().PointIn(center, target.radius * 0.6, random), 40, 3 + 3 * random()
     elseif inZone[target.action] then
         radius, wait = target.radius * 0.5, 0
     end
     st.id, st.action, st.anchor, st.point, st.next = target.id, target.action, target.pos, point, ctx.now + wait
+    st.revision = target.revision
     lib().LookAt(ctx, nil)
     local current = ctx.board.goal
     if current ~= nil and current.priority ~= priority then ctx:ClearGoal() end
@@ -110,20 +126,61 @@ end
 ---@param target PW.BotObjective
 ---@return boolean
 local function changed(st, target)
-    return st.id ~= target.id or st.action ~= target.action or not isvector(st.anchor)
+    return st.id ~= target.id or st.action ~= target.action or st.revision ~= target.revision or not isvector(st.anchor)
         or (st.anchor --[[@as Vector]]):Distance(target.pos) > 32
 end
 
 local retry = { failed = true, unreachable = true }
 
 ---@param ctx PW.BotBrainCtx
+---@param target PW.BotObjective
+---@return PW.BotTransition
+local function use(ctx, target)
+    local commander = PW.BotCommander
+    releaseUse(ctx)
+    if commander == nil or not IsValid(ctx.bot) or not ctx.bot:Alive() then
+        return PW.BotBrain.Done("interaction unavailable")
+    end
+    local goal = ctx.board.goal
+    if target.zone ~= nil and goal ~= nil and goal.projected ~= nil
+        and not commander.Inside(target, goal.projected) then
+        ctx:ClearGoal()
+        return PW.BotBrain.Done("projected outside interaction zone")
+    end
+    if not commander.Inside(target, lib().Facts(ctx).pos) then
+        ctx:SetGoal(target.pos, math.min(target.radius * 0.25, 16), "objective")
+        return PW.BotBrain.Continue()
+    end
+    ctx:ClearGoal()
+    ctx:SetTarget(nil)
+    local intent = ctx:Intent()
+    intent.sprint, intent.drive = false, nil
+    intent.buttons = bit.bor(intent.buttons or 0, IN_USE)
+    return PW.BotBrain.Continue()
+end
+
+---@param ctx PW.BotBrainCtx
 ---@return PW.BotTransition
 function BEHAVIOR:Update(_, ctx)
+    releaseUse(ctx)
     local target = resolve(ctx)
     if target == nil then return PW.BotBrain.Done("objective gone") end
+    if interact[target.action] then
+        if ctx.state ~= nil then ctx.state.id, ctx.state.revision = target.id, target.revision end
+        return use(ctx, target)
+    end
     local st = ctx.state or {}
     ctx.lastObjective = target.id
     local status = ctx:GoalStatus()
+    local commander, goal = PW.BotCommander, ctx.board.goal
+    if target.zone ~= nil and commander ~= nil and goal ~= nil and goal.projected ~= nil
+        and not commander.Inside(target, goal.projected) then
+        ctx:ClearGoal()
+        return PW.BotBrain.Done("projected outside objective zone")
+    end
+    if target.zone ~= nil and commander ~= nil and not commander.Inside(target, lib().Facts(ctx).pos) then
+        status = nil
+    end
     if changed(st, target) or status == nil or retry[status] then
         nextLeg(ctx, st, target, false)
     elseif status == "arrived" and ctx.now >= st.next then

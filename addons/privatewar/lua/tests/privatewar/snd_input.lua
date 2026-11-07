@@ -69,7 +69,7 @@ return {
             end
         end },
         { name = "SND input: real StartCommand holds E through an ordinary five-second plant", async = true,
-            timeout = 15, func = function(state, done)
+            timeout = 15, func = function(state)
                 local bot = must(state.bot --[[@as Player?]])
                 expect(IsValid(bot) and bot:Alive()).to.beTrue()
                 local ctx, behavior = context(bot, "plant")
