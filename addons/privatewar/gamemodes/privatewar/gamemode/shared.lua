@@ -8,7 +8,7 @@ GM.TeamBased = true
 rawset(GM, "ShowTeam", function() end)
 
 PW = PW or {}
-PW.Version = "0.0.1"
+PW.Version = "0.0.2"
 PW.API = 1
 
 include("core/sh_hooks.lua")
