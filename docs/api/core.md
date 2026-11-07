@@ -479,15 +479,21 @@ state of a definition (perk, streak, equipment) with hooks and timers that end w
 | `instance:IsValid() -> boolean` | `false` once removal starts, one of its calls through `PW.Call` errored, or its source definition has an `IsValid` function returning false. Plain non-registry definitions without `IsValid` still work |
 | `instance:Hook(name, fn)` | `hook.Add(name, instance, ...)`: on the hook, `fn(instance, ...)` runs through `PW.Call` and its results are returned (it may answer a question hook). One callback per hook name; a second `Hook` with the same name replaces it. Ignored on an invalid instance |
 | `instance:Timer(delay, reps, fn)` | `timer.Create` with a unique name (`PW.Instance.<n>`); `fn(instance)` runs through `PW.Call`. `reps` as in `timer.Create` (0 = forever). Ignored on an invalid instance |
-| `instance:Remove()` | Runs once: blocks gameplay, runs `OnUnequip(owner)` through a protected cleanup-only call even if the instance failed or its definition is disabled, then removes all owned hooks, timers and the live entry. Reentrant calls do nothing |
+| `instance:Remove()` | Runs once: blocks gameplay, runs `OnUnequip(owner)` through `PW.Call` with a protected, single-use cleanup admission even if the instance failed or its definition is disabled, then removes all owned hooks, timers and the live entry. Reentrant calls do nothing |
 
 - Errors: an error in `OnEquip`, a hook callback or a timer callback makes the instance invalid (`PW.Call` keeps
   it in its failed set; the definition is not disabled). After a failed hook or timer callback the instance is
   removed at once. Removal still calls `OnUnequip` exactly once; this cleanup-only exception does not resume
-  ordinary `PW.Call` gameplay. An `OnUnequip` error is logged with the definition id and method, never rethrown,
-  never disables the definition, and cannot skip core hook/timer/live-entry cleanup.
-- An error in `OnEquip` does not remove the instance at once: it stays invalid (no hooks or timers can be added)
-  until `Remove()` or the end of the match.
+  ordinary `PW.Call` gameplay. The central caller profiles cleanup normally when `pw_profile` is 1, including
+  failed cleanup. An `OnUnequip` error is logged with the definition id and method, never rethrown, never disables
+  the definition, and cannot skip core hook/timer/live-entry cleanup even when the logger itself errors.
+- Cleanup admission is created only inside the real `Remove` and consumed before entering `OnUnequip`.
+  Nested `PW.Call(instance, "OnUnequip")`, other methods, hooks and timers remain blocked while ending.
+  There is no caller-controlled bypass argument or public removal flag. Outside actual removal, ordinary
+  `PW.Call` still skips failed/invalid instances, including arbitrary calls to their `OnUnequip`.
+- After `OnEquip` returns, the constructor settles validity immediately: an already invalid definition skips
+  equipping and is removed without a live-entry leak; failed equipping removes its hooks/timers and invokes
+  `OnUnequip` once before returning the invalid instance. Later `Remove` calls remain no-ops.
 - Cleanup on the server: the core removes every live instance on `PW_MatchEnd` (listener `"PW.Instance"`).
 - Cleanup on the client (`PW_MatchEnd` is server only): the core removes every live client instance when the
   networked phase leaves `LIVE`, before `PW_PhaseChanged` fires (see "Phase networking").
@@ -498,7 +504,8 @@ state of a definition (perk, streak, equipment) with hooks and timers that end w
 - `PW._Instances` (live set, timer counter), `instance._Definition` (own source-table reference),
   `PW._EndInstances()` (removes every live instance), and `PW._EndDefinitionInstances(definition)` (removes only
   live instances with that exact source reference) are internal (d.14). The registry calls the latter only when
-  the instance core has loaded.
+  the instance core has loaded. `PW._TakeInstanceCleanup(entity, method)` is an internal read-once admission
+  predicate for `PW.Call`; it cannot create admission. Its pending state is private to the instance core.
 
 ## Phases and match
 
