@@ -46,8 +46,14 @@ return {
                         ctx.state = {}
                         behavior:Update(actor, ctx)
                         local goal = board.goal
+                        local frame = assert(ctx.state)
+                        print(string.format("[PW] HP_SHARED_SEAM id %s revision %s projectedFit %s",
+                            tostring(frame.id), tostring(frame.revision), tostring(goal == nil
+                                or (goal.projected ~= nil and hp.ArrivalFits(zone, goal.projected, goal.radius)))))
                         expect(goal == nil or (goal.projected ~= nil
                             and hp.ArrivalFits(zone, goal.projected, goal.radius))).to.beTrue()
+                        expect(frame.id).to.equal(objective.id)
+                        expect(frame.revision).to.equal(objective.revision)
                     end
                 end)
                 api.ClearGoal(actor)
