@@ -106,7 +106,7 @@
 ---The bot name pool (sh_name_pool.lua, 06-progression.md d.7): about 100 original names; unique, editable.
 ---@field NamePool string[]
 ---Pure: a pool name not in taken (lowercase names in use; roll in [0, 1) picks among the free ones); when every pool
----name is taken, a pool name with the lowest free number ("Viper 2").
+---name is taken, the first pool name with the lowest unused suffix from 2, without rolling; empty pools use Operator.
 ---@field _PickName fun(pool: string[], taken: table<string, boolean>, roll: fun(): number): string
 ---Pure: the lowercase names of the entries (entries without a name are skipped).
 ---@field _TakenNames fun(entries: PW.BotsEntry[]): table<string, boolean>

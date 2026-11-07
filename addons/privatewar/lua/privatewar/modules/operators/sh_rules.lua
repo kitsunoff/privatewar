@@ -5,8 +5,8 @@
 --     includes installed Workshop playermodels). A stock entry whose model path belongs to an active economy entry is
 --     dropped: the economy rule governs that model.
 --   Resolve: the entry a choice gives: the chosen entry when it exists and is not locked, else the player's own GMod
---     model (cl_playermodel) when it is a selectable stock entry, else the stock fallback, else the first selectable
---     entry. The choice "auto" goes straight to cl_playermodel.
+--     model (cl_playermodel) when it is a selectable stock entry, else the first selectable stock entry in list order.
+--     With no usable stock entry the caller uses FallbackPath. The choice "auto" goes straight to cl_playermodel.
 --   CheckChoice: the wire check of a requested choice (a short printable string).
 --   BotPick: a random entry for a bot, locks ignored. Colour: the player colour (team colour in team modes).
 --   Cards: the picker cards (screens/loadout_operator.lua).
@@ -107,10 +107,8 @@ end
 ---@param entries PW.OperatorEntry[]
 ---@return PW.OperatorEntry?
 local function fallback(entries)
-    local stock = find(entries, lib.FallbackName)
-    if usable(stock) then return stock end
     for _, entry in ipairs(entries) do
-        if not entry.locked then return entry end
+        if entry.source == "stock" and not entry.locked then return entry end
     end
     return nil
 end

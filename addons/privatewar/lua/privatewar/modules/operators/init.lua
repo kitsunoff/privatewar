@@ -1,8 +1,8 @@
 -- Operators, server glue (06-progression.md d.7; docs/api/operators.md). Thin wrappers around the pure rules:
 --   pw_operator_model (PW.Net.Receive: any player, 2 per second, MaxChoiceBytes + 1 bytes, owner the module): a
---     human's choice. A malformed one is dropped; a well-formed one is kept and checked again at every spawn (an
---     item bought later becomes usable, a lost one falls back). Outside LIVE an alive player gets it at once, so the
---     lobby shows it; during LIVE from the next spawn.
+--     human's choice. Malformed, unknown or locked choices are dropped without changing the previous choice.
+--     Accepted choices are checked again at every spawn (a lost one falls back). Outside LIVE an alive player gets
+--     an accepted choice at once, so the lobby shows it; during LIVE from the next spawn.
 --   PlayerSetModel: humans get their resolved choice, bots a random operator picked once (locks ignored); the player
 --     colour is the team colour in team modes, else cl_playercolor (humans) or a colour picked once (bots).
 -- The engine calls are injectable store fields, so the tests drive fake players through a fake store.
@@ -129,13 +129,14 @@ end
 
 function lib._OnRequest(store, ply, choice)
     if ply:IsBot() or not lib.CheckChoice(choice) then return false, nil end
-    store.requested[ply] = choice --[[@as string]]
     local _, reason = lib.Resolve(lib._ListFor(store, ply), choice, ply:GetInfo("cl_playermodel"))
     if reason ~= nil then
-        store.log(string.format("%s asked for %q (%s); using their fallback", ply:Nick(), choice, reason))
+        store.log(string.format("%s asked for %q (%s); request rejected", ply:Nick(), choice, reason))
+        return false, reason
     end
+    store.requested[ply] = choice --[[@as string]]
     if store.phase() ~= "LIVE" and ply:Alive() then lib._OnSetModel(store, ply) end
-    return true, reason
+    return true, nil
 end
 
 PW.Net.Receive(lib.NetName, { who = "any", rate = 2, maxLen = lib.MaxChoiceBytes + 1, owner = module },

@@ -64,7 +64,7 @@
 ---The operators module: one global operator per player, random operators for bots.
 ---@class PW.OperatorsLib
 ---@field Auto string the choice that means "my GMod model" ("auto")
----@field FallbackName string stock fallback name ("kleiner")
+---@field FallbackName string last-resort stock name ("kleiner"), not preferred over list order
 ---@field FallbackPath string the model used when no entry is usable
 ---@field MaxChoiceBytes integer longest accepted choice
 ---@field DefaultColour number[] GMod's default player colour
@@ -79,7 +79,8 @@
 ---@field List fun(input: PW.OperatorListInput): PW.OperatorEntry[]
 ---Pure: "auto" and every entry id (the options of the client setting).
 ---@field OptionIds fun(entries: PW.OperatorEntry[]): string[]
----Pure: the entry a choice gives and, when the choice was not honoured, why. auto is the cl_playermodel name.
+---Pure: the choice, else cl_playermodel stock, else the first usable stock in list order; nil without usable stock.
+---The second result explains a rejected choice. auto is the cl_playermodel name.
 ---@field Resolve fun(list: PW.OperatorEntry[], choice: string?, auto: string?): PW.OperatorEntry?, PW.OperatorReject?
 ---Pure: whether a requested choice is well formed (1..MaxChoiceBytes bytes, no control characters).
 ---@field CheckChoice fun(choice: any): boolean
@@ -110,7 +111,8 @@
 ---@field _NewStore? fun(opts?: PW.OperatorsStoreOptions): PW.OperatorsStore
 ---Internal (server): the list of one player on this server.
 ---@field _ListFor? fun(store: PW.OperatorsStore, ply: Player): PW.OperatorEntry[]
----Internal (server): a request arrived; returns whether it was stored and the rejection reason of the resolution.
+---Internal (server): validates syntax, existence and unlocks before storing; rejection leaves the choice unchanged.
+---Returns whether the choice was stored and, for an unknown or locked entry, its rejection reason.
 ---@field _OnRequest? fun(store: PW.OperatorsStore, ply: Player, choice: any): boolean, string?
 ---Internal (server): PlayerSetModel: sets the model and the player colour; returns the model path.
 ---@field _OnSetModel? fun(store: PW.OperatorsStore, ply: Player): string

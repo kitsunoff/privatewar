@@ -1,7 +1,8 @@
 -- Operators and bot names (06-progression.md d.7; docs/api/operators.md, bots-blackboard.md "Bots manager"). Pure
 -- cases over plain data: the operator list (stock and economy models, owned, free and locked ones), the choice
 -- resolution and the wire check, the server glue on fake players and a fake store (the request, PlayerSetModel, the
--- team colour, bots), the bot name pool and the unique name pick through a fake manager store. No real bot is created.
+-- team colour, bots), the bot name pool and the unique name pick through a fake manager store. The engine smoke
+-- reuses an existing player, restores their model and colour, and never creates another bot.
 
 ---@generic T
 ---@param value T?
@@ -107,6 +108,16 @@ local function storeWith(over, owned)
     return must(ops()._NewStore)(opts), logs
 end
 
+---A local seeded roll stub; never changes the engine's global random state.
+---@param seed integer
+---@return fun(): number
+local function seededRoll(seed)
+    return function()
+        seed = (seed * 16807) % 2147483647
+        return seed / 2147483647
+    end
+end
+
 ---@param a Vector?
 ---@param r number
 ---@param g number
@@ -119,7 +130,7 @@ end
 
 ---A fake bots manager store whose players have names; create records the names.
 ---@param names string[]
----@return PW.BotsStore, string[]
+---@return PW.BotsStore, string[], PW.BotsEntry[]
 local function nameStore(names)
     ---@type PW.BotsEntry[]
     local entries = {}
@@ -141,7 +152,7 @@ local function nameStore(names)
         generating = function() return false end, teams = function() return 0 end, smallest = function() return nil end,
         clock = function() return 0 end, tier = function() return "regular" end, roll = math.random
     })
-    return store, created
+    return store, created, entries
 end
 
 return {
@@ -199,8 +210,8 @@ return {
                 local _, unknown = ops().Resolve(entries, "nope", "alyx")
                 expect(unknown).to.equal("unknown")
                 expect(must(ops().Resolve(entries, "auto", "alyx")).id).to.equal("alyx")
-                expect(must(ops().Resolve(entries, "auto", "css_swat")).id).to.equal("kleiner")
-                expect(must(ops().Resolve(entries, "auto", "")).id).to.equal("kleiner")
+                expect(must(ops().Resolve(entries, "auto", "css_swat")).id).to.equal("alyx")
+                expect(must(ops().Resolve(entries, "auto", "")).id).to.equal("alyx")
             end
         },
         {
@@ -243,21 +254,27 @@ return {
             end
         },
         {
-            name = "Server: a malformed request is dropped; an unowned economy model is rejected at spawn",
+            name = "Server: malformed, unknown and unowned requests preserve the previous choice and model",
             func = function()
-                local store, logs = storeWith()
-                local state, ply = fakePlayer()
-                local malformed = must(ops()._OnRequest)(store, ply, "a\0b")
-                expect(malformed).to.beFalse()
+                local store, logs = storeWith({ phase = function() return "LOBBY" end })
+                local state, ply = fakePlayer({ alive = true })
+                expect(must(ops()._OnRequest)(store, ply, 5)).to.beFalse()
                 expect(store.requested[ply]).to.beNil()
-                local stored, reason = must(ops()._OnRequest)(store, ply, "models:elite")
-                expect(stored).to.beTrue()
-                expect(reason).to.equal("locked")
-                expect(#logs).to.equal(1)
-                must(ops()._OnSetModel)(store, ply)
-                expect(state.model).to.equal("models/player/alyx.mdl")
-                local _, unknown = must(ops()._OnRequest)(store, ply, "models/player/whatever.mdl")
+                expect(must(ops()._OnRequest)(store, ply, "kleiner")).to.beTrue()
+                for _, choice in ipairs({ 5, {}, "a\0b", "models/player/whatever.mdl", "models:elite" }) do
+                    local accepted = must(ops()._OnRequest)(store, ply, choice)
+                    expect(accepted).to.beFalse()
+                    expect(store.requested[ply]).to.equal("kleiner")
+                    expect(state.model).to.equal("models/player/kleiner.mdl")
+                end
+                local _, locked = must(ops()._OnRequest)(store, ply, "models:elite")
+                expect(locked).to.equal("locked")
+                local _, unknown = must(ops()._OnRequest)(store, ply, "missing")
                 expect(unknown).to.equal("unknown")
+                expect(#logs > 0).to.beTrue()
+                expect(must(ops()._OnRequest)(store, ply, "auto")).to.beTrue()
+                expect(store.requested[ply]).to.equal("auto")
+                expect(state.model).to.equal("models/player/alyx.mdl")
             end
         },
         {
@@ -330,13 +347,14 @@ return {
             end
         },
         {
-            name = "The bot name pool is non-empty and has no duplicates",
+            name = "The bot name pool has about 100 names, no empty entries and no duplicates",
             func = function()
                 local pool = bots().NamePool
-                expect(#pool >= 90).to.beTrue()
+                expect(#pool >= 90 and #pool <= 110).to.beTrue()
                 ---@type table<string, boolean>
                 local seen = {}
                 for _, name in ipairs(pool) do
+                    expect(string.Trim(name) ~= "").to.beTrue()
                     local key = string.lower(name)
                     expect(seen[key]).to.beNil()
                     expect(string.match(name, "^Bot%s*%d+$")).to.beNil()
@@ -370,6 +388,145 @@ return {
                     expect(seen[string.lower(name)]).to.beNil()
                     expect(string.match(name, "^Bot%s*%d+$")).to.beNil()
                     seen[string.lower(name)] = true
+                end
+            end
+        },
+        {
+            name = "Fallback uses the first stock entry, never an economy entry ahead of stock",
+            func = function()
+                local entries = ops().List({ stock = { barney = "models/player/barney.mdl" },
+                    economy = { { id = "free", name = "A Free Model", path = "models/player/alyx.mdl" } } })
+                expect(entries[1].source).to.equal("store")
+                expect(must(ops().Resolve(entries, "auto", "missing")).id).to.equal("barney")
+                local store = storeWith({ stock = function() return {} end })
+                local state, ply = fakePlayer()
+                expect(must(ops()._OnSetModel)(store, ply)).to.equal(ops().FallbackPath)
+                expect(state.model).to.equal(ops().FallbackPath)
+                expect(ops().Resolve({}, "auto", "")).to.beNil()
+            end
+        },
+        {
+            name = "A player without a choice gets cl_playermodel, otherwise the first stock model",
+            func = function()
+                local store = storeWith()
+                local state, ply = fakePlayer({ info = { cl_playermodel = "male_07" } })
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal(stock.male_07)
+                state.info.cl_playermodel = "missing"
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal(stock.alyx)
+                expect(store.requested[ply]).to.beNil()
+            end
+        },
+        {
+            name = "Ownership is checked at each request and spawn; later unavailable choices safely fall back",
+            func = function()
+                local owned = { elite = true }
+                local store = storeWith(nil, owned)
+                local state, ply = fakePlayer()
+                expect(must(ops()._OnRequest)(store, ply, "models:elite")).to.beTrue()
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal("models/player/combine_super_soldier.mdl")
+                owned.elite = false
+                expect(must(ops()._OnRequest)(store, ply, "models:elite")).to.beFalse()
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal(stock.alyx)
+                owned.elite = true
+                expect(must(ops()._OnRequest)(store, ply, "models:elite")).to.beTrue()
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal("models/player/combine_super_soldier.mdl")
+                store.economy = function() return {} end
+                must(ops()._OnSetModel)(store, ply)
+                expect(state.model).to.equal(stock.alyx)
+            end
+        },
+        {
+            name = "LiveInput includes Workshop player_manager models without a hardcoded whitelist",
+            func = function()
+                stub(player_manager, "AllValidModels").with(function()
+                    return { workshop_operator = "models/workshop/operator.mdl" }
+                end)
+                local entry = must(find(ops().List(ops().LiveInput()), "workshop_operator"))
+                expect(entry.path).to.equal("models/workshop/operator.mdl")
+                expect(entry.locked).to.beFalse()
+            end
+        },
+        {
+            name = "Seeded bot rolls keep the session model but choose different valid models across sessions",
+            func = function()
+                local first = storeWith({ roll = seededRoll(1) })
+                local _, ply = fakePlayer({ bot = true })
+                local path = must(ops()._OnSetModel)(first, ply)
+                first.roll = seededRoll(123456)
+                expect(must(ops()._OnSetModel)(first, ply)).to.equal(path)
+                local second = storeWith({ roll = seededRoll(123456) })
+                local other = must(ops()._OnSetModel)(second, ply)
+                expect(other ~= path).to.beTrue()
+                ---@type table<string, boolean>
+                local valid = {}
+                for _, entry in ipairs(listWith({})) do valid[entry.path] = true end
+                expect(valid[path] and valid[other]).to.beTrue()
+            end
+        },
+        {
+            name = "Exhausted names use the first pool name and lowest unused suffix without RNG",
+            func = function()
+                local pool = { "Viper", "Mike" }
+                local taken = { viper = true, mike = true, ["viper 2"] = true, ["viper 4"] = true }
+                for _, value in ipairs({ 0, 0.5, 0.99 }) do
+                    expect(bots()._PickName(pool, taken, function() return value end)).to.equal("Viper 3")
+                end
+                expect(bots()._PickName(pool, taken, function() error("exhausted pool must not roll") end))
+                    .to.equal("Viper 3")
+                local empty = bots()._PickName({}, { ["operator 2"] = true }, function()
+                    error("empty pool must not roll")
+                end)
+                expect(empty).to.equal("Operator 3")
+            end
+        },
+        {
+            name = "The manager releases a departed bot name and reuses it on the next creation step",
+            func = function()
+                local store, created, entries = nameStore({ string.upper(bots().NamePool[1]) })
+                store.fill = function() return 2 end
+                store.roll = function() return 0 end
+                expect(must(bots()._Step)(store)).to.equal(1)
+                local departed = must(table.remove(entries))
+                expect(departed.bot).to.beTrue()
+                local name = created[1]
+                expect(departed.name).to.equal(name)
+                expect(name ~= bots().NamePool[1]).to.beTrue()
+                expect(bots()._TakenNames(entries)[string.lower(name)]).to.beNil()
+                expect(#entries).to.equal(1)
+                expect(entries[1].bot).to.beFalse()
+                expect(must(bots()._Step)(store)).to.equal(1)
+                expect(created[2]).to.equal(name)
+                expect(entries[2].name).to.equal(name)
+                expect(entries[2].name ~= entries[1].name).to.beTrue()
+            end
+        },
+        {
+            name = "Engine smoke: PlayerSetModel applies a valid operator using a shared player without new slots",
+            func = function(state)
+                local ply = must(player.GetBots()[1] or player.GetHumans()[1])
+                expect(ply).to.beValid()
+                state.smokePlayer, state.smokeModel, state.smokeColour = ply, ply:GetModel(), ply:GetPlayerColor()
+                state.previousOperators = PW._Operators
+                local store = storeWith({ stock = function() return player_manager.AllValidModels() end,
+                    economy = function() return {} end })
+                PW._Operators = store
+                store.requested[ply] = "alyx"
+                if ply:IsBot() then store.bots[ply] = { path = stock.alyx, colour = { 1, 0, 0 } } end
+                hook.Run("PlayerSetModel", ply)
+                expect(ply:GetModel()).to.equal(stock.alyx)
+                expect(util.IsValidModel(must(ply:GetModel()))).to.beTrue()
+            end,
+            cleanup = function(state)
+                if state.previousOperators ~= nil then PW._Operators = state.previousOperators end
+                local ply = state.smokePlayer --[[@as Player?]]
+                if ply ~= nil and IsValid(ply) then
+                    ply:SetModel(state.smokeModel)
+                    ply:SetPlayerColor(state.smokeColour)
                 end
             end
         },
