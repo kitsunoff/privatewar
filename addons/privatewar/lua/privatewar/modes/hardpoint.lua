@@ -17,15 +17,22 @@ mode._ScoreKey = "pw_hp_score_"
 ---@param data any
 ---@return boolean, string?
 function mode:ValidateMapData(data)
-    if PW.Hardpoint == nil then return false, "Hardpoint module unavailable" end
+    local module = PW.Modules.Get("hardpoint")
+    if PW.Hardpoint == nil or not IsValid(module) then return false, "Hardpoint module unavailable" end
     return PW.Hardpoint.ValidateLayout(data)
 end
 
 function mode:Start()
+    assert(IsValid(PW.Modules.Get("hardpoint")), "Hardpoint module unavailable")
     assert(PW.Hardpoint, "Hardpoint module unavailable").Start(self)
 end
 
 function mode:Think()
+    if not IsValid(PW.Modules.Get("hardpoint")) then
+        self:Cleanup()
+        assert(PW.Match).Abort("Hardpoint module unavailable")
+        return
+    end
     if PW.Hardpoint ~= nil then PW.Hardpoint.Think(self) end
 end
 

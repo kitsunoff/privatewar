@@ -105,7 +105,8 @@ function hp.Objectives(mode, side)
     local runtime = mode._Hardpoint
     local commander = PW.BotCommander
     if runtime == nil or runtime.state.finished or commander == nil
-        or rawget(commander, "InvalidateObjective") == nil then return {} end
+        or rawget(commander, "InvalidateObjective") == nil or rawget(commander, "Sanitize") == nil
+        or rawget(commander, "Eligible") == nil then return {} end
     local zone = runtime.state.layout.zones[runtime.state.index]
     ---@type table<integer, boolean>
     local eligible = {}
