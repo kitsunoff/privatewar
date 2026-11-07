@@ -165,7 +165,8 @@
 ---@class PW.CallStore
 ---@field log PW.LogFn receives one line per runtime error
 ---Weak-keyed: erroring tables without an own (raw) _Registry, never called again. Instances land here even when
----their definition is a registered entity, so an error disables the instance, not the definition.
+---their definition is a registered entity, so an error disables the instance, not the definition. Only actual
+---Remove can admit its single OnUnequip cleanup call despite this failure; ordinary calls remain blocked.
 ---@field failed table<table, true>
 ---@field profile table<string, PW.ProfileEntry> accumulated timings by "<kind>:<id>"
 
@@ -393,6 +394,8 @@
 ---@field _Hooks PW.HookStore internal
 ---Calls entity[method](entity, ...) through pcall and returns its results (00-core.md d.6; 01 d.15).
 ---A missing method or an entity that is no longer valid (IsValid false, or an earlier error) returns nothing.
+---The real instance Remove can admit OnUnequip once despite invalidity/failure. This private cleanup admission
+---is consumed before entry, remains profiled, and cleanup errors never disable a definition or resume gameplay.
 ---On error: one log line (kind, id, method, error) and the entity is disabled until map change through its
 ---registry (_Disable, so its hook subscriptions drop). The active mode is not disabled: the core calls
 ---PW.Match.Abort("mode <id> failed: <error>") when it exists, and logs that line in any case.
@@ -409,7 +412,8 @@
 ---@field _Net PW.NetStore internal (server)
 ---@field _Call PW.CallStore internal
 ---Creates a per-owner instance of def (00-core.md d.11) and calls its OnEquip(owner) through PW.Call. The
----core ends every live instance on PW_MatchEnd; the owning module ends it earlier with instance:Remove().
+---constructor immediately removes an invalid/failed instance; the core ends every other live instance on
+---PW_MatchEnd, and the owning module may end it earlier with instance:Remove().
 ---@field Instance fun(def: table, owner: any): PW.Instance
 ---@field _Instances PW.InstanceStore internal
 ---Internal: removes every live instance (server: on PW_MatchEnd; client: when the phase leaves LIVE).
