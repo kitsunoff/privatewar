@@ -557,13 +557,19 @@ that they can declare their reads at load time). Pure glue around the two data k
 
 ## Bot names
 
-T-11.8, `design/06-progression.md` d.7. The manager passes a human-like name to `player.CreateNextBot` instead of
+T-11.9, `design/06-progression.md` d.7. The manager passes a human-like name to `player.CreateNextBot` instead of
 `Bot <n>`: `PW.BotsManager._PickName(PW.BotsManager.NamePool, taken, roll)` picks a pool name that no connected player
 has (compared without case; `taken` from `_TakenNames(entries)`, every `PW.BotsEntry` carries `name = Nick()`; names
-created in the same step are added). When every pool name is taken, a pool name with the lowest free number
-(`"Viper 2"`). The pool is the data file `modules/bots_manager/sh_name_pool.lua` (about 100 original first names,
-surnames and callsigns; unique, editable). The personality is not used as a hint: it is assigned after the team is known,
-later than the name. Killfeed, scoreboard and postmatch read `Nick()`. Bot operators (models) are in `operators.md`.
+created in the same step are added). When every pool name is taken, the first pool entry in its existing order gets the
+lowest unused numeric suffix starting at 2 (`"Mike 2"`). This fallback never draws RNG: identical `pool` and `taken`
+produce the same result regardless of `roll`. An empty pool uses `"Operator"` as the base, with the same suffix rule.
+
+Names are reserved by the current connected-player snapshot, not a permanent used-name set. A kicked bot still
+connected reserves its name; after it leaves, its name can be reused by the next creation step. Human names are
+reserved in the same way. The pool is the data file `modules/bots_manager/sh_name_pool.lua` (about 100 original first
+names, surnames and callsigns; no empty entries or case-insensitive duplicates, editable). The personality is not used
+as a hint: it is assigned after the team is known, later than the name. Killfeed, scoreboard and postmatch read `Nick()`.
+Bot operators (models) are in `operators.md`.
 
 ## Combat movement
 
