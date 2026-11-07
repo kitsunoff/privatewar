@@ -52,6 +52,31 @@ return {
             end
         },
         {
+            name = "Weapon: player replacement death spectator and weapon switch never reuse another snapshot",
+            func = function()
+                local playerA, playerB, weaponA, weaponB = {}, {}, {}, {}
+                ---@type PW.HudWeaponModel
+                local out = { name = "Rifle", text = "30 / 90", player = playerA, weapon = weaponA }
+                local ready = hud()._WeaponReady
+                expect(ready(out, playerA, weaponA, true)).to.beTrue()
+                expect(ready(out, playerB, weaponA, true)).to.beFalse()
+                expect(ready(out, playerA, weaponB, true)).to.beFalse()
+                expect(ready(out, playerA, weaponA, false)).to.beFalse()
+                expect(ready(out, nil, nil, false)).to.beFalse()
+            end
+        },
+        {
+            name = "Weapon: adapter display name and engine PrintName fallback are localized",
+            func = function()
+                local function localize(text) return text == "#rifle" and "Localized Rifle" or text end
+                local name = hud()._WeaponName
+                expect(name("#rifle", "Engine Rifle", "weapon_rifle", localize)).to.equal("Localized Rifle")
+                expect(name(nil, "#rifle", "weapon_rifle", localize)).to.equal("Localized Rifle")
+                expect(name("weapon_rifle", "#rifle", "weapon_rifle", localize)).to.equal("Localized Rifle")
+                expect(name("", "#rifle", "weapon_rifle", localize)).to.equal("Localized Rifle")
+            end
+        },
+        {
             name = "Names: long localized UTF-8 nicknames and weapon names fit without byte splitting",
             func = function()
                 -- Cyrillic letters encoded explicitly: repository prose stays English.

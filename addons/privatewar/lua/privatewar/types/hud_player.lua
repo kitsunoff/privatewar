@@ -39,6 +39,8 @@
 ---@field _PlayerLayout fun(width: number, height: number, out: table): PW.PlayerHudLayout
 ---@field _FitText fun(text: string, width: number, measure: fun(text: string): number): string
 ---@field _WeaponModel PW.WeaponHudUpdate
+---@field _WeaponReady fun(state: PW.HudWeaponModel, player: any, weapon: any, visible: boolean): boolean
+---@field _WeaponName fun(adapter: string?, engine: string, class: string, localize: fun(s: string): string): string
 ---@field _NativeHidden fun(name: string, registry: PW.Registry?, phase: PW.PhaseName, active: boolean): boolean
 ---@field PlayerVisible? fun(): boolean client: the living local player, never an observed player
 ---@field WeaponState? PW.HudWeaponModel client: snapshot collected outside HUDPaint

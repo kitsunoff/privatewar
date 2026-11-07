@@ -8,7 +8,26 @@ end
 
 return {
     groupName = "PW HUD vitals",
+    beforeEach = function(state)
+        state.calls = PW._Call
+        PW._Call = { log = function() end, failed = setmetatable({}, { __mode = "k" }), profile = {} }
+    end,
+    afterEach = function(state)
+        PW._Call = state.calls
+    end,
     cases = {
+        {
+            name = "Player HUD elements are registered with LIVE-only phases and separate draw order",
+            func = function()
+                assert(PW.Hud ~= nil, "HUD registry required")
+                local vitals, weapon = PW.Hud.Get("vitals"), PW.Hud.Get("weapon")
+                assert(vitals ~= nil and weapon ~= nil, "both player HUD elements must load on the server")
+                expect(vitals.Phases).to.deepEqual({ "LIVE" })
+                expect(weapon.Phases).to.deepEqual({ "LIVE" })
+                expect(vitals.Order).to.equal(25)
+                expect(weapon.Order).to.equal(26)
+            end
+        },
         {
             name = "Health fraction: zero half full clamp out-of-range and invalid maximum are safe",
             func = function()
@@ -115,6 +134,27 @@ return {
                 hud()._Paint(hud()._NewState(), registry, "LIVE")
                 expect(hud()._NativeHidden("CHudHealth", registry, "LIVE", true)).to.beFalse()
                 expect(hud()._NativeHidden("CHudAmmo", registry, "LIVE", true)).to.beFalse()
+                registry._Release()
+            end
+        },
+        {
+            name = "Native panels: ShouldDraw error restores vanilla without hiding another element",
+            func = function()
+                local registry = PW.Registry.New("test_hud_veto_error", { log = function() end })
+                local visible = true
+                registry.Register({
+                    ShouldDraw = function()
+                        if not visible then error("visibility failed") end
+                        return true
+                    end,
+                    Draw = function() end
+                }, "vitals")
+                registry.Register({ Draw = function() end }, "weapon")
+                registry.ResolveAll()
+                hud()._Paint(hud()._NewState(), registry, "LIVE")
+                visible = false
+                expect(hud()._NativeHidden("CHudHealth", registry, "LIVE", true)).to.beFalse()
+                expect(hud()._NativeHidden("CHudAmmo", registry, "LIVE", true)).to.beTrue()
                 registry._Release()
             end
         }
