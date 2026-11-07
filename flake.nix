@@ -68,6 +68,7 @@
         pkgs.markdownlint-cli2
         pkgs.luajit
         pkgs.coreutils
+        pkgs.gnused
         pkgs.gnumake
         pkgs.jq
         pkgs.rsync
@@ -78,7 +79,8 @@
         pkgs: self': name:
         pkgs.writeShellApplication {
           name = "pw-gate-${name}";
-          runtimeInputs = toolsFor pkgs self' ++ [ pkgs.openssh ];
+          # Keep macOS SSH (including its supported user-config options); Linux needs a supplied client.
+          runtimeInputs = toolsFor pkgs self' ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.openssh ];
           text = ''
             export PW_GLUA_API=${glua-api-snippets}
             export PW_GLUATEST=${gluatest}
@@ -118,6 +120,7 @@
             nativeBuildInputs = toolsFor pkgs self';
             PW_GLUA_API = glua-api-snippets;
             PW_GLUATEST = gluatest;
+            PW_TEST_GATE = pkgs.lib.getExe (gateCommand pkgs self' "test");
           }
           ''
             cp --recursive ${gateSource pkgs} src
@@ -162,6 +165,7 @@
             packages = toolsFor pkgs self' ++ gitHooks.enabledPackages;
             PW_GLUA_API = glua-api-snippets;
             PW_GLUATEST = gluatest;
+            PW_TEST_GATE = pkgs.lib.getExe (gateCommand pkgs self' "test");
             shellHook = ''
               ${gitHooks.shellHook}
               # LuaLS reads the GMod annotations and GLuaTest types from stable paths named in .luarc.json.
