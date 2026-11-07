@@ -37,5 +37,7 @@ The root GPL-3.0-or-later license applies; no third-party code or assets are bun
 
 ## Verification status
 
-This implementation is in development. Local runtime, lifecycle and real-engine smoke tests still need
-their post-implementation gates. Human/P2P and HUD visual checkpoints are not passed by automated tests.
+This implementation is in development. Installed lifecycle and native-fists smoke checks pass. The full
+merge gate remains incomplete: a generic MatchEnd reset dependency is RED, and the ordinary POSTMATCH
+screen still ranks FFA by kills rather than personal round wins. LIVE HUD captures have been inspected;
+human/P2P and HUD visual checkpoints are not passed by automated tests or agent inspection.

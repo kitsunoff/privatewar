@@ -76,3 +76,35 @@ function lib.Decode(reader)
     end
     return incoming
 end
+
+-- Final presentation is intentionally independent of ordinary score/kills, XP and money.
+function lib.Results(rows, ownId)
+    ---@type PW.InfectionResultRow[]
+    local clean = {}
+    ---@type table<integer, boolean>
+    local seen = {}
+    for _, row in ipairs(rows) do
+        if not integer(row.id, 4294967295) or seen[row.id] or not isstring(row.name)
+            or not integer(row.wins, 255) or not integer(row.infections or 0, 65535) then return nil end
+        seen[row.id] = true
+        clean[#clean + 1] = { id = row.id, name = row.name, wins = row.wins, infections = row.infections or 0 }
+    end
+    table.sort(clean, function(a, b)
+        if a.wins ~= b.wins then return a.wins > b.wins end
+        local an, bn = string.lower(a.name), string.lower(b.name)
+        if an ~= bn then return an < bn end
+        return a.id < b.id
+    end)
+    local ownWins = 0
+    ---@type integer?
+    local ownPlace
+    for index, row in ipairs(clean) do
+        local previous = clean[index - 1]
+        row.place = previous ~= nil and previous.wins == row.wins and previous.place or index
+        if row.id == ownId then ownWins, ownPlace = row.wins, row.place end
+    end
+    local top = clean[1]
+    local draw = top == nil or (clean[2] ~= nil and clean[2].wins == top.wins)
+    return { rows = clean, personalWins = ownWins, place = ownPlace, draw = draw,
+        winner = not draw and top ~= nil and top.id or nil }
+end

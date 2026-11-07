@@ -67,6 +67,12 @@ plain identity-keyed data, never engine entities. Humans use SteamID64 identitie
 UserID. At result publication the addon maps identities back to current actors or saved numeric UserIDs
 for departed participants; it never calls a method on a departed invalid player.
 
+`PW.InfectionPresentation.Results(rows, ownId)` is the addon-owned pure final presenter. It copies and
+allowlists public row identity/name, wins and informational infections, ranks by wins alone, and assigns
+shared places to ties. Infection count never decides a tie. The ordinary postmatch UI still needs an
+approved generic data-extension seam before this presenter can replace its kill-based FFA ordering;
+the addon does not wrap that UI or award artificial score/XP to work around the missing integration.
+
 ## Tests and limitations
 
 - `mode_infection.lua`: optional source boundary, seed, conversion, exact outcomes and personal standings.
@@ -82,4 +88,5 @@ for departed participants; it never calls a method on a departed invalid player.
 
 Source presence, not successful API registration, determines optional-addon test absence. A mounted
 broken implementation fails. No automated suite substitutes for the human HUD, gameplay or P2P checkpoint.
-Post-implementation type/full game gates and the removal-between-startups matrix are not yet verified.
+The full game gate currently has one generic bot MatchEnd reset failure. POSTMATCH integration and the
+removal-between-startups matrix are not yet verified. LIVE HUD inspection does not pass a human checkpoint.
