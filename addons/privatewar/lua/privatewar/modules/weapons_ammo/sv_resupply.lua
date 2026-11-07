@@ -44,10 +44,11 @@ end
 function lib.DamageWeapon(owner, dmg)
     if not IsValid(owner) or not owner:IsPlayer() or dmg == nil then return nil, false end
     local inflictor = dmg:GetInflictor()
-    local weapon = IsValid(inflictor) and inflictor:IsWeapon()
-    local active = inflictor == owner and owner:GetActiveWeapon() or nil
-    local direct = dmg:IsDamageType(bit.bor(DMG_BULLET, DMG_BUCKSHOT, DMG_CLUB, DMG_SLASH))
+    local weapon = inflictor ~= owner and IsValid(inflictor) and inflictor:IsWeapon()
+    local direct = isfunction(dmg.IsDamageType)
+        and dmg:IsDamageType(bit.bor(DMG_BULLET, DMG_BUCKSHOT, DMG_CLUB, DMG_SLASH))
         and not dmg:IsDamageType(bit.bor(DMG_BLAST, DMG_BURN, DMG_FALL))
+    local active = direct and inflictor == owner and owner:GetActiveWeapon() or nil
     local kind, eligible = lib._DamageSource({
         weapon = weapon, owned = weapon and owned(inflictor --[[@as Weapon]], owner),
         grenade = weapon and (inflictor --[[@as table]]).PWGrenade == true,

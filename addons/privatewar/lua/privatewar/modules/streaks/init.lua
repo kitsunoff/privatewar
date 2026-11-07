@@ -132,10 +132,11 @@ end
 function lib.SnapshotDeath(ply)
     local s = store()
     s.deathSnapshots = s.deathSnapshots or setmetatable({}, { __mode = "k" })
-    if s.deathSnapshots[ply] == nil then
-        s.deathSnapshots[ply] = s.setting("persist") == true or s.persist(ply)
-    end
-    return s.deathSnapshots[ply]
+    if s.deathSnapshots[ply] ~= nil then return s.deathSnapshots[ply] end
+    local persist = s.setting("persist") == true or s.persist(ply)
+    local perks = rawget(PW, "Perks") --[[@as PW.PerksLib?]]
+    if perks ~= nil and #perks.Get(ply) > 0 then s.deathSnapshots[ply] = persist end
+    return persist
 end
 
 function lib._OnDeath(ply)

@@ -84,6 +84,21 @@ return {
     end,
     cases = {
         {
+            name = "Flash stacking: a weaker simultaneous flash never erases stronger remaining ordinary impairment",
+            func = function()
+                local lib = must(PW.Throwables)
+                withBlindPackets(function()
+                    for _, bot in ipairs({ false, true }) do
+                        local ply = participant(bot)
+                        lib.Blind(ply, 1)
+                        lib.Blind(ply, 0.1)
+                        expect(api(lib, "Impairment")(ply, CurTime() + 1) > 0.5).to.beTrue()
+                        api(lib, "ClearBlind")(ply)
+                    end
+                end)
+            end
+        },
+        {
             name = "Fleet Foot: ordinary walk run use 1.10 baseline once equally for humans and bots without healing",
             func = function(state)
                 for _, bot in ipairs({ false, true }) do

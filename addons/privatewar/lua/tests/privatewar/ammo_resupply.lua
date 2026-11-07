@@ -40,6 +40,21 @@ return {
     groupName = "PW capped ordinary reserve resupply",
     cases = {
         {
+            name = "Provenance: autonomous streak damage cannot borrow an owned active gun for XP or scavenging",
+            func = function()
+                local owner, _, weapon = participant(false)
+                local dmg = { GetInflictor = function() return weapon end,
+                    IsDamageType = function(_, mask) return bit.band(DMG_BULLET, mask) ~= 0 end }
+                ---@type any, boolean?
+                local result, direct
+                assert(PW.Streaks).StreakDamage(function()
+                    result, direct = PW.WeaponAmmo.DamageWeapon(owner, dmg --[[@as CTakeDamageInfo]])
+                end)
+                expect(result).to.beNil()
+                expect(direct).to.beFalse()
+            end
+        },
+        {
             name = "Resupply: half magazine floor minimum one and three magazine cap",
             func = function()
                 local amount = api("_ResupplyAmount")

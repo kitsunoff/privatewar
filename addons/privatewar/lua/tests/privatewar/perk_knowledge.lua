@@ -28,6 +28,7 @@ local function participant(index, bot)
         IsBot = function() return bot end, Alive = function() return true end,
         EntIndex = function() return index end, Team = function() return index end,
         IsSprinting = function() return true end, GetVelocity = function() return Vector(200, 0, 0) end,
+        GetSliding = function() return false end,
         GetPos = function() return Vector(index, 0, 0) end,
         GetNW2Bool = function(_, key, default) if nw[key] == nil then return default end return nw[key] end,
         SetNW2Bool = function(_, key, value) nw[key] = value end
