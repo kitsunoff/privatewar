@@ -65,6 +65,11 @@
 ---@field Encode fun(writer: PW.InfectionWriter, incoming: table<string, any>): boolean validate before any write
 ---@field Decode fun(reader: PW.InfectionReader): table<string, any>
 ---@field Results fun(rows: PW.InfectionResultRow[], ownId: integer): PW.InfectionResultModel?
+---@field ResultChunk fun(current: PW.InfectionResultAssembly?, incoming: PW.InfectionResultChunk):
+---    PW.InfectionResultAssembly?, PW.InfectionTerminal?
+---@field EncodeResults fun(writer: PW.InfectionResultWriter, chunk: PW.InfectionResultChunk): boolean
+---@field DecodeResults fun(reader: PW.InfectionResultReader): PW.InfectionResultChunk
+---@field ApplyPostmatch fun(data: PW.UIPostmatchData, terminal: PW.InfectionTerminal, ownId: integer)
 
 ---@class PW.InfectionResultRow
 ---@field id integer public session UserID, not an engine entity
@@ -72,6 +77,34 @@
 ---@field wins integer
 ---@field infections? integer informational, never a rank tiebreaker
 ---@field place? integer output only
+---@field bot? boolean
+---@field kills? integer
+---@field deaths? integer
+
+---@class PW.InfectionTerminal
+---@field revision integer
+---@field active boolean
+---@field ownId integer authoritative association to a participant row; 0 for an unadmitted late viewer
+---@field rows PW.InfectionResultRow[] includes departed participants, never entities or SteamIDs
+
+---@class PW.InfectionResultChunk : PW.InfectionTerminal
+---@field total? integer total rows in this revision, maximum 4096
+---@field offset? integer zero-based position of this bounded chunk, maximum 64 rows per packet
+
+---@class PW.InfectionResultAssembly : PW.InfectionTerminal
+---@field total integer
+---@field seen table<integer, boolean>
+
+---@class PW.InfectionResultWriter : PW.InfectionWriter
+---@field string fun(value: string)
+
+---@class PW.InfectionResultReader : PW.InfectionReader
+---@field string fun(): string
+
+---@class PW.InfectionResultCache
+---@field revision integer
+---@field rows PW.InfectionResultRow[]
+---@field identities table<string, integer> server-only recipient association, never serialized
 
 ---@class PW.InfectionResultModel
 ---@field rows PW.InfectionResultRow[] sorted by wins with shared places
@@ -112,6 +145,8 @@
 ---@field lives table<Player, integer> per-entity new-life generation, weak keys
 ---@field history table<string, Player> last entity of each participant for final standings
 ---@field userIds table<string, integer> safe result identity for departed participants
+---@field metadata? table<string, PW.InfectionResultRow> copied public identity/stat metadata for departed rows
+---@field deathBaselines? table<string, integer>
 ---@field infections table<string, integer> informational counters, never score events
 ---@field previous? string previous seed identity
 ---@field round integer
@@ -135,6 +170,13 @@
 ---@field State? PW.InfectionState server-owned, read-only to consumers
 ---@field View? PW.InfectionSnapshot client-owned accepted snapshot
 ---@field Revision integer persistent monotonic outgoing revision
+---@field ResultRevision? integer separate persistent monotonic terminal generation
+---@field ResultCache? PW.InfectionResultCache server-owned terminal data until leaving POSTMATCH
+---@field Terminal? PW.InfectionTerminal client accepted complete terminal snapshot only
+---@field Assembly? PW.InfectionResultAssembly client partial bounded receive state
+---@field ResetResults fun()
+---@field PublishResults fun(summary: PW.InfectionSummary)
+---@field SendResults fun(ply: Player)
 ---@field Identity fun(ply: Player): string
 ---@field Role fun(ply: Player): PW.InfectionRole?
 ---@field Active fun(): boolean
