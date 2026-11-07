@@ -40,3 +40,8 @@ Types: `lua/privatewar/types/role_policy.lua`. Regression tests: `role_policy.lu
 
 See [teams](teams.md), [player overrides](player-overrides.md) and [operators](operators.md) for synchronous
 relationship resets, post-base new-life stats and temporary appearance.
+
+`PW_ObjectiveInvalidated(id, revision)` also synchronously ends matching running or suspended brain
+`objective` frames. The objective owner records the visit in `ctx.state.id` / `ctx.state.revision`; normal
+`OnEnd` releases the action's owned input bits. Old revisions and duplicate invalidations are no-ops.
+Commander remains the sole owner of orders and hunt slots; no foreign state is cleared by the brain.

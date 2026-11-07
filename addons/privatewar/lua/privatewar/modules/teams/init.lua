@@ -31,17 +31,19 @@ function lib.Transition(ply, to, reason)
         or not destination(ply:Team(), n) then return false, "not admitted" end
     if not destination(to, n) or not isstring(reason) or not reasons[reason] then return false, "invalid request" end
     local from = ply:Team()
-    if PW.Ask("PW_CanChangeTeam", ply, from, to, reason) ~= true then return false, "unauthorized" end
-    if from == to then return true end
     changing = true
-    local ok, err = pcall(function()
+    local ok, result, note = pcall(function()
+        if PW.Ask("PW_CanChangeTeam", ply, from, to, reason) ~= true then return false, "unauthorized" end
+        if PW.ActiveMode ~= mode or match.GetPhase() ~= "LIVE" then return false, "inactive" end
+        if from == to then return true end
         PW.Notify("PW_PlayerTeamChanging", ply, from, to, reason)
         ply:SetTeam(to)
         PW.Notify("PW_PlayerTeamChanged", ply, from, to, reason)
+        return true
     end)
     changing = false
-    if not ok then error(err, 0) end
-    return true
+    if not ok then error(result, 0) end
+    return result, note
 end
 
 ---Every player in join order (UserID), so the assignment is deterministic.

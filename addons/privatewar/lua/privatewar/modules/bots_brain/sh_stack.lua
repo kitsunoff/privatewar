@@ -413,3 +413,28 @@ function lib.Stop(state, env, now, reason)
     state.ctx.running = nil
     writeDebug(state, env)
 end
+
+---@param state PW.BotBrainState
+---@param env PW.BotBrainEnv
+---@param now number
+---@param id string
+---@param revision integer
+function lib._InvalidateObjective(state, env, now, id, revision)
+    refreshCtx(state, env, now)
+    local changed = false
+    for i = #state.stack, 1, -1 do
+        local frame = state.stack[i]
+        if frame.id == "objective" and frame.state.id == id and frame.state.revision == revision then
+            callFrame(state, env, frame, "OnEnd")
+            table.remove(state.stack, i)
+            state.evals[frame.id], state.cooldowns[frame.id] = nil, nil
+            changed = true
+        end
+    end
+    if changed then
+        state.ctx.lastObjective, state.ctx.facts, state.ctx.factsAt = nil, nil, nil
+        refreshCtx(state, env, now)
+        releaseLegs(state, env.board)
+        writeDebug(state, env)
+    end
+end

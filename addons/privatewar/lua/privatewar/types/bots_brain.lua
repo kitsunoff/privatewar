@@ -149,6 +149,9 @@ BEHAVIOR = nil
 ---@field Stop fun(state: PW.BotBrainState, env: PW.BotBrainEnv, now: number, reason: string)
 ---The ids of the stack, bottom first.
 ---@field StackIds fun(state: PW.BotBrainState): string[]
+---Internal synchronous old-visit cleanup, including a suspended objective frame.
+---@field _InvalidateObjective fun(state: PW.BotBrainState, env: PW.BotBrainEnv, now: number,
+---    id: string, revision: integer)
 
 ---Internal (server): state of the module.
 ---@class PW.BotBrainStore
