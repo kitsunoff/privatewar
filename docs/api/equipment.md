@@ -111,9 +111,9 @@ grenade SWEPs are first given, after the perks and wildcards of the loadout are 
 order). A perk answers it from its instance: `self:Hook("PW_EquipmentCount", function(perk, ply, slot, id, count) ...
 end)`.
 
-### Planned deterministic additive count sources
+### Deterministic additive count sources
 
-Approved by `design/05-loadout.md` d.16; test-first, **not implemented or mounted-verified yet**.
+Approved by `design/05-loadout.md` d.16; implemented after observed test-first RED.
 The legacy question above retains its first-answer meaning. It is not converted into a chain.
 
 - `PW.Equipment.CountSource(ply, id, fn?)`: register/replace an owner-local additive source;
@@ -173,6 +173,8 @@ only. Live projectiles are removed without detonating at the end of the match (`
 | --- | --- |
 | `Flash` | `{ radius = 1500, near = 300, behind = 0.2, maxTime = 4, minStrength = 0.05 }` |
 | `Blind(ply, strength)` | Server. Returns whether it blinded; does nothing below `minStrength`. For a human it sends `pw_blind` and, at strength 0.5 or more, sets the ringing DSP; for everyone (bots too) it notifies `PW_Blinded` |
+| `Impairment(ply, now?)` | Server. Current ordinary blind alpha from the authoritative resolved strength/start time; 0 without active status. Bot sight and firing use the same status and expiry, without changing difficulty or erasing memory |
+| `ClearBlind(ply)`, `ClearBlinds()` | Server. Release one/all owned flash statuses, expiry timers, DSP and human overlays. Death, disconnect, match end and throwables disable clean up owned state; round lifecycle owners may call `ClearBlinds` |
 | `FlashAt(pos, inflictor?)` | Server. Blinds every living player within `radius` of `pos` by line of sight, angle and distance; returns how many were blinded |
 | `Blinded` | Client. `{ strength, at }`: the blind being shown (strength 0 = none) and its start time |
 | `_Launch`, `_Fuse`, `_FlashStrength`, `_BlindTime`, `_BlindAlpha`, `_EncodeStrength`, `_DecodeStrength` | Pure helpers (tests) |
@@ -190,7 +192,11 @@ factor is 1 when the player faces the flash within 60 degrees, down to 0.2 when 
 
 `PW_Blinded(ply, strength, seconds)`: notification (`PW.Notify`), server. Fired by `PW.Throwables.Blind` for every
 blinded player, bots included, so the bot perception may listen. `strength` is 0..1, `seconds` is the blind duration.
-Bots do not react to it yet.
+Flash resistance scales strength before this notification. The resolved 8-bit strength and
+its derived duration are identical for human packets and bot status. A weaker simultaneous
+flash cannot shorten a stronger remaining status. Ordinary bots suppress new visual
+recognition and weapon firing while impairment exceeds 0.05; legitimate old memory and
+nonvisual awareness are not deleted. Difficulty parameters and recoil compensation are unchanged.
 
 ## Bots
 

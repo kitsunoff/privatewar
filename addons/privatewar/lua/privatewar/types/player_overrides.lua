@@ -7,6 +7,8 @@
 ---@field runSpeedMult? number finite positive, relative to ordinary postspawn baseline
 
 ---@alias PW.PlayerOverridesQuestion fun(ply: Player): PW.PlayerOverrideProfile?
+---@alias PW.PlayerStatsChangedNotification fun(ply: Player)
+---@alias PW.FallDamageBaselineQuestion fun(ply: Player, speed: number): number?
 ---@alias PW.PlayerModelOverrideQuestion fun(ply: Player): string?
 
 ---@class PW.PlayerOverrideBaseline

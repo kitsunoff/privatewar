@@ -60,7 +60,9 @@ Weapon keys (`reload_time`, `draw_time`, `ads_time`, `sprint_to_fire`, `recoil`,
 `PW.StatMods._Keys` when present) are also sent to the weapon base through `PW.SetStatMods(ply, mods)`, only when
 they changed. A base honours a key only if its adapter lists it in `SupportedStatMods`. **The HL2 fallback adapter
 supports no stat mods, so the stat perks (Ready Up, Sleight of Hand) have no visible effect on HL2 weapons.** Player
-stats (such as `move_speed`) are computed and readable through `PW.Stat`, but nothing applies them yet.
+stats require an explicit consumer: `move_speed` applies to ordinary walk/run through
+`PW.PlayerOverrides`; `fall_damage` scales the ordinary fall baseline once; `flash_strength`
+resolves flash impairment before human packets/DSP and bot perception/aim.
 
 ## `PW.Perks`
 
@@ -95,11 +97,11 @@ empty weapon mods. Hooks and timers made through `self:Hook` and `self:Timer` en
 Presets: Assault `flak_jacket`, `sleight_of_hand`, `adrenaline`; Close quarters and Run and gun `ready_up`,
 `sleight_of_hand`, `adrenaline` (see `loadout.md`).
 
-## Approved expansion contract (test-first)
+## Approved expansion contract
 
 `design/05-loadout.md` d.16 freezes all twelve additional perks, groups, costs, unlocks,
-strengths and information boundaries. This section describes the pending integration contract,
-**not an implementation or mounted-test pass**. The existing four remain unchanged.
+strengths and information boundaries. All twelve are implemented; their focused tests precede
+runtime. Automated and manual acceptance are separate. The existing four remain unchanged.
 
 - New player stat consumers: `move_speed` through `PW.PlayerOverrides`, `fall_damage` once
   against the ordinary fall baseline, and `flash_strength` before flash duration/network/DSP
@@ -118,12 +120,15 @@ strengths and information boundaries. This section describes the pending integra
   1.5-second `PW.Reveal` pulse. `_RetaliationEligible(facts)` is the pure eligibility seam.
 - Death persistence must be sampled before either owner's cleanup runs. Streaks keep a
   per-life snapshot until the next spawn, so either `PostPlayerDeath` listener order works;
-  duplicate cleanup cannot change it. Normal next-life persistence and inventory semantics
-  remain unchanged. Role revocation never becomes death persistence.
+  duplicate cleanup cannot change it. `PW.Streaks.SnapshotDeath(ply)` samples an equipped
+  perk lifetime; legacy persistence questions outside perk cleanup remain live queries.
+  Normal next-life persistence and inventory semantics remain unchanged. Role revocation
+  never becomes death persistence.
 - Content/module disable must synchronously revoke owned hooks, cached/replicated state and
-  player effects. Re-enable alone does not re-equip an old life. The registry currently lacks
-  a disable notification; the core owner must supply a generic lifecycle seam before this
-  requirement can be implemented without wrapping another module or relying on polling.
+  player effects. Re-enable alone does not re-equip an old life. Core's
+  `PW_EntityDisabled(kind, id, definition, reason)` first ends exact-definition instances;
+  the perks cleanup-only observer then removes only matching owner entries and recomputes.
+  A disabled perks module revokes all its owners without relying on its removed gameplay hooks.
 - `PW.LoadoutUI.PerkDescription(definition, selectedWeaponClasses)` uses each selected
   adapter's `SupportedStatMods` to append an unsupported-key warning. Picks stay valid;
   unsupported bases do not silently become compatible. Stock-footstep/custom-sound and
@@ -133,6 +138,8 @@ Equipment contribution and ordinary reserve contracts are in [equipment](equipme
 [adapter](adapter.md). New tests: `perk_candidates.lua`, `perk_knowledge.lua`,
 `perk_lifecycle.lua`, `perk_player_effects.lua`, `perk_rewards.lua`, `perk_support_ui.lua`.
 Existing T-4.4 and grenade/cooking, bot loadout and progression cases remain mandatory.
+`perk_engine_smoke.lua` also exercises actual player-bot grenade ammo, walk/run restoration,
+replicated footsteps and ordinary flash gating through the public owner APIs.
 
 ## Mandatory cases
 

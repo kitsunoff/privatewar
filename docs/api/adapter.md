@@ -495,7 +495,7 @@ The setting is read when `Give` runs, as a non-negative integer (a non-number re
 ### Ordinary-reserve resupply extension
 
 Approved consumer requirements: `design/05-loadout.md` d.16 and support-streak cache.
-The following contract is implemented after observed GLuaTest RED; mounted verification is pending.
+The following contract is implemented after observed GLuaTest RED.
 Spawn-only `Give` and delayed base-default-ammo suppression remain unchanged.
 
 - `PW.WeaponAmmo.Resupply(ply, weapons, opts?) -> table<integer, integer>`: server-authoritative
@@ -519,6 +519,9 @@ Spawn-only `Give` and delayed base-default-ammo suppression remain unchanged.
   unrelated held gun is never substituted for world/projectile/streak damage. The active
   weapon fallback is allowed only when the inflictor is the player and the damage is a
   direct weapon hit, not an autonomous or delayed nonweapon effect.
+- `PW.Streaks.IsDamage()` exposes only whether execution is inside the authoritative
+  `StreakDamage` callback. Provenance rejects that origin before attributing a weapon;
+  score events and player XP still occur normally, without unrelated held-weapon XP.
 - `_DamageSource(facts)` is the pure provenance classifier used by the engine wrapper.
   Match kill scoring uses proven attribution without changing player score/XP rewards.
 

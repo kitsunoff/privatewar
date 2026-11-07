@@ -25,3 +25,17 @@ Generic optional module `player_overrides`; types `lua/privatewar/types/player_o
 The Infection provider supplies max/spawn health 400, walk/run multipliers 1.15 for either actor type.
 Jump and stock `weapon_fists` damage remain unchanged. These are role rules, never bot-only bonuses.
 Tests: `player_overrides.lua`, `infection_presentation.lua`; no runtime/model availability pass is implied.
+
+## Ordinary perk movement and falls
+
+The cached `PW.Stat(ply, "move_speed", 1)` composes with the role's walk/run multipliers,
+relative to the same ordinary baseline. `PW_PlayerStatsChanged(ply)` refreshes this owner
+after perk recompute/removal; it never applies spawn health again or multiplies current speeds.
+With neither role nor movement modifier, release restores the ordinary baseline.
+Jump, crouch, slide and special ADS movement are not independently modified.
+
+The owner also consumes `fall_damage` once in `GetFallDamage`. The question
+`PW_FallDamageBaseline(ply, speed) -> number?` can supply an ordinary numeric baseline;
+otherwise the gamemode's ordinary `GetFallDamage` method supplies it. With identity multiplier,
+the hook returns nil and leaves ordinary fall processing untouched. No extra damage event,
+physics mutation or navigation exception is introduced.
