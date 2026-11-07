@@ -194,9 +194,9 @@
 ---Uniquely named timer.Create(delay, reps, ...) through PW.Call; fn receives the instance. Removed when the
 ---instance ends.
 ---@field Timer fun(self: PW.Instance, delay: number, reps: integer, fn: fun(self: PW.Instance))
----Ends the instance: blocks gameplay, invokes OnUnequip(owner) once through protected cleanup-only pcall even
+---Ends the instance: blocks gameplay, invokes OnUnequip(owner) once through protected cleanup-only PW.Call even
 ---after failure/definition disable, then removes hooks, timers and the live entry regardless of cleanup errors.
----Reentrant/repeated calls do nothing. Cleanup never disables the definition or resumes ordinary PW.Call.
+---Reentrant/repeated calls do nothing. Cleanup is profiled, never disables the definition or resumes gameplay.
 ---@field Remove fun(self: PW.Instance)
 ---@field _Hooks table<string, true> internal: hook names the instance listens to
 ---@field _Timers table<string, true> internal: names of the instance's timers
@@ -416,6 +416,8 @@
 ---@field _EndInstances fun()
 ---Internal: synchronously removes live instances whose own _Definition is exactly definition; no id matching.
 ---@field _EndDefinitionInstances fun(definition: table)
+---Internal: consumes an existing private Remove-only admission for OnUnequip; never creates admission.
+---@field _TakeInstanceCleanup fun(entity: table, method: string): boolean
 PW = {}
 
 ---Class table inside a kinds/ file.
