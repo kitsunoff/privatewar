@@ -64,6 +64,21 @@
 ---@field Model fun(snapshot: PW.InfectionSnapshot, now: number): table<string, any>
 ---@field Encode fun(writer: PW.InfectionWriter, incoming: table<string, any>): boolean validate before any write
 ---@field Decode fun(reader: PW.InfectionReader): table<string, any>
+---@field Results fun(rows: PW.InfectionResultRow[], ownId: integer): PW.InfectionResultModel?
+
+---@class PW.InfectionResultRow
+---@field id integer public session UserID, not an engine entity
+---@field name string
+---@field wins integer
+---@field infections? integer informational, never a rank tiebreaker
+---@field place? integer output only
+
+---@class PW.InfectionResultModel
+---@field rows PW.InfectionResultRow[] sorted by wins with shared places
+---@field personalWins integer
+---@field place? integer
+---@field draw boolean
+---@field winner? integer
 
 ---@class PW.InfectionWriter
 ---@field uint fun(value: integer, bits: integer)

@@ -14,6 +14,32 @@ return {
     groupName = "PW Infection runtime contracts",
     cases = {
         {
+            name = "Infection final presentation: round wins alone rank and tie;"
+                .. " infections never break a shared top",
+            skip = absent,
+            func = function()
+                local presentation = must(PW.InfectionPresentation)
+                ---@type PW.InfectionResultRow[]
+                local input = { { id = 1, name = "Host", wins = 0, infections = 99 },
+                    { id = 2, name = "Alpha", wins = 1, infections = 0 },
+                    { id = 3, name = "Bravo", wins = 1, infections = 8 } }
+                local result = must(presentation.Results(input, 1))
+                expect(result.draw).to.beTrue()
+                expect(result.winner).to.beNil()
+                expect(result.personalWins).to.equal(0)
+                expect(result.place).to.equal(3)
+                expect({ result.rows[1].id, result.rows[2].id, result.rows[3].id }).to.deepEqual({ 2, 3, 1 })
+                expect({ result.rows[1].place, result.rows[2].place, result.rows[3].place }).to.deepEqual({ 1, 1, 3 })
+                expect(input[1].place).to.beNil()
+                input[3].wins = 2
+                result = must(presentation.Results(input, 3))
+                expect(result.draw).to.beFalse()
+                expect(result.winner).to.equal(3)
+                expect(result.personalWins).to.equal(2)
+                expect(result.place).to.equal(1)
+            end
+        },
+        {
             name = "Infection preset: separate optional mode uses fixed-total common rounds, 3 default and 1 allowed",
             skip = absent,
             func = function()
