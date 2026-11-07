@@ -29,7 +29,7 @@ For an agent that picks the work up in the middle (for example Codex after Claud
 
 ### Publishing
 
-The public repository is generated, never edited by hand: `bash scripts/export/public.sh <empty-dir>` builds it from `HEAD`, drops the paths in `scripts/export/local-only.txt` (the local manual checklist among them) and fails on Cyrillic or private terms. Public text is English only. See `docs/publishing.md`.
+Develop directly in this canonical repository (`kitsunoff/privatewar`), on feature branches and through reviewed PRs, draft by default. The former research checkout is historical only. Push only with the user's authorization; show the PR title and body and obtain approval before creating it. Merging requires separate explicit user approval. Public text is English only; private content must stay outside the public repository and any published tree. `scripts/export/public.sh` remains optional tooling for a filtered snapshot, not a required development step. See `docs/publishing.md`.
 
 ### Current state (2026-11-07 evening)
 
@@ -44,7 +44,7 @@ The public repository is generated, never edited by hand: `bash scripts/export/p
 2. Task order: lowest-numbered task whose dependencies are merged; skip anything blocked by an open design question (`D1`-`D4`) or marked "pending confirmation"; collect those for the user. The full orchestration rules (briefs, model choice, hard rules) are in `.claude/commands/orchestrate.md`; they apply to any agent.
 3. The merge gate, run in the agent's worktree after merging the latest `main` into the branch: `nix develop --command make check` and `nix develop --command make test`, both green (run them with `set -o pipefail` so a failure inside a pipe is not hidden). Plus: scope check with `git diff --stat main...<branch>` (only the lane's directories, `lua/privatewar/types/`, `lua/tests/privatewar/`), and every mandatory test case below exists by name and is not weakened.
 4. Copy the git-ignored `.deck.env` (Deck address) from the main checkout into every new worktree.
-5. Merge locally: `git checkout main && git merge --no-ff --signoff <branch>`. There is no remote and no pull request yet; if a remote appears, ask the user before switching to PRs.
+5. Never commit or merge locally on `main`. After review and green gates, request authorization to push the feature branch if not already granted. Show the draft PR title and body and obtain the user's approval before `gh pr create --draft`. Merge only with separate explicit user approval, using `gh pr merge --squash --delete-branch` after the PR is ready. No push, PR creation or merge is automatic.
 6. Commits: `git commit --signoff`, semantic message, trailer `Assisted-by: LLM` only. Never `--no-verify`.
 
 ### Steam Deck rules
@@ -56,11 +56,11 @@ The public repository is generated, never edited by hand: `bash scripts/export/p
 
 ### Manual checks and pending decisions
 
-The local manual checklist (not published; the file is listed in `scripts/export/local-only.txt` and stays tracked only in the private development repository) is the place for everything a human must check in the game and for decisions taken by recommendation (its section 7). It may be written in the maintainer's language, but nothing from it is ever published; public text is English only. When a decision is marked "pending confirmation" here or in `design/`, implement the recommendation and add an item there; the user confirms or corrects it later. Do not stop the run for it.
+The local manual checklist (not published; its path is listed in `scripts/export/local-only.txt` and it must stay outside the public repository and any published tree) is the place for everything a human must check in the game and for decisions taken by recommendation (its section 7). It may be written in the maintainer's language, but nothing from it is ever published; public text is English only. When a decision is marked "pending confirmation" here or in `design/`, implement the recommendation and add an item there; the user confirms or corrects it later. Do not stop the run for it.
 
 ## Toolchain
 
-Everything comes from `flake.nix` (`nix develop`, or direnv `use flake`). Agents run commands through `nix develop --command <cmd>` because their shells are non-interactive.
+Lint, type and test tools come from `flake.nix` (`nix develop`, or direnv `use flake`). Agents run these commands through `nix develop --command <cmd>` because their shells are non-interactive. Run ordinary git commands directly in your own worktree.
 
 **Rule: nothing is built from source.** A tool missing from nixpkgs is packaged from its **release binary** under the nixpkgs naming convention `<name>-bin`.
 
@@ -142,7 +142,7 @@ scripts/deck/
 | Unit and integration tests | **GLuaTest** (`CFC-Servers/GLuaTest`, GPL-3.0, active) | RSpec/Jest-like syntax, `expect`, `stub`, async cases; runs in a real server, so engine APIs, hooks, timers and bots are testable |
 | Local loop | GLuaTest in the dev server's `addons/` | Tests run on server start; re-run with `pw_reload` / restart |
 | Headless run | GLuaTest Docker runner (`run_local.sh`) | Same runner as CI; needs Docker compose (Colima `nerdctl compose`); x86 server image on Apple Silicon is unverified |
-| CI (optional, when a GitHub remote exists) | GLuaTest reusable workflow on pull requests | `requirements.txt` can pull dependencies (for example weapon bases) |
+| CI (optional) | GLuaTest reusable workflow on pull requests | `requirements.txt` can pull dependencies (for example weapon bases) |
 | Lint and types (mandatory) | `glualint` (linter) + `lua-language-server --check` (type checker, GMod annotations from `luttje/glua-api-snippets`, warnings as errors) + `markdownlint-cli2` for docs + `rules` (`scripts/check/rules.sh`, below) | Enforced by `pre-commit` and the Claude Code `PostToolUse` hook (T-0.7); `make check` runs lint, types, markdown and rules; type and lint errors fail the build; disabling a rule inline or in config needs the user's approval with a written reason |
 | Rules gate (mandatory) | `make rules` (`scripts/check/rules.sh`, also a `nix flake check` and a `pre-commit` hook) | No `net.WriteTable` / `net.ReadTable` outside tests (DESIGN.md global rule 4); a Lua file at most 500 lines and a function at most 60 lines under `gamemodes/`, `lua/privatewar/` and the integration addons (global rule 3), function length measured from the `luajit -bl` prototype listing; `lua/tests/` and `addons/privatewar-dev/` are exempt |
 | Not automatable | Checkpoints (`CP-*`) | P2P, listen-server specifics, feel, visuals |
