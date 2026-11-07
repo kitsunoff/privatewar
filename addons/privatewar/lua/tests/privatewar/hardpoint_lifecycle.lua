@@ -7,7 +7,7 @@ end
 ---@return PW.HardpointMode
 local function fixture()
     return { ClassName = "hardpoint", Name = "Hardpoint fixture", Teams = 2,
-        _ScoreKey = "pw_hp_score_", Setting = function(_, key)
+        _ScoreKey = "pw_hp_score_", HudScoreKey = "pw_hp_score_", Setting = function(_, key)
         return ({ zonetime = 60, scorelimit = 250, timelimit = 600 })[key]
     end } --[[@as PW.HardpointMode]]
 end

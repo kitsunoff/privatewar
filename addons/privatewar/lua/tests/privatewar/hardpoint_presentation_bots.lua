@@ -35,6 +35,27 @@ return {
     groupName = "PW Hardpoint presentation and bot seams",
     cases = {
         {
+            name = "Hardpoint: match-status prefix reads objective points instead of inherited team kills",
+            func = function()
+                local mode = must(PW.Modes.Get("hardpoint"))
+                expect(must(PW.MatchRules)._HudScoreKey(mode)).to.equal("pw_hp_score_")
+                expect(mode.HudScoreKey).to.equal("pw_hp_score_")
+            end
+        },
+        {
+            name = "Hardpoint: control uses readable relative palette tokens rather than dark engine team colours",
+            func = function()
+                expect(lib().ControlToken(0, false, 1)).to.equal("text")
+                expect(lib().ControlToken(1, false, 1)).to.equal("team_friendly")
+                expect(lib().ControlToken(2, false, 1)).to.equal("team_enemy")
+                expect(lib().ControlToken(2, false, 2)).to.equal("team_friendly")
+                expect(lib().ControlToken(1, false, 2)).to.equal("team_enemy")
+                expect(lib().ControlToken(0, true, 1)).to.equal("warning")
+                expect(lib().ControlToken(1, true, 2)).to.equal("warning")
+                expect(lib().ControlToken(1, false, 0)).to.equal("text")
+            end
+        },
+        {
             name = "Hardpoint: rotation releases sticky holds including tiny teams",
             func = function()
                 local commander = must(PW.BotCommander)

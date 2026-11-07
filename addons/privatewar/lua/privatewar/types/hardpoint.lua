@@ -85,6 +85,7 @@
 ---@field PublicSnapshot fun(state: PW.HardpointState, revision: integer): PW.HardpointSnapshot
 ---@field AcceptSnapshot fun(current: PW.HardpointSnapshot?, incoming: PW.HardpointSnapshot): PW.HardpointSnapshot
 ---@field View fun(snapshot: PW.HardpointSnapshot, now: number, out: PW.HardpointView): PW.HardpointView
+---@field ControlToken fun(control: integer, contested: boolean, ownTeam: integer): string
 ---@field ValidateActivation fun(layout: PW.HardpointLayout,
 ---    probe: fun(zone: PW.HardpointZone): boolean): boolean, string?
 ---@field CheckActivation fun(layout: PW.HardpointLayout): boolean, string?
@@ -100,6 +101,7 @@
 ---@class PW.HardpointMode : PW.Mode
 ---@field _Hardpoint? PW.HardpointRuntime
 ---@field _ScoreKey string
+---@field HudScoreKey string public match-status score prefix, never the TDM kill counter
 
 ---@class PW.HardpointRuntime
 ---@field state PW.HardpointState
