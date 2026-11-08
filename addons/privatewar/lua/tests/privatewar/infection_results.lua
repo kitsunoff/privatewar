@@ -178,7 +178,8 @@ return {
                 local lib, owner = must(PW.Infection), must(PW.Modules.Get("pw_infection_rules"))
                 local data = { result = {}, sections = {} }
                 stub(PW.Phase, "GetPhase").with(function() return "POSTMATCH" end)
-                stub(_G, "GetGlobal2Bool").with(function() return true end)
+                -- Terminal data is authoritative even before unrelated NW2 result flags catch up.
+                stub(_G, "GetGlobal2Bool").with(function() return false end)
                 lib.Terminal = nil
                 PW.Notify("PW_PostmatchGathered", data, 7)
                 expect(data.result).to.deepEqual({})

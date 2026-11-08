@@ -16,7 +16,6 @@ include("privatewar/modules/pw_infection_rules/sh_results.lua")
 ---@param ownId integer
 function MODULE:PW_PostmatchGathered(data, ownId)
     local terminal = assert(PW.Infection).Terminal
-    if terminal == nil or not terminal.active or not GetGlobal2Bool("pw_infection_results", false)
-        or PW.Phase.GetPhase() ~= "POSTMATCH" then return end
+    if terminal == nil or not terminal.active or PW.Phase.GetPhase() ~= "POSTMATCH" then return end
     assert(PW.InfectionPresentation).ApplyPostmatch(data, terminal, ownId)
 end
