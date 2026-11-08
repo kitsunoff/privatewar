@@ -1,6 +1,7 @@
 -- Three real teammates, ordinary LIVE engine spawns and public board injection only.
 -- This controls a subsystem scenario, not production spawn fairness or an opposing-team combat checkpoint.
 local timerName, hookName = "PW.HardpointTeamSmoke", "PW.HardpointTeamInput"
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
 
 ---@class PW.HardpointTeamProbe
 ---@field bot Player
@@ -33,22 +34,28 @@ local function sample(probes, state, now)
     return completed
 end
 
+---@param test GLuaTest_TestState
+local function cleanup(test)
+    timer.Remove(timerName)
+    hook.Remove("SetupMove", hookName)
+    local cleaned, reason = true, nil
+    if test.mode ~= nil then
+        cleaned, reason = pcall(assert(PW.Hardpoint).Cleanup, test.mode)
+        PW.ActiveMode = test.originalMode
+        test.mode = nil
+    end
+    for _, probe in ipairs(test.probes or {} --[[@as PW.HardpointTeamProbe[] ]]) do
+        if IsValid(probe.bot) then
+            assert(PW.Bot).ClearGoal(probe.bot)
+            probe.bot:Kick("Hardpoint team smoke complete")
+        end
+    end
+    assert(cleaned, reason)
+end
+
 return {
     groupName = "PW Hardpoint team normal-input smoke",
-    afterAll = function(test)
-        timer.Remove(timerName)
-        hook.Remove("SetupMove", hookName)
-        if test.mode ~= nil then
-            assert(PW.Hardpoint).Cleanup(test.mode)
-            PW.ActiveMode = test.originalMode
-        end
-        for _, probe in ipairs(test.probes or {} --[[@as PW.HardpointTeamProbe[] ]]) do
-            if IsValid(probe.bot) then
-                assert(PW.Bot).ClearGoal(probe.bot)
-                probe.bot:Kick("Hardpoint team smoke complete")
-            end
-        end
-    end,
+    afterEach = cleanup,
     cases = {
         {
             name = "Hardpoint team: multiple real bots approach hold and rotate through normal CUserCmd",
@@ -123,7 +130,11 @@ return {
                     expect(ok).to.beTrue()
                     expect(count >= 2).to.beTrue()
                     expect(runtime.state.scores[1] >= 2).to.beTrue()
-                    done()
+                    cleanup(test)
+                    ---@type Player[]
+                    local owned = {}
+                    for _, probe in ipairs(probes) do owned[#owned + 1] = probe.bot end
+                    resources.Disconnected(owned, done, timer.Simple)
                 end)
             end
         }
