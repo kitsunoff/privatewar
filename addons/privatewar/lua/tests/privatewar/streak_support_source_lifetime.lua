@@ -335,6 +335,48 @@ return {
             end
         },
         {
+            name = "Source lifetime: unrelated owner cleanup cannot retire an active sensor through its expired pulse",
+            func = function()
+                local owner, target, state = scene()
+                local token = {}
+                assert(PW.Reveal)(owner, { target }, 2.1, owner, token)
+                now, position = 102, Vector(200, 0, 0)
+                assert(PW.Reveal)(owner, { target }, 2.1, owner, token)
+                now = 102.2
+                assert(assert(PW.Streaks)._RemoveEffects)(person(3))
+                expect(assert(state.memory[target]).pos.x).to.equal(200)
+                now, position = 103, Vector(300, 0, 0)
+                expect(assert(PW.Reveal)(owner, { target }, 2.1, owner, token)).to.equal(1)
+                expect(assert(state.memory[target]).pos.x).to.equal(300)
+            end
+        },
+        {
+            name = "Source lifetime: malformed tagged duration refuses before disclosure and retains no immortal pulse",
+            func = function()
+                local owner, target, state = scene()
+                local reads = 0
+                rawset(target --[[@as table]], "GetPos", function() reads = reads + 1 return position end)
+                for _, seconds in ipairs({ 0, -1, math.huge, 0 / 0 }) do
+                    expect(assert(PW.Reveal)(owner, { target }, seconds, owner, {})).to.equal(0)
+                end
+                expect(reads).to.equal(0)
+                expect(#sent).to.equal(0)
+                expect(state.memory[target]).to.beNil()
+            end
+        },
+        {
+            name = "Source lifetime: malformed tagged bot timestamp returns refusal instead of throwing",
+            func = function()
+                local owner, target, state = scene()
+                local ok, accepted = pcall(assert(PW.Bot).AddStimulus, owner, "radar", {
+                    ent = target, pos = Vector(), sourceToken = {}, expiresAt = 105, time = "invalid"
+                })
+                expect(ok).to.beTrue()
+                expect(accepted).to.equal(0)
+                expect(state.memory[target]).to.beNil()
+            end
+        },
+        {
             name = "Source lifetime: legacy and tokenized reveal use identical unchanged human wire",
             func = function()
                 local owner, target = scene()
