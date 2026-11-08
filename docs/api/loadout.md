@@ -5,6 +5,7 @@ Status: added after T-4.1 (2026-11-07); extended after T-4.2 (Pick X: budget, co
 
 Module `loadout` (`lua/privatewar/modules/loadout/`: `shared.lua` slots, pure rules, questions and resolution;
 `sh_budget.lua` Pick X arithmetic and rules, `sh_classes.lua` and `sh_classes_repair.lua` the pure part of classes,
+`sh_class_visibility.lua` human picker policy,
 `sv_classes.lua` and `cl_init.lua` the class glue, `init.lua` giving weapons on spawn, server). Types: `lua/privatewar/types/loadout.lua`. Source decisions:
 `design/05-loadout.md` d.1 to d.3, d.6, d.7, `design/01-extensibility.md` d.9. It sits on top of `core.md` (`PW.Ask`, registries,
 `PW.HookFor`) and `adapter.md` (`PW.WeaponAmmo.Give`, ammo) and does not repeat them.
@@ -180,8 +181,9 @@ The engine hook `PlayerLoadout` (called by the base `GM:PlayerSpawn`) is answere
 ## Classes
 
 Source: `design/05-loadout.md` d.12 and d.13; code `modules/loadout/sh_classes.lua`, `sh_classes_repair.lua`,
+`sh_class_visibility.lua`,
 `sv_classes.lua`, `cl_init.lua`, kind `classes` (`kinds/classes.lua`), screen `screens/loadout_classes.lua`. Types:
-`lua/privatewar/types/loadout.lua`.
+`lua/privatewar/types/loadout_classes.lua`.
 
 **Where classes come from.** Presets are data files in `lua/privatewar/classes/` (kind `classes`: folder `classes`, class
 table `CLASS`, never auto-subscribed, required `Name` string and `Loadout` table, optional `Description` and

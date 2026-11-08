@@ -36,12 +36,14 @@ if SERVER then
     AddCSLuaFile("privatewar/modules/loadout/sh_budget.lua")
     AddCSLuaFile("privatewar/modules/loadout/sh_classes.lua")
     AddCSLuaFile("privatewar/modules/loadout/sh_classes_repair.lua")
+    AddCSLuaFile("privatewar/modules/loadout/sh_class_visibility.lua")
     AddCSLuaFile("privatewar/modules/loadout/sh_wildcards.lua")
     AddCSLuaFile("privatewar/modules/loadout/sh_gunsmith.lua")
 end
 include("privatewar/modules/loadout/sh_budget.lua")
 include("privatewar/modules/loadout/sh_classes.lua")
 include("privatewar/modules/loadout/sh_classes_repair.lua")
+include("privatewar/modules/loadout/sh_class_visibility.lua")
 include("privatewar/modules/loadout/sh_wildcards.lua")
 include("privatewar/modules/loadout/sh_gunsmith.lua")
 

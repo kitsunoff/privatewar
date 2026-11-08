@@ -1,9 +1,9 @@
 -- Class selection, root of the LOADOUT tab (T-4.7, T-7.4; 05-loadout.md d.12, d.13; 10-frontend.md d.1, d.3). Left:
--- the classes (presets, then the player's custom classes from classes.json) as cards; selecting one shows its
+-- only the player's custom classes from classes.json as cards; selecting one shows its
 -- contents on the right and, when it is available, asks the server to use it from the next spawn
 -- (PW.Loadout.SendPick). An unavailable class shows N/A and the reason (budget, attachment cap, empty after repair).
--- Under the contents: EDIT, COPY, RENAME, DELETE and NEW CLASS (PW.LoadoutUI.ClassActions): a preset is copied into a
--- custom class, a custom class opens the class editor (screens/loadout_editor.lua; RENAME starts in its name field).
+-- Under the contents: EDIT, COPY, RENAME, DELETE and NEW CLASS (PW.LoadoutUI.ClassActions). A custom class opens
+-- the class editor (screens/loadout_editor.lua; RENAME starts in its name field). COPY duplicates its saved contents.
 -- OPERATOR opens the operator picker (screens/loadout_operator.lua, 06-progression.md d.7).
 -- Thin glue over PW.Loadout._ClassCards and _ClassRows (sh_classes_repair.lua) and the loadout_ui module.
 
@@ -12,7 +12,7 @@ SCREEN.Root = true
 SCREEN.Order = 10
 SCREEN.Title = "Classes"
 SCREEN.Hints = {
-    { action = "accept", label = "Use class" }, { action = "secondary", label = "Edit or copy" },
+    { action = "accept", label = "Use class" }, { action = "secondary", label = "Edit class" },
     { action = "tertiary", label = "New class" }, { action = "back", label = "Back" }
 }
 
@@ -50,7 +50,8 @@ end
 ---@return PW.LoadoutClassState?
 local function classState()
     local get = loadout().GetClassState
-    return get ~= nil and get() or nil
+    local state = get ~= nil and get() or nil
+    return state ~= nil and loadout().HumanClassState(state, true) or nil
 end
 
 ---@param ref? string
@@ -79,9 +80,12 @@ local function showDetails(view, state)
     local entry = entryOf(state, view.viewing)
     local details = view.details
     if entry == nil then
-        details:SetTitle(state == nil and "Waiting for the server" or "No class selected")
+        local empty = state ~= nil and #state.entries == 0
+        local title = empty and "No custom classes" or "No class selected"
+        details:SetTitle(state == nil and "Waiting for the server" or title)
         details:SetRows({})
-        details:SetText(state ~= nil and "Pick a class on the left. It is used from your next spawn." or nil)
+        details:SetText(empty and "Create a custom class with NEW CLASS." or
+            (state ~= nil and "Pick a class on the left. It is used from your next spawn." or nil))
         details:SetWarning(nil)
     else
         details:SetTitle(entry.name)
@@ -102,8 +106,10 @@ local function refresh(view)
         loadout().UploadClasses()
     end
     local selected = state ~= nil and state.selected ~= "" and state.selected or nil
-    view.viewing = view.viewing or selected
-    view.cardList:SetCards(state ~= nil and loadout()._ClassCards(state) or {}, view.viewing)
+    if entryOf(state, view.viewing) == nil then
+        view.viewing = selected or (state ~= nil and state.entries[1] ~= nil and state.entries[1].ref or nil)
+    end
+    view.cardList:SetCards(state ~= nil and loadout()._ClassCards(state, true) or {}, view.viewing)
     showDetails(view, state)
     local root = PW.UI.CurrentRoot() --[[@as PWRoot?]]
     if root ~= nil then root.focusDirty = 2 end
@@ -119,15 +125,11 @@ local function select(view, ref)
     showDetails(view, state)
 end
 
----The loadout a copy starts from: a preset's own data, a custom class's file entry, else what the server sent.
+---Copy the custom class's saved data, not the repaired preview. There is no preset-id cloning path in this editor.
 ---@param ref string
 ---@param entry PW.LoadoutClassEntry
 ---@return PW.Loadout
 local function sourceOf(ref, entry)
-    local preset = string.match(ref, "^preset:(.+)$")
-    local presets = rawget(PW, "Classes") --[[@as PW.Registry?]]
-    local found = preset ~= nil and presets ~= nil and presets.Get(preset) or nil
-    if found ~= nil then return (found --[[@as PW.ClassPreset]]).Loadout end
     local ui, index = editors(), customIndex(ref)
     local class = ui ~= nil and index ~= nil and ui.ReadClasses ~= nil and ui.ReadClasses()[index] or nil
     return class ~= nil and class.loadout or entry.loadout
@@ -178,7 +180,7 @@ end
 local function onAction(view, action)
     if action == "tertiary" then return run(view, "new") end
     if action ~= "secondary" then return end
-    run(view, customIndex(view.viewing) ~= nil and "edit" or "copy")
+    run(view, "edit")
 end
 
 ---@param view PWLoadoutClassesView

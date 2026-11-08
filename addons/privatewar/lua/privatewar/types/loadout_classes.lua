@@ -103,7 +103,7 @@
 ---Shared human view using public preset metadata; customOnly excludes all presets. Does not mutate state.
 ---Selected is empty when absent from the filtered entries; does not change the authoritative stored pick.
 ---@field HumanClassState fun(state: PW.LoadoutClassState, customOnly?: boolean): PW.LoadoutClassState
----Pure: the cards of the class list (badge IN USE for the class in use, N/A and the reason for an unavailable one).
+---Shared human-filtered cards (IN USE for the selected class, N/A with its reason when unavailable).
 ---@field _ClassCards fun(state: PW.LoadoutClassState, customOnly?: boolean): PW.UICard[]
 ---Pure: key and value rows of a class (slot, item name; attachments counted per weapon slot).
 ---@field _ClassRows fun(entry: PW.LoadoutClassEntry, nameOf?: fun(kind: string, id: string): string):

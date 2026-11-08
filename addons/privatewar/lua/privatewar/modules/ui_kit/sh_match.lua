@@ -37,7 +37,15 @@ local function currentOf(state)
     return state.selected
 end
 
+---@param state? PW.LoadoutClassState
+---@return PW.LoadoutClassState?
+local function humanState(state)
+    local loadout = rawget(PW, "Loadout") --[[@as PW.LoadoutLib?]]
+    return state ~= nil and loadout ~= nil and loadout.HumanClassState(state) or nil
+end
+
 function match.ClassCards(state)
+    state = humanState(state)
     ---@type PW.UICard[]
     local cards = {}
     local current = currentOf(state)
@@ -57,6 +65,7 @@ function match.ClassCards(state)
 end
 
 function match.Choose(state, ref, send)
+    state = humanState(state)
     for _, entry in ipairs(state ~= nil and state.entries or {}) do
         if entry.ref == ref then
             if not entry.available then return "locked" end

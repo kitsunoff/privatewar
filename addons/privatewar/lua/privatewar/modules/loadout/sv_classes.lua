@@ -117,15 +117,35 @@ function lib.ClassState(ply)
     local ctx = contextFor(ply)
     ---@type PW.LoadoutClassEntry[]
     local entries = {}
-    for _, preset in ipairs(presets()) do
-        entries[#entries + 1] = entryOf("preset:" .. preset.ClassName, preset.Name,
-            statusOf(ply, "preset:" .. preset.ClassName, preset.Loadout, ctx))
-    end
     for index, class in ipairs(store.uploads[ply] or {}) do
         local ref = "custom:" .. index
         entries[#entries + 1] = entryOf(ref, class.name, statusOf(ply, ref, class.loadout, ctx))
     end
-    return { selected = store.picks[ply] or "", entries = entries }
+    for _, preset in ipairs(presets()) do
+        -- Hidden technical definitions are not human classes to repair, invalidate or offer for selection.
+        if preset.Hidden ~= true then
+            entries[#entries + 1] = entryOf("preset:" .. preset.ClassName, preset.Name,
+                statusOf(ply, "preset:" .. preset.ClassName, preset.Loadout, ctx))
+        end
+    end
+    return lib.HumanClassState({ selected = store.picks[ply] or "", entries = entries })
+end
+
+---@param ref? string
+---@return boolean
+local function hiddenPick(ref)
+    local source, id = lib._ParseRef(ref)
+    if source ~= "preset" then return false end
+    local registry = rawget(PW, "Classes") --[[@as PW.Registry?]]
+    local preset = registry ~= nil and registry.Get(id --[[@as string]]) or nil
+    return preset ~= nil and preset.Hidden == true
+end
+
+---@param ply Player
+local function sanitizePick(ply)
+    if not hiddenPick(PW._LoadoutClasses.picks[ply]) then return end
+    PW._LoadoutClasses.picks[ply] = nil
+    lib.SetClass(ply, nil) -- the existing default fallback; custom slot contents and mode overrides are untouched
 end
 
 ---@param state PW.LoadoutClassState
@@ -140,6 +160,7 @@ end
 
 function lib.RefreshClasses(ply)
     local store = PW._LoadoutClasses
+    sanitizePick(ply)
     local state = lib.ClassState(ply)
     if store.picks[ply] ~= nil then
         local entry = findEntry(state, state.selected)
@@ -161,6 +182,7 @@ end
 
 function lib._OnPick(ply, ref)
     local store = PW._LoadoutClasses
+    sanitizePick(ply)
     local state = lib.ClassState(ply)
     local entry = lib._ParseRef(ref) ~= nil and findEntry(state, ref) or nil
     local taken = entry ~= nil and entry.available
@@ -191,4 +213,11 @@ function module:PW_PhaseChange()
             if IsValid(ply) then lib.RefreshClasses(ply) end
         end
     end)
+end
+
+---A code reload may hide a previously selected preset. Wait for the complete weapon catalogue before refreshing.
+function module:PW_WeaponsLoaded()
+    for ply, ref in pairs(PW._LoadoutClasses.picks) do
+        if IsValid(ply) and hiddenPick(ref) then lib.RefreshClasses(ply) end
+    end
 end
