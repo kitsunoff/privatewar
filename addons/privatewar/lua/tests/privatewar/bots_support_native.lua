@@ -5,6 +5,14 @@ local key = "PW.SupportNativeTest"
 local actors = {}
 ---@type PW.StreaksStore?
 local previous
+local modeId = "pwt_support_native"
+local matchStarted = false
+---@type number?
+local previousFill
+---@type table<string, string>
+local previousVars = {}
+---@type PW.BotObjective[]
+local guardObjectives = {}
 
 ---@return PW.DevicesLib
 local function devices() return assert(PW.Devices) end
@@ -45,16 +53,25 @@ return {
         devices().Clear()
         PW._Streaks = assert(assert(PW.Streaks)._NewStore)({
             lookup = function(id) return assert(PW.Registries.streaks).Get(id) --[[@as PW.Streak?]] end,
-            phase = function() return "LIVE" end,
+            phase = function() return assert(PW.Match).GetPhase() end,
             alive = function(ply) return ply:Alive() end,
             publish = function() end
         })
     end,
     afterEach = function()
+        timer.Remove(key .. ".live")
         hook.Remove("Tick", key)
         hook.Remove("SetupMove", key)
         hook.Remove("EntityFireBullets", key)
         devices().Clear()
+        if matchStarted then
+            assert(PW.Match).Abort("native support fixture complete")
+            assert(PW.Modes).Register({ Name = "Support native fixture", Base = "ffa", Abstract = true }, modeId)
+            matchStarted = false
+        end
+        if previousFill ~= nil then assert(PW.Settings.Set("bots.fill", previousFill)) previousFill = nil end
+        for name, value in pairs(previousVars) do assert(GetConVar(name)):SetString(value) end
+        previousVars, guardObjectives = {}, {}
         PW._Streaks = previous
         for _, bot in ipairs(actors) do if IsValid(bot) then bot:Kick("native support smoke complete") end end
         actors = {}
@@ -65,6 +82,8 @@ return {
             async = true,
             timeout = 30,
             func = function()
+                local function smoke()
+                expect(assert(PW.Match).GetPhase()).to.equal("LIVE")
                 local owner, record = fixture()
                 local origin = owner:GetPos()
                 owner:GodDisable()
@@ -88,6 +107,7 @@ return {
                 board.order = { id = "support_fixture_guard", type = "hold", priority = 1, since = CurTime(),
                     objective = { id = "support_fixture_guard", pos = bot:GetPos(), radius = 8,
                         action = "hold", weight = 1, want = 1 } }
+                guardObjectives[1] = assert(board.order).objective
                 local bots = assert(PW.Bot)
                 local original = assert(bots.Get)
                 stub(bots, "Get").with(function(who) if who == bot then return board end return original(who) end)
@@ -129,6 +149,24 @@ return {
                     expect(premature).to.beFalse()
                     expect(IsValid(record.entity)).to.beFalse()
                     done()
+                end)
+                end
+                expect(assert(PW.Match).GetPhase()).to.equal("LOBBY")
+                previousFill = PW.Setting("bots.fill")
+                assert(PW.Settings.Set("bots.fill", 0))
+                for _, name in ipairs({ "pw_prematch_timeout", "pw_countdown" }) do
+                    local convar = assert(GetConVar(name))
+                    previousVars[name] = convar:GetString()
+                    convar:SetString("0")
+                end
+                assert(assert(PW.Modes).Register({ Name = "Support native fixture", Base = "ffa",
+                    BotObjectives = function() return guardObjectives end }, modeId))
+                matchStarted = true
+                assert(assert(PW.Match).Start(assert(assert(PW.Modes).Get(modeId))))
+                local deadline = CurTime() + 5
+                timer.Create(key .. ".live", 0.05, 0, function()
+                    if assert(PW.Match).GetPhase() == "LIVE" then timer.Remove(key .. ".live") smoke()
+                    elseif CurTime() >= deadline then error("native support fixture never entered LIVE") end
                 end)
             end
         }

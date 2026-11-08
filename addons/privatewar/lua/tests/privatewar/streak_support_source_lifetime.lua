@@ -240,6 +240,21 @@ return {
             end
         },
         {
+            name = "Source lifetime: opaque tokens use raw identity even with an equality metamethod",
+            func = function()
+                local owner, target, state = scene()
+                local meta = { __eq = function() return true end }
+                local a, b = setmetatable({}, meta), setmetatable({}, meta)
+                assert(PW.Reveal)(owner, { target }, 5, owner, a)
+                now, position = 101, Vector(200, 0, 0)
+                assert(PW.Reveal)(owner, { target }, 5, owner, b)
+                assert(assert(PW.Streaks).RetireRevealSource)(a)
+                expect(assert(state.memory[target]).pos.x).to.equal(200)
+                expect(sent[#sent].pos).to.equal(200)
+                expect(sent[#sent].seconds).to.equal(5)
+            end
+        },
+        {
             name = "Source lifetime: legacy and tokenized reveal use identical unchanged human wire",
             func = function()
                 local owner, target = scene()
