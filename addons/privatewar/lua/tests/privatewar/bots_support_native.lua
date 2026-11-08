@@ -19,6 +19,8 @@ local previousMode
 ---@return PW.Mode
 local function sceneMode()
     return { Name = "Support native fixture", Base = "ffa", Teams = 0,
+        -- Diagnostic scene only: legal host perception must never damage the unmeasured human.
+        PW_CanTakeDamage = function(_, target) if target:IsListenServerHost() then return false end end,
         BotObjectives = function() return guardObjectives end }
 end
 
@@ -41,10 +43,23 @@ local function fixture()
     local owner = player.CreateNextBot("PW native device owner")
     assert(IsValid(owner), "device smoke needs a free listen-server slot")
     actors[#actors + 1] = owner
-    for _, area in ipairs(navmesh.GetAllNavAreas() --[[@as CNavArea[] ]]) do
+    local host = assert(player.GetHumans()[1])
+    local areas = navmesh.GetAllNavAreas() --[[@as CNavArea[] ]]
+    table.sort(areas, function(a, b)
+        return a:GetCenter():DistToSqr(host:GetPos()) < b:GetCenter():DistToSqr(host:GetPos())
+    end)
+    for _, area in ipairs(areas) do
         if area:GetSizeX() >= 600 and area:GetSizeY() >= 160 then
             place(owner, area:GetCenter())
-            if devices().Prepare(owner, "ground_sensor") ~= nil then
+            local away = owner:GetPos() - host:GetPos()
+            away.z = 0
+            away:Normalize()
+            owner:SetEyeAngles(away:Angle())
+            local guardPoint = owner:GetPos() + away * 256
+            local tr = util.TraceLine({ start = guardPoint + Vector(0, 0, 64), endpos = host:EyePos(),
+                filter = { owner, host }, mask = MASK_OPAQUE_AND_NPCS })
+            if guardPoint:Distance(host:GetPos()) < 4000 and tr.Fraction >= 0.99
+                and devices().Prepare(owner, "ground_sensor") ~= nil then
                 assert(assert(PW.Streaks).Give)(owner, "ground_sensor")
                 assert(assert(assert(PW.Streaks).Use)(owner, "ground_sensor"))
                 return owner, assert(devices().List()[1])
@@ -96,6 +111,7 @@ return {
                     expect(assert(PW.Match).GetPhase()).to.equal("LIVE")
                     local owner, record = fixture()
                     local origin = owner:GetPos()
+                    local facing = owner:GetAimVector()
                     owner:GodDisable()
                     owner:KillSilent()
                     expect(IsValid(record.entity)).to.beTrue()
@@ -103,7 +119,7 @@ return {
                     assert(IsValid(bot), "native device smoke needs a second free slot")
                     actors[#actors + 1] = bot
                     -- The owner's corpse is behind the device, not between the attacker and its sight line.
-                    place(bot, origin + Vector(256, 0, 0))
+                    place(bot, origin + facing * 256)
                     bot:GodEnable()
                     bot:StripWeapons()
                     bot:Give("weapon_smg1")
@@ -209,6 +225,7 @@ return {
                 expect(PW.IsEnemy(guard, owner)).to.beTrue()
                 expect(PW.IsEnemy(owner, guard)).to.beTrue()
                 expect(PW.IsEnemy(guard, guard)).to.beFalse()
+                expect(PW.Ask("PW_CanRespawn", owner)).to.beFalse()
                 expect(PW.IsEnemy(guard, host)).to.beFalse()
                 expect(PW.IsEnemy(host, guard)).to.beFalse()
                 PW.ActiveMode = { ClassName = "ffa", Teams = 0 }
