@@ -209,14 +209,29 @@ local function bot(state, key)
     return found
 end
 
+---@param label string
+---@param ply Player
+---@param wep PW.Arc9Weapon
+local function observeWeapon(label, ply, wep)
+    print(string.format("[PW] ARC9 native %s phase=%s alive=%s observer=%d team=%d valid=%s processed=%s owner=%s",
+        label, must(PW.Match).GetPhase(), tostring(ply:Alive()), ply:GetObserverMode(), ply:Team(),
+        tostring(IsValid(wep)), type(wep.GetProcessedValue), tostring(IsValid(wep) and wep:GetOwner() == ply)))
+end
+
 ---Gives class to ply through the ammo module (the loadout path); a held copy is stripped first.
 ---@param ply Player
 ---@param class string
 ---@return PW.Arc9Weapon
 local function give(ply, class)
     if ply:HasWeapon(class) then ply:StripWeapon(class) end
-    local wep = PW.WeaponAmmo.Give(ply, class, { magazines = 1 })
+    local wep = must(PW.WeaponAmmo.Give(ply, class, { magazines = 1 }))
     assert(IsValid(wep), "could not give " .. class .. " to " .. ply:Nick())
+    observeWeapon("given " .. class .. " arc9_base=" .. tostring(weapons.IsBasedOn(class, "arc9_base")),
+        ply, wep --[[@as PW.Arc9Weapon]])
+    wep:CallOnRemove("PW arc9 native provenance", function()
+        print("[PW] ARC9 native removed " .. class .. " phase=" .. must(PW.Match).GetPhase()
+            .. " owner=" .. tostring(ply) .. " " .. debug.traceback())
+    end)
     return wep --[[@as PW.Arc9Weapon]]
 end
 
@@ -871,6 +886,9 @@ return {
                 local base = wep:GetProcessedValue("ReloadTime") --[[@as number]]
                 PW.SetStatMods(ply, { reload_time = 0.5 })
                 timer.Simple(0.3, function()
+                    observeWeapon("reload delayed", ply, wep)
+                    expect(IsValid(wep)).to.beTrue()
+                    expect(wep:GetOwner()).to.equal(ply)
                     local faster = wep:GetProcessedValue("ReloadTime") --[[@as number]]
                     expect(math.abs(faster - base * 0.5) < 1e-6).to.beTrue()
                     expect(call("SupportedStatMods").reload_time).to.beTrue()
@@ -940,6 +958,8 @@ return {
                         return
                     end
                     if not started then
+                        observeWeapon("bash refused", a, wep)
+                        expect(IsValid(wep)).to.beTrue()
                         local s = lib().BashState(a, wep)
                         print(string.format("[PW] ARC9 bash setup: placed=%s active=%s weapon=%d activeWeapon=%d " ..
                             "owner=%s spot=%s targetDistance=%.3f", tostring(placed), tostring(active), wep:EntIndex(),
@@ -1005,6 +1025,11 @@ return {
                     expect(storedNow ~= first or storedNow ~= second).to.beTrue()
                 end
                 timer.Simple(0.5, function()
+                    observeWeapon("build A delayed", a, wepA)
+                    observeWeapon("build B delayed", b, wepB)
+                    expect(IsValid(wepA) and IsValid(wepB)).to.beTrue()
+                    expect(wepA:GetOwner()).to.equal(a)
+                    expect(wepB:GetOwner()).to.equal(b)
                     expect(installed(wepA, chosen.slot)).to.equal(first)
                     expect(installed(wepB, chosen.slot)).to.equal(second)
                     done()
