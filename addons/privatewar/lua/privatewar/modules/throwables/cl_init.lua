@@ -18,7 +18,6 @@ PW.HookFor(MODULE, "RenderScreenspaceEffects", function()
     local alpha = lib._BlindAlpha(CurTime() - blinded.at, blinded.strength)
     if alpha <= 0 then
         blinded.strength = 0
-        LocalPlayer():SetDSP(0, false)
         return
     end
     cam.Start2D()

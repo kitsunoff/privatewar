@@ -34,6 +34,15 @@ after perk recompute/removal; it never applies spawn health again or multiplies 
 With neither role nor movement modifier, release restores the ordinary baseline.
 Jump, crouch, slide and special ADS movement are not independently modified.
 
+Spawn ordering is synchronous: the owner's `PlayerSpawn` engine hook releases any prior-life
+override and marks ordinary base initialization in progress. Only the stat-change notification
+is deferred during that stage; public midlife `Refresh` keeps its existing behavior.
+`PW_PlayerSpawned` clears the stage, captures the completed ordinary baseline, and applies the
+final cached perk/role product once. Loadout notifications may occur inside base `PlayerLoadout`
+and may recompute more than once; they must not capture or scale the in-progress baseline.
+No timer, repeated loadout grant or gamemode-function wrapper is used. Tests include controlled
+native ordinary/perk lives and a further respawn while the old override is still owned.
+
 The owner also consumes `fall_damage` once in `GetFallDamage`. The question
 `PW_FallDamageBaseline(ply, speed) -> number?` can supply an ordinary numeric baseline;
 otherwise the gamemode's ordinary `GetFallDamage` method supplies it. With identity multiplier,

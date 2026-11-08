@@ -1,7 +1,7 @@
 -- Ordinary flash status has one resolved strength/duration for packets, DSP and bot impairment.
 local lib = PW.Throwables --[[@as PW.ThrowablesLib]]
 local owner = MODULE
----@type table<Player, { strength: number, at: number }>
+---@type table<Player, { strength: number, at: number, dspOwned: boolean }>
 local blinded = setmetatable({}, { __mode = "k" })
 
 function lib.Impairment(ply, now)
@@ -11,11 +11,12 @@ function lib.Impairment(ply, now)
 end
 
 function lib.ClearBlind(ply)
-    if blinded[ply] == nil then return end
+    local status = blinded[ply]
+    if status == nil then return end
     blinded[ply] = nil
     timer.Remove("PW.Blind." .. tostring(ply))
     if not IsValid(ply) then return end
-    ply:SetDSP(0, false)
+    if status.dspOwned then ply:SetDSP(0, false) end
     if not ply:IsBot() then
         net.Start("pw_blind")
         net.WriteUInt(0, 8)
@@ -37,12 +38,16 @@ function lib.Blind(ply, strength)
     local previous = blinded[ply]
     if previous ~= nil and previous.at + lib._BlindTime(previous.strength) >= now + seconds
         and lib.Impairment(ply, now) >= resolved then return true end
-    blinded[ply] = { strength = resolved, at = now }
+    local status = { strength = resolved, at = now, dspOwned = previous ~= nil and previous.dspOwned == true }
+    blinded[ply] = status
     if not ply:IsBot() then
         net.Start("pw_blind")
         net.WriteUInt(lib._EncodeStrength(resolved), 8)
         net.Send(ply)
-        ply:SetDSP(resolved >= 0.5 and 35 or 0, false)
+        if resolved >= 0.5 then
+            ply:SetDSP(35, false)
+            status.dspOwned = true
+        end
     end
     timer.Create("PW.Blind." .. tostring(ply), seconds, 1, function()
         if lib.Impairment(ply) <= 0 then lib.ClearBlind(ply) end

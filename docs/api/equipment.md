@@ -174,7 +174,7 @@ only. Live projectiles are removed without detonating at the end of the match (`
 | `Flash` | `{ radius = 1500, near = 300, behind = 0.2, maxTime = 4, minStrength = 0.05 }` |
 | `Blind(ply, strength)` | Server. Returns whether it blinded; does nothing below `minStrength`. For a human it sends `pw_blind` and, at strength 0.5 or more, sets the ringing DSP; for everyone (bots too) it notifies `PW_Blinded` |
 | `Impairment(ply, now?)` | Server. Current ordinary blind alpha from the authoritative resolved strength/start time; 0 without active status. Bot sight and firing use the same status and expiry, without changing difficulty or erasing memory |
-| `ClearBlind(ply)`, `ClearBlinds()` | Server. Release one/all owned flash statuses, expiry timers, DSP and human overlays. Death, disconnect, match end and throwables disable clean up owned state; round lifecycle owners may call `ClearBlinds` |
+| `ClearBlind(ply)`, `ClearBlinds()` | Server. Release one/all owned flash statuses, expiry timers, owned DSP and human overlays. Death, disconnect, round end, match end and throwables disable clean up owned state |
 | `FlashAt(pos, inflictor?)` | Server. Blinds every living player within `radius` of `pos` by line of sight, angle and distance; returns how many were blinded |
 | `Blinded` | Client. `{ strength, at }`: the blind being shown (strength 0 = none) and its start time |
 | `_Launch`, `_Fuse`, `_FlashStrength`, `_BlindTime`, `_BlindAlpha`, `_EncodeStrength`, `_DecodeStrength` | Pure helpers (tests) |
@@ -197,6 +197,13 @@ its derived duration are identical for human packets and bot status. A weaker si
 flash cannot shorten a stronger remaining status. Ordinary bots suppress new visual
 recognition and weapon firing while impairment exceeds 0.05; legitimate old memory and
 nonvisual awareness are not deleted. Difficulty parameters and recoil compensation are unchanged.
+
+The canonical throwables `PW_RoundEnd` and `PW_MatchEnd` consumers both call the public
+`ClearBlinds()` and `_RemoveAll()` owners: active flash state is not a field of the projectile
+store. Human ringing DSP is marked owned only when this module actually applies DSP 35.
+Weak flashes and bot status never reset unrelated DSP; a weaker replacement retains an
+already-owned ringing effect until cleanup. The client overlay expiry does not write DSP.
+No DSP getter, general audio mixer or unrelated audio-state restoration is introduced.
 
 ## Bots
 

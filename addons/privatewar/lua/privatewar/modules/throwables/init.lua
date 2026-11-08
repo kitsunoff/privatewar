@@ -148,3 +148,8 @@ function MODULE:PW_RoundEnd()
     lib._RemoveAll()
     clearBlind()
 end
+
+function MODULE:PW_RoundEnd()
+    lib.ClearBlinds()
+    lib._RemoveAll()
+end
