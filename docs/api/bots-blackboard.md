@@ -959,7 +959,7 @@ Gaps (the design is silent; no contradiction):
       available custom classes of every human of the session, taken whenever a pool is built and when a human leaves,
       kept until the map changes). Every class passes `PW.Loadout.Validate` under the current match settings (budget,
       bans, `PW_ValidateLoadout`), never progression. An empty set or nothing valid gives an empty pool: the bot keeps
-       the default loadout.
+      the default loadout.
       `CLASS.Hidden` is human-picker policy only: it neither filters this existing enabled-preset pool nor bypasses
       its source setting, budget, bans or `PW_ValidateLoadout`. Hidden definitions remain publicly resolvable for
       technical/bot callers; the human class-selection net path never gains bot permission from its sender.

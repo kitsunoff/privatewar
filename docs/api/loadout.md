@@ -196,7 +196,7 @@ table `CLASS`, never auto-subscribed, required `Name` string and `Loadout` table
 **Human visibility (T-11.15).** The class editor/customization list contains custom classes only. Human selection
 lists (lobby, pause and death/respawn) show custom classes first, then visible presets, retaining order within each
 category without mutating the source tables. `Hidden = true` removes a code preset from every human picker and
-server-side id selection. Hidden presets remain registered, enabled and accessible through `PW.Classes.Get(id)`;
+server-side id selection. Hidden presets remain registered and accessible through `PW.Classes.Get(id)`;
 trusted technical code may use their `Loadout`, including from `PW_PlayerLoadout`. `Abstract` and enable semantics
 are unchanged. The existing bot pool still admits enabled presets only when `bots.classes` permits presets and
 match validation passes, regardless of `Hidden`; hiding grants no additional bot permission.
@@ -276,7 +276,7 @@ reason is the check's). The final check on the server is `_Validate` (slot rules
 | `PW.Loadout.SendPick(ref)` | Client. Sends `pw_loadout_pick` |
 | `PW.Loadout._HumanClassEntries(entries, customOnly, lookup)` | Pure. Fresh stable custom-first list; when `customOnly` is true, no presets. `lookup(id)` supplies preset metadata; `Hidden = true` is omitted. Entry objects and loadouts are never changed |
 | `PW.Loadout.HumanClassState(state, customOnly?)` | Shared wrapper using public preset metadata. Fresh filtered state; selected is empty if absent from the filtered entries. Used by client state, preview/editor cards and in-match selectors |
-| `PW.Loadout._ClassCards(state)`, `_ClassRows(entry)` | Pure: the card model of the class list (badge `N/A` when unavailable, else `IN USE` for the selected one; text is the reason, else `Removed: ...`; tag `Preset` or `Custom class`) and the content rows of a class (slot id upper-cased and the item names; one `<SLOT> ATTACHMENTS` row per build with the option count) |
+| `PW.Loadout._ClassCards(state, customOnly?)`, `_ClassRows(entry)` | Human-filtered card model (editor passes `customOnly = true`; badge `N/A` when unavailable, else `IN USE` for the selected one; text is the reason, else `Removed: ...`; tag `Preset` or `Custom class`) and the pure content rows of a class (slot id upper-cased and the item names; one `<SLOT> ATTACHMENTS` row per build with the option count) |
 
 A class that becomes unavailable because the match settings changed (for example a playlist lowers the budget) is kept
 and shown `N/A`; the player gets the default loadout for that match. The state is sent again one frame after every
