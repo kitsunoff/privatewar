@@ -91,6 +91,8 @@ stimulus (`PW.Bot.AddStimulus`). A target hidden by an active Counter-UAV of the
 The optional fifth argument is a server-only opaque table/instance/record; it never replaces the real source
 owner for concealment, relationships or Counter-UAV, and is never serialized. Four-argument calls and the wire
 stay compatible; legacy pulses retain independent observed snapshots until their normal expiry.
+Tagged calls require a finite positive duration before any position is read. Removing an expired pulse during
+another owner's cleanup does not retire a still-active periodic producer or its current bot observation.
 
 `PW.Streaks.RetireRevealSource(token)` uses raw identity, including for tokens with an equality metamethod.
 Nil/unknown/repeated retirement is a no-op. Only a changed active contribution triggers human reset/replay;

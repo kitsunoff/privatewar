@@ -57,6 +57,7 @@ function lib.AddStimulus(state, kind, data)
     if kind == "radar" then
         local token, ends = data.sourceToken, data.expiresAt
         if token ~= nil and (not istable(token) or lib._RetiredRadarSources[token]) then return false end
+        if (token ~= nil or ends ~= nil) and data.time ~= nil and not isnumber(data.time) then return false end
         if ends ~= nil and (not isnumber(ends) or ends ~= ends or ends >= math.huge
             or ends <= CurTime() or ends <= (data.time or CurTime())) then
             return false

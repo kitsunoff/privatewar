@@ -146,7 +146,8 @@ end)
 function PW.Reveal(viewer, targets, duration, owner, sourceToken)
     local s = store()
     if sourceToken ~= nil and (not istable(sourceToken)
-        or (s.retiredSources ~= nil and s.retiredSources[sourceToken])) then return 0 end
+        or (s.retiredSources ~= nil and s.retiredSources[sourceToken]) or not isnumber(duration)
+        or duration ~= duration or duration <= 0 or duration >= math.huge) then return 0 end
     local now = s.clock()
     lib._Prune(s.jams, now)
     local recipients = s.members(viewer)
@@ -230,7 +231,8 @@ function lib._RemoveEffects(owner)
     local pulses = s.pulses or {}
     for i = #pulses, 1, -1 do
         if pulses[i].owner == owner or pulses[i].ends <= s.clock() then
-            retireBot(pulses[i].botToken)
+            -- Expiring somebody else's old pulse does not retire their still-live periodic producer.
+            if pulses[i].owner == owner or pulses[i].sourceToken == nil then retireBot(pulses[i].botToken) end
             table.remove(pulses, i)
         end
     end
