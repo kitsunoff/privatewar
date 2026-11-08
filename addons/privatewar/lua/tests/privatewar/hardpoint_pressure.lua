@@ -39,8 +39,10 @@ local function environment(target, distance, visible)
     local env = { bot = board.bot, board = board, behaviors = behaviors, mode = "synthetic_mode",
         random = function() return 0 end, api = { facts = function() return facts end,
             random = function() return 0 end, clearGoal = function() board.goal = nil end,
+            bash = function() return false end, walkable = function() return true end,
             setGoal = function(_, point, radius, priority)
-                board.goal = { point = point, radius = radius, priority = priority, status = "moving", since = 100 }
+                board.goal = { point = point, projected = point, radius = radius, priority = priority,
+                    status = "moving", since = 100 }
                 return true, "moving"
             end } }
     return must(PW.BotBrain).NewState(), env
@@ -103,6 +105,32 @@ return {
                 state, env = environment(objective(1), 100, false)
                 expect(think(state, env)).to.equal("objective")
                 expect(env.board.target).to.beNil()
+            end
+        },
+        {
+            name = "Hardpoint pressure: cached urgent travel yields to an approaching recognized near threat",
+            func = function()
+                local state, env = environment(objective(1), 900)
+                expect(think(state, env)).to.equal("objective")
+                must(env.board.contacts)[1].pos = Vector(300, 0, 0)
+                must(PW.BotBrain).Think(state, env, 100.1) -- same contact, before the 0.5s Rank interval
+                local top = state.stack[#state.stack]
+                expect(top == nil or top.id ~= "objective").to.beTrue()
+                must(PW.BotBrain).Think(state, env, 100.2)
+                expect(must(state.stack[#state.stack]).id).to.equal("fight")
+            end
+        },
+        {
+            name = "Hardpoint pressure: an occupied zone stays the goal instead of chasing a distant enemy",
+            func = function()
+                local target = objective(0.5)
+                local state, env = environment(target, 1900)
+                expect(think(state, env)).to.equal("objective")
+                must(env.board.tactics).pos = target.pos
+                must(state.ctx.facts).pos = target.pos
+                must(PW.BotBrain).Think(state, env, 100.6)
+                expect(must(state.stack[#state.stack]).id).to.equal("objective")
+                expect(must(env.board.goal).point:Distance(target.pos) <= 160).to.beTrue()
             end
         },
         {
