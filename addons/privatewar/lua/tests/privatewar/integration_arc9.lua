@@ -315,9 +315,10 @@ local function restoreNative(state)
             ply:Kick("PW arc9 test finished")
         end
     end
-    if state.ownsMatch then
+    local native = state.native --[[@as { ownsMatch: boolean }]]
+    if native.ownsMatch then
         must(PW.Match).Abort("ARC9 native fixture finished")
-        state.ownsMatch = false
+        native.ownsMatch = false
     end
     for name, value in pairs(state.saved --[[@as table<string, string>]]) do must(GetConVar(name)):SetString(value) end
 end
@@ -327,6 +328,7 @@ return {
     beforeAll = function(state)
         state.pool = {}
         state.saved = {}
+        state.native = { ownsMatch = false } -- case state is copied; retain ownership in the shared fixture table
     end,
     afterAll = restoreNative,
     cases = {
@@ -846,7 +848,8 @@ return {
                 hook.Add("PW_PlayerLoadout", "PW test arc9 native loadout", function(ply)
                     if ply == a or ply == b then return {} end -- no unrelated class perks or weapons
                 end)
-                state.ownsMatch = true
+                local native = state.native --[[@as { ownsMatch: boolean }]]
+                native.ownsMatch = true
                 assert(match.Start(must(PW.Modes.Get("tdm"))), "ARC9 fixture could not start TDM")
                 local deadline = CurTime() + 5
                 local function ready()
@@ -869,6 +872,8 @@ return {
         {
             name = "Apply on a bot's weapon returns the applied build",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 local chosen = pick(false)
                 local wep = give(bot(state, "a"), chosen.class)
@@ -877,11 +882,15 @@ return {
                 expect(result[chosen.slot]).to.equal(option)
                 expect(installed(wep, chosen.slot)).to.equal(option)
                 expect(adapter():IsValid()).to.beTrue()
+                -- ARC9 PostModify queues native work on this instance; finish it before the next case strips it.
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
             name = "Apply with a conflicting build returns what stuck",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 local chosen = pick(true)
                 local wep = give(bot(state, "a"), chosen.class)
@@ -893,11 +902,14 @@ return {
                 expect(result[other]).toNot.equal(wrong)
                 expect(result[other]).to.equal(installed(wep, other))
                 expect(result["99"]).to.beNil()
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
             name = "Customization lock: ARC9's own customization paths refuse",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 expect(GetConVar("arc9_atts_nocustomize"):GetBool()).to.beTrue()
                 expect(GetConVar("arc9_free_atts"):GetBool()).to.beFalse()
@@ -918,6 +930,7 @@ return {
                 local receiver = must((net.Receivers --[[@as table<string, function?>]])["arc9_randomizeatts"])
                 receiver(0, ply)
                 expect(table.HasValue(arc9().RandomizeQueue, wep)).to.beFalse()
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
