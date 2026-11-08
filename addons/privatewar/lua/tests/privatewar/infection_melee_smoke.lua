@@ -75,6 +75,9 @@ return {
         hook.Remove("Tick", smoke)
         hook.Remove("SetupMove", smoke)
         hook.Remove("PostEntityTakeDamage", smoke)
+        hook.Remove("PW_CanTakeDamage", smoke)
+        hook.Remove("PlayerSpawn", smoke)
+        hook.Remove("PlayerDeath", smoke)
         local bots = state.bots --[[@as Player[] ]]
         if PW.ActiveMode ~= state.mode and PW.ActiveMode ~= nil then PW.Call(PW.ActiveMode, "Cleanup") end
         for _, bot in ipairs(bots) do
@@ -90,7 +93,7 @@ return {
     cases = {
         {
             name = "Infection real melee: legal sight pursuit moves into reach"
-                .. " and native fists damage twice via usercmd",
+                .. " and FIRST native hit converts alive without respawn via usercmd",
             skip = absent,
             async = true,
             timeout = 30,
@@ -114,8 +117,9 @@ return {
                 begin(mode, bots)
                 local seed = must(PW.Infection).Role(bots[1]) == "infected" and bots[1] or bots[2]
                 local target = seed == bots[1] and bots[2] or bots[1]
-                -- Fixture only: stationary durable opponent, normal stock fists for the unmodified seed.
-                target:SetHealth(1000)
+                -- The former two-damage-hit premise is superseded by the approved first-contact revision.
+                -- Fixture only: stationary ordinary-health opponent, normal stock fists for the unmodified seed.
+                target:SetHealth(100)
                 target:StripWeapons()
                 place(seed, must(a), must(b))
                 place(target, must(b), must(a))
@@ -123,28 +127,44 @@ return {
                 PW._BotsManager.boards[seed] = board(seed)
                 local started, initial = CurTime(), seed:GetPos()
                 local hits, attackTicks, releaseTicks, movementTicks = 0, 0, 0, 0
+                local spawns, deaths = 0, 0
+                local contactPos, contactVelocity, contactView = Vector(), Vector(), Angle()
                 local pursued, native = false, false
+                hook.Add("PlayerSpawn", smoke, function(ply) if ply == target then spawns = spawns + 1 end end)
+                hook.Add("PlayerDeath", smoke, function(ply) if ply == target then deaths = deaths + 1 end end)
                 hook.Add("SetupMove", smoke, function(ply, move)
                     if ply ~= seed then return end
                     if bit.band(move:GetButtons(), IN_ATTACK) ~= 0 then attackTicks = attackTicks + 1
                     elseif attackTicks > 0 then releaseTicks = releaseTicks + 1 end
                     if math.abs(move:GetForwardSpeed()) > 0 then movementTicks = movementTicks + 1 end
                 end)
-                hook.Add("PostEntityTakeDamage", smoke, function(victim, dmg, took)
-                    if victim ~= target or dmg:GetAttacker() ~= seed or not took then return end
-                    local wep = seed:GetActiveWeapon()
-                    native = IsValid(wep) and wep:GetClass() == "weapon_fists"
-                    if native and dmg:GetDamage() > 0 then hits = hits + 1 end
+                -- Notification-only observer before the mode's public veto. Cancelled hits need not apply damage.
+                hook.Add("PW_CanTakeDamage", smoke, function(victim, attacker, dmg)
+                    ---@cast dmg CTakeDamageInfo
+                    if victim ~= target or attacker ~= seed then return end
+                    local wep = dmg:GetInflictor()
+                    native = IsValid(wep) and wep:IsWeapon() and wep:GetClass() == "weapon_fists"
+                        and wep:GetOwner() == seed and seed:GetActiveWeapon() == wep
+                    if native and dmg:GetDamage() > 0 then
+                        hits = hits + 1
+                        if hits == 1 then
+                            contactPos, contactVelocity, contactView = target:GetPos(), target:GetVelocity(),
+                                target:EyeAngles()
+                        end
+                    end
                 end)
                 hook.Add("Tick", smoke, function()
                     local current = must(PW.Bot).Get(seed)
                     if current ~= nil and current.behavior ~= nil
                         and current.behavior.id == "pw_infection_pursuit" then pursued = true end
                     local expired = CurTime() - started >= 24
-                    if hits < 2 and not expired then return end
+                    if hits < 1 and not expired then return end
                     hook.Remove("Tick", smoke)
                     hook.Remove("SetupMove", smoke)
                     hook.Remove("PostEntityTakeDamage", smoke)
+                    hook.Remove("PW_CanTakeDamage", smoke)
+                    hook.Remove("PlayerSpawn", smoke)
+                    hook.Remove("PlayerDeath", smoke)
                     print(string.format("[PW] Infection melee: hits=%d attack=%d release=%d move=%d"
                         .. " travel=%.1f pursuit=%s", hits, attackTicks, releaseTicks, movementTicks,
                         seed:GetPos():Distance(initial), tostring(pursued)))
@@ -152,7 +172,15 @@ return {
                     expect(movementTicks > 0).to.beTrue()
                     expect(seed:GetPos():Distance(initial) > 200).to.beTrue()
                     expect(attackTicks > 0 and releaseTicks > 0).to.beTrue()
-                    expect(native and hits >= 2).to.beTrue()
+                    expect(native).to.beTrue()
+                    expect(hits).to.equal(1)
+                    expect(must(PW.Infection).Role(target)).to.equal("infected")
+                    expect(target:Alive()).to.beTrue()
+                    expect(target:Health()).to.equal(400)
+                    expect({ spawns, deaths }).to.deepEqual({ 0, 0 })
+                    expect(target:GetPos():Distance(contactPos) < 1).to.beTrue()
+                    expect(target:GetVelocity():Distance(contactVelocity) < 1).to.beTrue()
+                    expect(target:EyeAngles()).to.equal(contactView)
                     done()
                 end)
             end

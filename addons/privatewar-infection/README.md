@@ -8,13 +8,16 @@ A host plus one bot is enough. Fewer than two participants aborts the match with
 ## Rules
 
 - Each 120-second round chooses one random initial infected, avoiding the previous identity when possible.
-- Survivors use their ordinary saved class. Every survivor death converts, including suicide or world death.
+- Survivors use their ordinary saved class. The approved playtest revision makes the first valid infected
+  native-fist hit convert a living survivor immediately, without death or respawn, preserving motion and control.
+  That hit's damage is cancelled even if lethal. World/suicide death conversion remains the fallback policy.
+- Survivor bots keep distance from perceived infected and fire when legal; infected bots continue pursuing.
 - Infected have 400 spawn/max health, ordinary walk/run speeds multiplied by 1.15, native `weapon_fists`
   and a validated stock zombie player model. Jump and native fist damage are unchanged for humans and bots.
   An unavailable or incompatible model falls back to the player's ordinary operator, not an NPC model.
 - Infected respawn after 3 seconds. A dead infected awaiting respawn still counts as present.
 - All survivors converted means infected victory. At the deadline, any remaining survivors win;
-  deadline equality takes precedence over a death. The last infected leaving awards survivors the round.
+  deadline equality takes precedence over a hit or death. The last infected leaving awards survivors the round.
 - New joiners and reconnects wait for the next round. Bot quota replacements occur only between rounds.
 - Only surviving survivors or the initial seed on an infected victory earn a personal round win.
   Converted players do not inherit a win. The configured total rounds always runs; a shared top score draws.
@@ -37,7 +40,12 @@ The root GPL-3.0-or-later license applies; no third-party code or assets are bun
 
 ## Verification status
 
-Installed lifecycle and native-fists smoke checks cover both roles and rollback. The POSTMATCH screen
+The first-hit/survivor-distance revision above is approved, but only its tests/contracts are prepared.
+Its runtime is not implemented or validated yet. Work resumes after coordinator-confirmed nightly/main
+integration, the hook-removal configuration and permission to use the Deck for a newly observed RED.
+Do not treat the previous death-conversion/two-hit smoke results as acceptance of this revision.
+
+Previously installed lifecycle and native-fists checks covered both roles and rollback. The POSTMATCH screen
 uses authoritative personal round wins, shared placements and a `ROUND WINS` score column, including
 departed participants and late delivery. Human/P2P and HUD visual checkpoints are not passed by automated
 tests or agent image inspection. Removal between game startups needs a separately authorized restart.

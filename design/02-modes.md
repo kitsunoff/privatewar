@@ -120,17 +120,25 @@ Inherited from `01-extensibility.md`:
      occupancy scores; empty and contested zones score zero regardless of unequal counts. No additional
      personal rewards. Bots pursue the active zone, without pre-rotation.
    - **Infection:** a separate optional addon, not mandatory built-in content; default 3 rounds, configurable
-     including 1. Reseed initial infected each round, preferring no repeat where possible; survivor deaths
-     convert, infected continue playing. Each round lasts 120 s, with one random initial infected; infected
-     respawn after 3 s, new joiners wait for the next round. Any survivor death converts, including world
-     death/suicide without a reward. All converted means infected win; at time expiry remaining survivors
+      including 1. Reseed initial infected each round, preferring no repeat where possible. User-approved
+      playtest revision (2026-11-08): the first valid native-fist hit by a living infected immediately converts
+      a living current-roster survivor without death, respawn or teleport. Cancel that hit's damage, including
+      lethal damage; preserve position, momentum and control. Validate attack provenance, enemy roles and
+      current lives, not merely holding fists; world, team, other-weapon, blast, non-hit, duplicate or stale
+      events cannot trigger contact conversion or credit. Survivor bots escape/maintain distance and fire
+      when legally possible rather than approach for melee; infected bots still pursue with native fists.
+      Both use ordinary perceived contacts, local navigation and normal aim/input, never hidden positions
+      or difficulty cheats. Each round lasts 120 s, with one random initial infected; infected respawn after
+      3 s, new joiners wait for the next round. Survivor death still converts, including world death/suicide
+      without a reward. All converted means infected win; at time expiry remaining survivors
      win. No new XP/money events. Infected have 400 health, walk and run speeds multiplied by 1.15 over
      ordinary player values, GMod's built-in fists and the HL2 zombie player skin; jump and fist damage
      are unchanged. Apply identically to humans/bots and fully restore ordinary state outside Infection.
      Verify the built-in fists weapon class and valid player model in the engine; no substitute crowbar.
      At least two participants means humans or bots (one host plus one bot is valid). Last infected
      disconnect gives survivors the round; no survivors gives infected the round; a pending infected respawn
-     still counts as present. Deadline wins over equal-time death. Personal round wins go to surviving
+      still counts as present. Deadline wins over equal-time hit or death; contact conversion must occur
+      strictly before expiry and the last conversion resolves once. Personal round wins go to surviving
      survivors at expiry or the initial seed on infected victory; converted players never inherit a win.
      Final match standings use personal round wins (`teams = false`), shared top is a draw; infection counts
      are informational statistics only. Infected receive no perks/grenades/streaks; revoke them on conversion.

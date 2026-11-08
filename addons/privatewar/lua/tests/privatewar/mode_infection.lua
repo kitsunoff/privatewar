@@ -65,6 +65,64 @@ local function round(seed) return must(rules().NewRound(roster(), seed or "bot1"
 
 local cases = {
     {
+        name = "Infection touch: first proven hit converts alive in the same life, never records a death",
+        func = function()
+            local current = round()
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 10)).to.beTrue()
+            local converted = current.players.host
+            expect(converted.role).to.equal("infected")
+            expect(converted.alive).to.beTrue()
+            expect(converted.life).to.equal(1)
+            expect(converted.deadLife).to.beNil()
+            expect(converted.converted).to.beTrue()
+            expect(converted.initial).to.beFalse()
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 10)).to.beFalse()
+            expect(rules().Winner(current, 11)).to.beNil()
+        end
+    },
+    {
+        name = "Infection touch: missing departed dead stale-life self and noninfected participants fail closed",
+        func = function()
+            local current = round()
+            expect(rules().Touch(current, "host", 0, "bot1", 1, 1)).to.beFalse()
+            expect(rules().Touch(current, "host", 1, "bot1", 0, 1)).to.beFalse()
+            expect(rules().Touch(current, "missing", 1, "bot1", 1, 1)).to.beFalse()
+            expect(rules().Touch(current, "host", 1, "missing", 1, 1)).to.beFalse()
+            expect(rules().Touch(current, "host", 1, "host", 1, 1)).to.beFalse()
+            expect(rules().Touch(current, "host", 1, "bot2", 1, 1)).to.beFalse()
+            current.players.bot1.alive = false
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 1)).to.beFalse()
+            current.players.bot1.alive, current.players.bot1.present = true, false
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 1)).to.beFalse()
+            current.players.bot1.present, current.players.host.alive = true, false
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 1)).to.beFalse()
+            current.players.host.alive, current.players.host.present = true, false
+            expect(rules().Touch(current, "host", 1, "bot1", 1, 1)).to.beFalse()
+            expect(current.players.host.role).to.equal("survivor")
+        end
+    },
+    {
+        name = "Infection touch: last conversion seals once before deadline, equality preserves survivor win",
+        func = function()
+            local before, exact = round(), round()
+            expect(rules().Touch(before, "host", 1, "bot1", 1, 119)).to.beTrue()
+            expect(rules().Touch(before, "bot2", 1, "host", 1, 119.9)).to.beTrue()
+            expect(rules().Winner(before, 119.9)).to.equal("infected")
+            expect(before.players.host.won).to.beFalse()
+            expect(before.players.bot2.won).to.beFalse()
+            expect(before.players.bot1.won).to.beTrue()
+            expect(rules().Touch(before, "bot2", 1, "bot1", 1, 120)).to.beFalse()
+            expect(rules().Winner(before, 121)).to.equal("infected")
+            expect(rules().Touch(exact, "host", 1, "bot1", 1, 119)).to.beTrue()
+            expect(rules().Touch(exact, "bot2", 1, "host", 1, 120)).to.beFalse()
+            expect(exact.players.bot2.role).to.equal("survivor")
+            expect(rules().Winner(exact, 120)).to.equal("survivor")
+            expect(rules().Touch(exact, "bot2", 1, "bot1", 1, 121)).to.beFalse()
+            expect(rules().Summary({ before, exact }).standings).to.deepEqual({
+                { id = "bot1", score = 1 }, { id = "bot2", score = 1 }, { id = "host", score = 0 } })
+        end
+    },
+    {
         name = "Infection: one host plus one bot is sufficient; fewer than two cannot start",
         func = function()
             local players = roster()
@@ -105,7 +163,7 @@ local cases = {
         end
     },
     {
-        name = "Infection: survivor death converts once; stale duplicate and infected death do not reconvert",
+        name = "Infection fallback death: world or suicide converts once; stale and infected death do not reconvert",
         func = function()
             local current = round()
             expect(rules().Death(current, "host", 0, 10)).to.beFalse()

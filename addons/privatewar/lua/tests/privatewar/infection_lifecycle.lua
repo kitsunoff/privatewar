@@ -23,6 +23,11 @@ local function absent() return not file.Exists("privatewar/types/pw_infection.lu
 ---@field resolved? PW.Loadout
 ---@field observer integer
 ---@field observing Entity
+---@field pos Vector
+---@field velocity Vector
+---@field view Angle
+---@field active Weapon
+---@field deaths integer
 
 ---@param id integer
 ---@param isBot boolean
@@ -30,7 +35,9 @@ local function absent() return not file.Exists("privatewar/types/pw_infection.lu
 local function actor(id, isBot)
     ---@type PW.InfectionActorFixture
     local d = { team = id % 2 + 1, hp = 100, max = 100, walk = 200, run = 400, jump = 200,
-        alive = true, model = "models/player/kleiner.mdl", spawns = 0, observer = OBS_MODE_NONE, observing = NULL }
+        alive = true, model = "models/player/kleiner.mdl", spawns = 0, observer = OBS_MODE_NONE, observing = NULL,
+        pos = Vector(100, 200, 32), velocity = Vector(120, -60, 12), view = Angle(10, 120, 0),
+        active = NULL, deaths = 0 }
     return { IsValid = function() return true end, IsPlayer = function() return true end,
         IsBot = function() return isBot end, UserID = function() return id end,
         SteamID64 = function() return "76561198000000" .. id end, Nick = function() return "actor" .. id end,
@@ -40,7 +47,15 @@ local function actor(id, isBot)
         Spectate = function(_, mode) d.observer = mode end,
         SpectateEntity = function(_, target) d.observing = target end,
         UnSpectate = function() d.observer, d.observing = OBS_MODE_NONE, NULL end,
-        Deaths = function() return 0 end,
+        Deaths = function() return d.deaths end,
+        GetPos = function() return d.pos end, GetVelocity = function() return d.velocity end,
+        EyeAngles = function() return d.view end, GetActiveWeapon = function() return d.active end,
+        SetPos = function() error("live conversion must not teleport") end,
+        SetVelocity = function() error("live conversion must not change momentum") end,
+        SetEyeAngles = function() error("live conversion must not change control") end,
+        Kill = function() error("live conversion must not kill") end,
+        KillSilent = function() error("live conversion must not silently kill") end,
+        Spawn = function() error("live conversion must not respawn") end,
         SetHealth = function(_, n) d.hp = n end, GetMaxHealth = function() return d.max end,
         SetMaxHealth = function(_, n) d.max = n end,
         GetWalkSpeed = function() return d.walk end, SetWalkSpeed = function(_, n) d.walk = n end,
@@ -131,6 +146,79 @@ local function start(f)
     f.mode:Think()
 end
 
+---@param ply Player
+---@param class? string
+---@return Weapon
+local function weapon(ply, class)
+    return { IsValid = function() return true end, IsWeapon = function() return true end,
+        GetClass = function() return class or "weapon_fists" end,
+        GetOwner = function() return ply end } --[[@as Weapon]]
+end
+
+---Stock fists use an owned SWEP as inflictor and DMG_GENERIC, not an active-weapon guess or DMG_CLUB.
+---@param attacker Entity
+---@param inflictor Entity
+---@param amount? number
+---@param kind? integer
+---@return CTakeDamageInfo
+local function punch(attacker, inflictor, amount, kind)
+    local value, damageType = amount or 8, kind or DMG_GENERIC
+    return { GetAttacker = function() return attacker end, GetInflictor = function() return inflictor end,
+        GetWeapon = function() return inflictor end,
+        GetDamage = function() return value end, SetDamage = function(_, nextValue) value = nextValue end,
+        ScaleDamage = function(_, scale) value = value * (tonumber(scale) or 1) end,
+        GetDamageType = function() return damageType end,
+        IsDamageType = function(_, mask) return bit.band(damageType, mask) ~= 0 end,
+        GetDamagePosition = function() return Vector(100, 200, 32) end,
+        GetDamageForce = function() return Vector(9998, 4912, 0) end,
+        SetDamageForce = function() end } --[[@as CTakeDamageInfo]]
+end
+
+---Execute the real public veto at its actual generic owner boundary; never install a replacement mode method.
+---@param victim Player
+---@param damage CTakeDamageInfo
+---@return boolean?
+local function takeDamage(victim, damage)
+    local owner = must(PW.Modules.Get("match_rules"))
+    return must(must(owner._EngineHooks).EntityTakeDamage)(owner, victim, damage)
+end
+
+---@param f PW.InfectionLifecycleFixture
+---@param attacker Player
+---@param victim Player
+---@param amount number
+local function assertLiveTouch(f, attacker, victim, amount)
+    local lib, d = must(PW.Infection), f.data[victim]
+    local s = must(lib.State)
+    local life = s.lives[victim]
+    local pos, velocity, view = d.pos, d.velocity, d.view
+    local spawns, deaths = d.spawns, d.deaths
+    local native = weapon(attacker)
+    f.data[attacker].active = native
+    expect(takeDamage(victim, punch(attacker, native, amount))).to.beTrue()
+    expect(lib.Role(victim)).to.equal("infected")
+    expect(d.alive).to.beTrue()
+    expect({ d.hp, d.max, d.team }).to.deepEqual({ 400, 400, 2 })
+    expect({ d.spawns, d.deaths, s.lives[victim] }).to.deepEqual({ spawns, deaths, life })
+    expect({ d.pos, d.velocity, d.view }).to.deepEqual({ pos, velocity, view })
+    local row = must(s.current).players[must(s.identities[victim])]
+    expect(row.alive).to.beTrue()
+    expect(row.deadLife).to.beNil()
+    expect(row.converted).to.beTrue()
+    expect(row.initial).to.beFalse()
+    expect(d.resolved).to.deepEqual({ melee = "weapon_fists" })
+    expect(d.model).to.equal("models/player/zombie_classic.mdl")
+    expect(math.abs(d.walk - 230) < 1e-6 and math.abs(d.run - 460) < 1e-6).to.beTrue()
+    expect(d.jump).to.equal(200)
+    expect(s.infections[must(s.identities[attacker])]).to.equal(1)
+    d.hp = 250
+    must(PW.PlayerOverrides).Refresh(victim)
+    expect(d.hp).to.equal(250) -- only conversion initializes role health; ordinary refresh remains non-healing
+    takeDamage(victim, punch(attacker, native, amount))
+    expect(d.hp).to.equal(250)
+    expect(s.infections[must(s.identities[attacker])]).to.equal(1)
+end
+
 local suite = {
     groupName = "PW Infection common lifecycle",
     beforeEach = function(state)
@@ -143,6 +231,7 @@ local suite = {
             teams = function() return 2 end, log = function() end })
     end,
     afterEach = function(state)
+        if PW.Perks ~= nil then PW.Perks.StatSource("pwt_infection_touch", nil) end
         local owned = PW.Infection ~= nil and PW.Infection.State or nil
         local mode = owned ~= nil and owned.mode or PW.ActiveMode
         if mode ~= nil and mode ~= state.mode then PW.Call(mode, "Cleanup") end
@@ -151,6 +240,163 @@ local suite = {
         PW._Operators = state.operators
     end,
     cases = {
+        {
+            name = "Infection first hit: nonlethal native fist converts a living bot"
+                .. " without death spawn or motion change",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3, 3)
+                for _, ply in ipairs(f.players) do must(PW.Loadout).SetClass(ply, { primary = "weapon_smg1" }) end
+                start(f)
+                local victim = f.players[2]
+                must(PW.Perks).StatSource("pwt_infection_touch", function(ply)
+                    if ply == victim and must(PW.Infection).Role(ply) == "survivor" then
+                        return { { move_speed = 2 } }
+                    end
+                end)
+                must(PW.Perks).Refresh(victim, {})
+                expect(must(PW.Stat)(victim, "move_speed", 1)).to.equal(2)
+                f.data[victim].hp = 35
+                local equipment, streaks = false, false
+                stub(must(PW.Equipment), "Revoke").with(function(ply)
+                    if ply == victim then equipment = true end
+                end)
+                stub(must(PW.Streaks), "Revoke").with(function(ply)
+                    if ply == victim then streaks = true end
+                end)
+                stub(must(PW.Loadout), "Give").with(function(ply, loadout)
+                    expect(must(PW.Infection).Role(ply)).to.equal("infected")
+                    expect(loadout).to.deepEqual({ melee = "weapon_fists" })
+                    f.data[ply].resolved = loadout
+                    return { "weapon_fists" }
+                end)
+                assertLiveTouch(f, f.players[1], f.players[2], 8)
+                expect(equipment and streaks).to.beTrue()
+                expect(must(PW.Stat)(victim, "move_speed", 1)).to.equal(1)
+                expect(must(PW.Loadout).GetClass(f.players[2])).to.deepEqual({ primary = "weapon_smg1" })
+                expect(f.mode:RoundWinner(false)).to.beNil()
+                expect(PW.Ask("PW_CanRunBotBehavior", f.players[2], "pw_infection_escape")).to.beFalse()
+                expect(PW.Ask("PW_CanRunBotBehavior", f.players[2], "pw_infection_pursuit")).to.beTrue()
+                expect(PW.Ask("PW_ScoreValue", "kill")).to.equal(0)
+            end
+        },
+        {
+            name = "Infection first hit: lethal native fist converts a living human"
+                .. " and seals last survivor exactly once",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 1)
+                start(f)
+                local lib = must(PW.Infection)
+                lib.Prepare(2) -- avoid prior seed: human becomes survivor, bot becomes infected
+                for _, ply in ipairs(f.players) do must(PW.MatchRules).Spawn(ply) end
+                PW.Call(f.mode, "PW_RoundStart")
+                stub(must(PW.Loadout), "Give").with(function(ply, loadout)
+                    f.data[ply].resolved = loadout
+                    return { "weapon_fists" }
+                end)
+                local victim, attacker = f.players[1], f.players[2]
+                f.data[victim].hp = 1
+                f.now = must(must(lib.State).current).deadline - 0.001
+                assertLiveTouch(f, attacker, victim, 1000)
+                expect(f.mode:RoundWinner(false)).to.equal(2)
+                f.mode:Think()
+                f.mode:Think()
+                expect(#f.results).to.equal(1)
+                expect(f.results[1].winner).to.equal(attacker)
+                for _, row in ipairs(f.results[1].standings) do
+                    expect(row.score).to.equal(row.id == attacker and 1 or 0)
+                end
+                expect(#must(lib.State).completed).to.equal(1)
+                expect(f.data[victim].spawns).to.equal(2)
+            end
+        },
+        {
+            name = "Infection first hit: provenance rejects held fists world other weapons blast bullet and non-hits",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3, 3)
+                start(f)
+                local lib = must(PW.Infection)
+                local attacker, victim = f.players[1], f.players[2]
+                local native, other = weapon(attacker), weapon(attacker, "weapon_crowbar")
+                local stolen = weapon(victim)
+                f.data[attacker].active = native
+                local invalid = { punch(attacker, attacker), punch(attacker, game.GetWorld()),
+                    punch(game.GetWorld(), native), punch(attacker, other), punch(attacker, stolen),
+                    punch(attacker, native, 8, DMG_BLAST), punch(attacker, native, 8, DMG_BULLET),
+                    punch(attacker, native, 8, DMG_FALL), punch(attacker, native, 0),
+                    punch(attacker, native, -1), punch(attacker, native, math.huge),
+                    punch(attacker, native, 0 / 0), punch(victim, native), punch(f.players[3], native) }
+                for _, damage in ipairs(invalid) do
+                    takeDamage(victim, damage)
+                    expect(lib.Role(victim)).to.equal("survivor")
+                    expect(f.data[victim].hp).to.equal(100)
+                    expect(must(lib.State).infections).to.deepEqual({})
+                end
+                f.data[attacker].active = other
+                takeDamage(victim, punch(attacker, native)) -- no delayed hit after switching away from fists
+                expect(lib.Role(victim)).to.equal("survivor")
+                expect(must(lib.State).infections).to.deepEqual({})
+            end
+        },
+        {
+            name = "Infection first hit: dead stale departed reconnect intermission and deadline cannot convert",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3, 3)
+                start(f)
+                local lib = must(PW.Infection)
+                local s = must(lib.State)
+                local attacker, victim = f.players[1], f.players[2]
+                local native = weapon(attacker)
+                f.data[attacker].active = native
+                f.data[victim].alive = false
+                takeDamage(victim, punch(attacker, native))
+                f.data[victim].alive, f.data[attacker].alive = true, false
+                takeDamage(victim, punch(attacker, native))
+                f.data[attacker].alive = true
+                s.lives[victim] = must(s.lives[victim]) + 1
+                takeDamage(victim, punch(attacker, native))
+                s.lives[victim] = s.lives[victim] - 1
+                s.lives[attacker] = must(s.lives[attacker]) + 1
+                takeDamage(victim, punch(attacker, native))
+                s.lives[attacker] = s.lives[attacker] - 1
+                local row = must(s.current).players[must(s.identities[victim])]
+                row.present = false
+                takeDamage(victim, punch(attacker, native))
+                row.present = true
+                local replacement = actor(2, true)
+                takeDamage(replacement, punch(attacker, native))
+                s.playing = false
+                takeDamage(victim, punch(attacker, native))
+                s.playing = true
+                local reconnect = actor(1, false)
+                takeDamage(victim, punch(reconnect, weapon(reconnect)))
+                expect(lib.Role(victim)).to.equal("survivor")
+                f.now = must(s.current).deadline
+                takeDamage(victim, punch(attacker, native))
+                expect(lib.Role(victim)).to.equal("survivor")
+                expect(f.mode:RoundWinner(false)).to.equal(1)
+                expect(s.infections).to.deepEqual({})
+                expect(f.data[victim].spawns).to.equal(1)
+            end
+        },
+        {
+            name = "Infection survivor policy: melee approach is excluded, role conversion retains infected pursuit",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3, 3)
+                start(f)
+                local seed, survivor = f.players[1], f.players[2]
+                expect(PW.Ask("PW_CanRunBotBehavior", survivor, "melee")).to.beFalse()
+                expect(PW.Ask("PW_CanRunBotBehavior", survivor, "pw_infection_escape") == false).to.beFalse()
+                expect(PW.Ask("PW_CanRunBotBehavior", survivor, "pw_infection_pursuit")).to.beFalse()
+                expect(PW.Ask("PW_CanRunBotBehavior", seed, "pw_infection_escape")).to.beFalse()
+                expect(PW.Ask("PW_CanRunBotBehavior", seed, "pw_infection_pursuit")).to.beTrue()
+                expect(PW.Ask("PW_CanRunBotBehavior", seed, "melee")).to.beFalse()
+            end
+        },
         {
             name = "Infection disable: actual owner disable clears roles stats and snapshots,"
                 .. " unrelated disable does not",

@@ -39,6 +39,9 @@
 ---@field PickSeed fun(players: PW.InfectionParticipant[], previous: string?, rng: fun(): number): string?
 ---@field NewRound fun(players: PW.InfectionParticipant[], seed: string, deadline: number): PW.InfectionRound?, string?
 ---@field Death fun(round: PW.InfectionRound, id: string, life: integer, now: number): boolean
+---A proven native hit converts a living survivor in the same life; engine provenance is checked before this call.
+---@field Touch fun(round: PW.InfectionRound, id: string, life: integer,
+---    attacker: string, attackerLife: integer, now: number): boolean
 ---@field Disconnect fun(round: PW.InfectionRound, id: string, now: number)
 ---@field Admit fun(round: PW.InfectionRound, player: PW.InfectionParticipant): boolean
 ---@field Winner fun(round: PW.InfectionRound, now: number): PW.InfectionRole?
