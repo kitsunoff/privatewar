@@ -23,6 +23,22 @@ local function eligible(record, recipient)
         visible = visible(record, recipient) })
 end
 
+---@param recipient Player
+---@return Weapon[]
+local function ordinaryWeapons(recipient)
+    ---@type Weapon[]
+    local selected = {}
+    local catalogue = PW.Weapons
+    if catalogue == nil then return selected end
+    for i, weapon in ipairs(recipient:GetWeapons()) do
+        if i > 64 then break end
+        local entry = catalogue.Get(weapon:GetClass())
+        -- Capacity is not a weapon classification. Unknown, throwable, launcher and equipment entries stay out.
+        if entry ~= nil and entry:IsValid() and entry.Kind == "gun" then selected[#selected + 1] = weapon end
+    end
+    return selected
+end
+
 ---@param record PW.SupportDevice
 ---@param players Player[]
 ---@param now number
@@ -32,7 +48,7 @@ local function cache(record, players, now)
     for _, recipient in ipairs(players) do
         if assert(PW.SupportStreaks).ReceiptReady(record.charges or 0, assert(record.receipts)[recipient], now)
             and record.position:DistToSqr(recipient:GetPos()) <= 160 * 160 and eligible(record, recipient) then
-            local supplied = ammo.Resupply(recipient, recipient:GetWeapons(), { fraction = 1, maxMagazines = 3 })
+            local supplied = ammo.Resupply(recipient, ordinaryWeapons(recipient), { fraction = 1, maxMagazines = 3 })
             if next(supplied) ~= nil then
                 record.charges = (record.charges or 0) - 1
                 assert(record.receipts)[recipient] = now
