@@ -17,6 +17,7 @@ rules:
 check: lint types markdown rules
 	bash scripts/check/selftest.sh
 	bash scripts/package/selftest.sh
+	bash scripts/deck/publish-selftest.sh
 	bash scripts/export/selftest.sh
 
 # GLuaTest in the real game on the Steam Deck (scripts/deck/test.sh).
