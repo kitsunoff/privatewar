@@ -13,6 +13,14 @@ local previousFill
 local previousVars = {}
 ---@type PW.BotObjective[]
 local guardObjectives = {}
+---@type PW.Mode?
+local previousMode
+
+---@return PW.Mode
+local function sceneMode()
+    return { Name = "Support native fixture", Base = "ffa", Teams = 0,
+        BotObjectives = function() return guardObjectives end }
+end
 
 ---@return PW.DevicesLib
 local function devices() return assert(PW.Devices) end
@@ -49,6 +57,7 @@ end
 return {
     groupName = "PW support native device counterplay",
     beforeEach = function()
+        previousMode = PW.ActiveMode
         previous = PW._Streaks
         devices().Clear()
         PW._Streaks = assert(assert(PW.Streaks)._NewStore)({
@@ -75,6 +84,7 @@ return {
         PW._Streaks = previous
         for _, bot in ipairs(actors) do if IsValid(bot) then bot:Kick("native support smoke complete") end end
         actors = {}
+        PW.ActiveMode = previousMode
     end,
     cases = {
         {
@@ -136,10 +146,23 @@ return {
                                 mask = MASK_VISIBLE })
                             local fov = assert(PW.BotDevices).Perceivable(eye, bot:GetAimVector(), point,
                                 1800, 110, true)
-                            print(string.format("[PW] support probe: phase=%s enemy=%s fov=%s los=%s distance=%.1f",
+                             print(string.format("[PW] support probe: phase=%s enemy=%s fov=%s los=%s distance=%.1f",
                                 tostring(PW.BotScheduler.GetPhase("devices:" .. bot:UserID())),
                                 tostring(PW.IsEnemy(bot, owner)), tostring(fov),
-                                tostring(tr.Entity == record.entity or tr.Fraction >= 0.99), eye:Distance(point)))
+                                 tostring(tr.Entity == record.entity or tr.Fraction >= 0.99), eye:Distance(point)))
+                            print("[PW] support scene: bot=" .. tostring(bot:GetPos()) .. " device="
+                                .. tostring(point) .. " target=" .. tostring(board.target)
+                                .. " targetPos=" .. tostring(IsValid(board.target) and board.target:GetPos() or nil))
+                            for _, contact in ipairs(board.contacts or {}) do
+                                print(string.format(
+                                    "[PW] support player contact: entity=%s visible=%s source=%s pos=%s",
+                                    tostring(contact.ent), tostring(contact.visible), contact.source,
+                                    tostring(contact.pos)))
+                            end
+                            for _, human in ipairs(player.GetHumans()) do
+                                print("[PW] support host relation: human=" .. tostring(human) .. " enemy="
+                                    .. tostring(PW.IsEnemy(bot, human)) .. " pos=" .. tostring(human:GetPos()))
+                            end
                         end
                         if IsValid(record.entity) and CurTime() - started < 23 then return end
                         hook.Remove("Tick", key)
@@ -163,8 +186,7 @@ return {
                     previousVars[name] = convar:GetString()
                     convar:SetString("0")
                 end
-                assert(assert(PW.Modes).Register({ Name = "Support native fixture", Base = "ffa",
-                    BotObjectives = function() return guardObjectives end }, modeId))
+                assert(assert(PW.Modes).Register(sceneMode(), modeId))
                 matchStarted = true
                 assert(assert(PW.Match).Start(assert(assert(PW.Modes).Get(modeId))))
                 local deadline = CurTime() + 5
@@ -172,6 +194,28 @@ return {
                     if assert(PW.Match).GetPhase() == "LIVE" then timer.Remove(key .. ".live") smoke()
                     elseif CurTime() >= deadline then error("native support fixture never entered LIVE") end
                 end)
+            end
+        },
+        {
+            name = "Device native fixture: host is neutral, device owner is hostile, ordinary FFA is unchanged",
+            func = function()
+                local host = assert(player.GetHumans()[1], "native fixture requires a listen host")
+                local function actor()
+                    return { Team = function() return assert(PW.MatchRules).FreeTeam end } --[[@as Player]]
+                end
+                local owner, guard = actor(), actor()
+                actors = { owner, guard }
+                PW.ActiveMode = sceneMode()
+                expect(PW.IsEnemy(guard, owner)).to.beTrue()
+                expect(PW.IsEnemy(owner, guard)).to.beTrue()
+                expect(PW.IsEnemy(guard, guard)).to.beFalse()
+                expect(PW.IsEnemy(guard, host)).to.beFalse()
+                expect(PW.IsEnemy(host, guard)).to.beFalse()
+                PW.ActiveMode = { ClassName = "ffa", Teams = 0 }
+                expect(PW.IsEnemy(guard, host)).to.beTrue()
+                expect(PW.IsEnemy(host, guard)).to.beTrue()
+                expect(PW.IsEnemy(guard, owner)).to.beTrue()
+                expect(PW.IsEnemy(guard, guard)).to.beFalse()
             end
         }
     }
