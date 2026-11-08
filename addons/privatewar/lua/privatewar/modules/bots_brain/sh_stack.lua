@@ -20,6 +20,13 @@ local lib = PW.BotBrain --[[@as PW.BotBrainLib]]
 
 local epsilon = 1e-9
 
+---@param env PW.BotBrainEnv
+---@param def PW.BotBehavior
+---@return boolean
+local function admitted(env, def)
+    return PW.Ask("PW_CanRunBotBehavior", env.bot, def.ClassName) ~= false
+end
+
 ---@type table<string, function>
 local ctxMethods = {}
 local ctxMeta = { __index = ctxMethods }
@@ -173,7 +180,7 @@ local function evaluate(state, env, now)
     local byId = {}
     for _, def in ipairs(env.behaviors) do
         local id = def.ClassName
-        if inMode(def, env.mode) then
+        if inMode(def, env.mode) and admitted(env, def) then
             byId[id] = def
             local ev = state.evals[id]
             if ev == nil or now + epsilon >= ev.at + lib.IntervalOf(def) then
@@ -186,6 +193,8 @@ local function evaluate(state, env, now)
             if ready and ev.rank ~= nil and ev.weight > 0 then
                 cands[#cands + 1] = { id = id, rank = ev.rank, weight = ev.weight }
             end
+        else
+            state.evals[id] = nil
         end
     end
     return cands, byId
@@ -280,6 +289,10 @@ end
 local function finishTop(state, env, now)
     endTop(state, env, now)
     local below = state.stack[#state.stack]
+    while below ~= nil and not admitted(env, below.def) do
+        endTop(state, env, now)
+        below = state.stack[#state.stack]
+    end
     state.ctx.running = below and below.id or nil
     if below ~= nil then callFrame(state, env, below, "OnResume") end
 end
@@ -301,7 +314,7 @@ local function apply(state, env, result, byId, now)
         return
     end
     local def = isstring(t.id) and byId[t.id] or nil
-    if def == nil then
+    if def == nil or not admitted(env, def) then
         top.reason = "unknown behaviour " .. tostring(t.id)
         return
     end
@@ -370,6 +383,15 @@ end
 ---@param now number
 function lib.Think(state, env, now)
     refreshCtx(state, env, now)
+    -- Restrictions apply to suspended frames too, before cached/minimum-run selection or resumption.
+    for i = #state.stack, 1, -1 do
+        local frame = state.stack[i]
+        if not admitted(env, frame.def) then
+            callFrame(state, env, frame, "OnEnd")
+            table.remove(state.stack, i)
+            state.evals[frame.id], state.cooldowns[frame.id] = nil, nil
+        end
+    end
     nudgeOnSight(state, state.ctx.contacts)
     local byId = selectTop(state, env, now)
     releaseLegs(state, env.board)
@@ -390,4 +412,29 @@ function lib.Stop(state, env, now, reason)
     end
     state.ctx.running = nil
     writeDebug(state, env)
+end
+
+---@param state PW.BotBrainState
+---@param env PW.BotBrainEnv
+---@param now number
+---@param id string
+---@param revision integer
+function lib._InvalidateObjective(state, env, now, id, revision)
+    refreshCtx(state, env, now)
+    local changed = false
+    for i = #state.stack, 1, -1 do
+        local frame = state.stack[i]
+        if frame.id == "objective" and frame.state.id == id and frame.state.revision == revision then
+            callFrame(state, env, frame, "OnEnd")
+            table.remove(state.stack, i)
+            state.evals[frame.id], state.cooldowns[frame.id] = nil, nil
+            changed = true
+        end
+    end
+    if changed then
+        state.ctx.lastObjective, state.ctx.facts, state.ctx.factsAt = nil, nil, nil
+        refreshCtx(state, env, now)
+        releaseLegs(state, env.board)
+        writeDebug(state, env)
+    end
 end

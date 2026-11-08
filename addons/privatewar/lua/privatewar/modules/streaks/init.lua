@@ -101,7 +101,9 @@ local function refreshSet(s, ply, st)
 end
 
 function lib._OnSpawn(ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
+    if s.deathSnapshots ~= nil then s.deathSnapshots[ply] = nil end
     if s.phase() ~= "LIVE" then return false end
     local st = stateOf(s, ply)
     refreshSet(s, ply, st)
@@ -111,6 +113,7 @@ end
 
 function lib._OnScore(ply, eventId, points)
     local s = store()
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return {} end
     if s.phase() ~= "LIVE" then return {} end
     if not lib._Counts(s.setting("chain") == true, s.depth > 0) then return {} end
     local gain = lib._Gain(s.setting("earn") == "score" and "score" or "kills", eventId, points)
@@ -126,17 +129,28 @@ function lib._OnScore(ply, eventId, points)
     return earned
 end
 
+function lib.SnapshotDeath(ply)
+    local s = store()
+    s.deathSnapshots = s.deathSnapshots or setmetatable({}, { __mode = "k" })
+    if s.deathSnapshots[ply] ~= nil then return s.deathSnapshots[ply] end
+    local persist = s.setting("persist") == true or s.persist(ply)
+    local perks = rawget(PW, "Perks") --[[@as PW.PerksLib?]]
+    if perks ~= nil and #perks.Get(ply) > 0 then s.deathSnapshots[ply] = persist end
+    return persist
+end
+
 function lib._OnDeath(ply)
     local s = store()
     local st = s.players[ply]
     if st == nil then return end
-    local persist = s.setting("persist") == true or s.persist(ply)
+    local persist = lib.SnapshotDeath(ply)
     st.progress = lib._AfterDeath(st.progress, persist)
     s.publish(ply, lib.ProgressKey, st.progress)
 end
 
 function lib._Clear(ply)
     local s = store()
+    if s.deathSnapshots ~= nil then s.deathSnapshots[ply] = nil end
     if s.players[ply] == nil then return end
     s.players[ply] = nil
     publishAll(s, ply, { progress = 0, inventory = {}, set = {} })
@@ -162,6 +176,7 @@ function lib.Set(ply)
 end
 
 function lib.Give(ply, id)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.lookup(id) == nil then return false end
     local st = stateOf(s, ply)
@@ -176,17 +191,50 @@ local function finish(inst)
     inst:Remove()
 end
 
+function lib.EndEffects(ply)
+    for inst in pairs(lib._Instances) do
+        if inst._Owner == ply then finish(inst) end
+    end
+    lib._RemoveEffects(ply)
+end
+
+function lib.Revoke(ply)
+    lib.EndEffects(ply)
+    lib._Clear(ply)
+end
+
 ---Makes the activation instance and ends it after Duration.
 ---@param ply Player
 ---@param def PW.Streak
-local function activate(ply, def)
-    local inst = PW.Instance(def, ply) --[[@as PW.StreakInstance]]
+---@param plan? table
+---@return boolean
+local function activate(ply, def, plan)
+    local source = def
+    if plan ~= nil then
+        -- The bridge installs data before construction without changing the registered definition.
+        source = setmetatable({ IsValid = function()
+            return not isfunction(def.IsValid) or def:IsValid()
+        end, OnEquip = function(self, owner)
+            self.Activation, self._Definition, self.OnEquip = plan, def, def.OnEquip
+            PW.Call(self, "OnEquip", owner)
+        end }, { __index = def }) --[[@as PW.Streak]]
+    end
+    local inst = PW.Instance(source, ply) --[[@as PW.StreakInstance]]
+    if not inst:IsValid() then inst:Remove() return false end
     lib._Instances[inst] = true
     local duration = tonumber(def.Duration) or lib.DefaultDuration
     inst:Timer(math.max(0, duration), 1, function(self) finish(self --[[@as PW.StreakInstance]]) end)
+    return true
 end
 
-function lib.Use(ply, id)
+---@type table<Player, true>
+local activating = setmetatable({}, { __mode = "k" })
+
+---@param ply Player
+---@param id string
+---@return boolean
+local function use(ply, id)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.phase() ~= "LIVE" or not s.alive(ply) then return false end
     local st = s.players[ply]
@@ -194,13 +242,31 @@ function lib.Use(ply, id)
     if st == nil or index == nil then return false end
     local def = s.lookup(id)
     if def == nil then return false end
+    local plan = nil
+    if def.Prepare ~= nil then
+        plan = PW.Call(def, "Prepare", ply)
+        if not istable(plan) then
+            if PW.Devices ~= nil then PW.Devices.Feedback(ply, "DEPLOYMENT BLOCKED - FIND CLEAR LEVEL GROUND") end
+            return false
+        end
+    end
+    if not activate(ply, def, plan) then return false end
     table.remove(st.inventory, index)
     s.publish(ply, lib.InventoryKey, lib._EncodeInventory(st.inventory))
-    activate(ply, def)
     return true
 end
 
+function lib.Use(ply, id)
+    if activating[ply] then return false end
+    activating[ply] = true
+    local ok, result = pcall(use, ply, id)
+    activating[ply] = nil
+    if not ok then print("[PW] streak activation failed: " .. tostring(result)) return false end
+    return result
+end
+
 function lib.Ready(bot)
+    if PW.Ask("PW_CanUseLoadoutKind", bot, "streaks") == false then return nil end
     local s = store()
     local st = s.players[bot]
     if st == nil then return nil end
@@ -209,6 +275,10 @@ function lib.Ready(bot)
         if def ~= nil and (def.BotShouldUse == nil or PW.Call(def, "BotShouldUse", bot) == true) then return id end
     end
     return nil
+end
+
+function lib.IsDamage()
+    return store().depth > 0
 end
 
 function lib.StreakDamage(fn, ...)
@@ -251,6 +321,13 @@ function MODULE:PW_MatchEnd()
     if reveal ~= nil then reveal.jams = {} end
 end
 
+function MODULE:PW_RoundPreparing()
+    for inst in pairs(lib._Instances) do finish(inst) end
+    lib._ResetEffects()
+end
+
+function MODULE:PW_PlayerTeamChanged() lib._ResetEffects() end
+
 PW.HookFor(MODULE, "PlayerSpawn", function(_, ply)
     lib._OnSpawn(ply)
 end)
@@ -260,5 +337,5 @@ PW.HookFor(MODULE, "PostPlayerDeath", function(_, ply)
 end)
 
 PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
-    lib._Clear(ply)
+    lib.Revoke(ply)
 end)

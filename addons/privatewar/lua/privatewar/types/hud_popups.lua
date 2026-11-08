@@ -59,10 +59,13 @@
 ---Design units between the LEVEL UP title and the level line, and the least room to the screen edges.
 ---@field LevelUpGap number
 ---@field LevelUpMargin number
+---Design-unit padding on every side of the measured text, and its pre-animation shadow offset in pixels.
+---@field LevelUpPadding number
+---@field LevelUpShadow number
 ---Pure: the LEVEL UP layout in pixels. The text is drawn unscaled at absolute screen positions (titleY, labelY,
 ---centred on cx) and scaled around (cx, cy), so the unscaled text stays inside the surface clip rect, which applies
----before the model matrix. The box is the extent of both lines at LevelUpScaleFrom; cy is moved so it stays on
----screen. Writes into and returns `out` (no allocation per frame).
+---before the model matrix. The box contains both measured lines, padding and shadow at LevelUpScaleFrom; cy moves
+---so the box stays on screen. Writes into and returns `out` (no allocation per frame).
 ---@field _LevelUpLayout fun(facts: PW.LevelUpFacts, out: PW.LevelUpLayout): PW.LevelUpLayout
 ---Pure: an empty score popup state.
 ---@field _PopupNew fun(): PW.PopupState
@@ -115,7 +118,7 @@
 ---@field labelH number
 
 ---The LEVEL UP layout in pixels: draw both lines unscaled, centred on cx at titleY / labelY, and scale around
----(cx, cy). box* is the extent of both lines at LevelUpScaleFrom.
+---(cx, cy). box* contains both measured lines plus padding and shadow at LevelUpScaleFrom.
 ---@class PW.LevelUpLayout
 ---@field cx number
 ---@field cy number

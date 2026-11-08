@@ -18,7 +18,7 @@ MODULE.Name = "Loadout screens"
 local lib = (rawget(PW, "LoadoutUI") or {}) --[[@as PW.LoadoutUILib]]
 PW.LoadoutUI = lib
 
-for _, name in ipairs({ "names", "editor", "gunsmith" }) do
+for _, name in ipairs({ "names", "editor", "gunsmith", "perks" }) do
     local path = "privatewar/modules/loadout_ui/sh_" .. name .. ".lua"
     if SERVER then AddCSLuaFile(path) end
     include(path)

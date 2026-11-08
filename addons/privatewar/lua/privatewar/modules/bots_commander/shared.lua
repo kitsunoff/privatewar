@@ -100,7 +100,8 @@ local function current(pass, bot)
     local order = pass.orders[bot.id]
     if order == nil then return nil, nil end
     local obj = pass.byId[order.id]
-    if obj == nil or obj.action ~= order.type then return nil, nil end
+    if obj == nil or obj.action ~= order.type or obj.revision ~= order.objective.revision
+        or not lib.Eligible(obj, bot.id) then return nil, nil end
     return obj, order
 end
 
@@ -130,7 +131,7 @@ end
 local function keep(pass, bots, now, hold)
     for _, bot in ipairs(bots) do
         local obj, order = current(pass, bot)
-        if obj ~= nil and order ~= nil and active[obj.action] and bot.pos:Distance(obj.pos) <= obj.radius then
+        if obj ~= nil and order ~= nil and active[obj.action] and lib.Inside(obj, bot.pos) then
             give(pass, bot, obj, order.since)
         end
     end
@@ -180,7 +181,7 @@ end
 ---@param opts PW.CommanderAssignOpts
 local function addPairs(list, pass, bot, objectives, opts)
     for _, obj in ipairs(objectives) do
-        if pass.slots[obj.id] > 0 then
+        if pass.slots[obj.id] > 0 and lib.Eligible(obj, bot.id) then
             list[#list + 1] = { bot = bot, obj = obj, score = scoreOf(pass, bot, obj, opts) }
         end
     end
@@ -237,3 +238,5 @@ end
 
 if SERVER then AddCSLuaFile("privatewar/modules/bots_commander/sh_hunt.lua") end
 include("privatewar/modules/bots_commander/sh_hunt.lua")
+if SERVER then AddCSLuaFile("privatewar/modules/bots_commander/sh_contracts.lua") end
+include("privatewar/modules/bots_commander/sh_contracts.lua")

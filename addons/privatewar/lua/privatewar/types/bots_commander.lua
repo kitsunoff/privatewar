@@ -2,6 +2,10 @@
 -- Types of the bots_commander module (T-5.11; 07-bots.md d.9, d.14). Code: lua/privatewar/modules/bots_commander/
 -- (shared.lua: the pure assignment and the hunt filter; sh_hunt.lua: the pure hunt slots; init.lua: the 1 Hz glue).
 
+---@alias PW.PlayerTeamChangingHook fun(ply: Player, from: integer, to: integer, reason: string)
+---@alias PW.PlayerTeamChangedHook fun(ply: Player, from: integer, to: integer, reason: string)
+---@alias PW.ObjectiveInvalidatedHook fun(id: string, revision: integer)
+
 ---The commander's order (docs/api/bots-blackboard.md "Blackboard" types; writer: bots_commander). One objective of
 ---MODE:BotObjectives plus the assignment. A hunt assignment is carried by board.hunt, not by the order.
 ---@class PW.BotOrder
@@ -94,6 +98,16 @@
 ---The bot commander (T-5.11). Shared: the pure rules; server: the 1 Hz glue.
 ---@class PW.BotCommanderLib
 ---@field Config PW.CommanderConfig
+---Pure whitelist sanitizer preserving copied eligibility, revision and cylinder.
+---@field Sanitize fun(raw: any): PW.BotObjective[]
+---Role/roster/carrier eligibility; a present empty set allows nobody.
+---@field Eligible fun(objective: PW.BotObjective, botId: integer): boolean
+---@field Inside fun(objective: PW.BotObjective, pos: Vector): boolean cylinder or legacy sphere containment
+---@field ArrivalFits fun(objective: PW.BotObjective, projected: Vector, radius: number): boolean
+---Server: clear only commander-owned orders/hunt/retained state; goals through the public goal API.
+---@field Clear? fun()
+---Server: release a specific old visit and its goal; other visits/objectives stay intact.
+---@field InvalidateObjective? fun(id: string, revision: integer)
 ---Pure: closeness of a distance, 1 at 0, 0.5 at Config.falloff.
 ---@field Closeness fun(dist: number): number
 ---Pure: the orders of one team. orders = the current orders by bot id; the answer has an entry for every bot that

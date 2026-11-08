@@ -8,6 +8,10 @@ return {
             func = function()
                 expect(PW).to.exist()
                 expect(PW.Version).to.beA("string")
+                expect(string.match(PW.Version, "^%d+%.%d+%.%d+$") ~= nil).to.beTrue()
+                for part in string.gmatch(PW.Version, "%d+") do
+                    expect(#part == 1 or string.sub(part, 1, 1) ~= "0").to.beTrue()
+                end
             end
         },
         {

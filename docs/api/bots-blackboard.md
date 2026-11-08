@@ -85,6 +85,21 @@ tier per bot for `mix`) at creation, and a personality as soon as the bot's team
 | `danger` | per-area cost table reference | nav (baked about once per second) | nav | design (`07 d.6`). **Not on the board**: the baked table is one per navigation service, shared by all bots (`service.GetCostTable()`, "Goal API") |
 | `debug` | table (counters, ms per layer) | every writer adds its own counters | overlay | design (`07 d.11`). Written today: `debug.perception = { candidates, traces }`, `debug.aim = { focus, err, tolerance, fire, part, blockedSince }` |
 
+### Tactics relationship reset
+
+The `bots_tactics` owner consumes `PW_PlayerTeamChanging`, `PW_PlayerTeamChanged`, `PW_RoundPreparing`
+and `PW_RoundPrepared`, and clears the same owned state on `PW_MatchEnd`.
+Each notification synchronously forgets its own hurt/attacker history and
+cached `board.tactics` for **all managed bots**, including when a human changes team. Repeated reset
+is harmless; it does not produce contacts, start goals, change roles or write another layer's fields.
+Scheduler registrations remain intact, and ordinary ticks rebuild fresh facts normally.
+
+Queued cover searches carry unique request tokens. Reset invalidates them without removing another
+owner's FIFO jobs. An obsolete callback cannot trace old threat positions, restore cached cover,
+consume a newer pending request or write to a replaced board/facts generation. Only the matching live
+request writes its owner's `tactics.cover`. This is not a bot teleport or an alternative damage path.
+Tests: `bots_tactics_reset.lua`; no optional addon is required for these cases.
+
 Types (the field lists of the rows marked "contract"; names the design does not give are in "Open in design"):
 
 ```lua
@@ -361,7 +376,7 @@ reveals enemies to a team's bots exactly as the radar shows them to humans.
 | --- | --- | --- |
 | `botOrTeam` | `Player` (a bot) or integer (a team index) | Who gets the stimulus |
 | `kind` | string | The kind of stimulus, see the list below |
-| `data` | table | `{ ent, pos, vel?, time?, dir? }` (below) |
+| `data` | table | `{ ent, pos, vel?, time?, dir?, sourceToken?, expiresAt? }`; the last two fields are optional server-only radar provenance |
 
 - Perception (`bots_perception`, T-5.7) receives it and adds it to the contact memory of the target bot or of every
   bot of the team (`PW.BotContact.source` = the kind).
@@ -382,6 +397,18 @@ Decided in code (T-5.7, `bots_perception`):
   (`PW.IsEnemy`) is dropped. A sound position is moved by an error of up to a tenth of the distance.
 - `PW.Bot.AddStimulus` returns the number of bots that took the stimulus (`0` for bad input; it never errors). A table
   in place of `kind` is the stimulus itself with its kind in the field `kind`.
+- For `"radar"`, optional `sourceToken` is an opaque table identity and `expiresAt` is an absolute `CurTime()`
+  deadline. `PW.Bot.RetireStimulusSource(token) -> integer` removes only matching radar evidence and pending
+  radar sharing; returns the removed contribution/message count. Nil/unknown/repeated calls do not clear unrelated
+  data. Retired known tokens reject late delivery. Ordinary callers without these fields keep existing behavior.
+- Radar overlays retain bounded, copied observations: removal/expiry falls back to another active radar source or
+  independent sight/hearing/damage/genuine team-shared evidence for the same entity. Genuine later sight survives.
+  Fallback never reads hidden live positions. Public board memory and contacts are updated synchronously on retirement.
+  Optional contact `sourceToken`/`expiresAt` describe the selected radar contribution, not permission to fire.
+- Sharing a radar-derived contact preserves its source and expiry through delayed delivery; it cannot become
+  permanent unretirable `"shared"` knowledge. Ordinary sight sharing remains unchanged. Radar sidecars stay capped
+  at 128 contributions per contact and decay with the existing contact lifetime; weak source tombstones do not
+  strongly retain tokens/entities forever. Provenance fields are perception-owned, not writable by consumers.
 - Hearing ranges, in units: gunfire 2500, suppressed 500, sprint footsteps 450, explosion 3500. A kind not listed is
   never heard. Sprint footsteps need a horizontal speed above 150.
 - Other numbers: field of view 110 degrees, sight range 4500, memory 12 s (fixed by `07 d.7`; `contact_memory` of a
@@ -557,13 +584,19 @@ that they can declare their reads at load time). Pure glue around the two data k
 
 ## Bot names
 
-T-11.8, `design/06-progression.md` d.7. The manager passes a human-like name to `player.CreateNextBot` instead of
+T-11.9, `design/06-progression.md` d.7. The manager passes a human-like name to `player.CreateNextBot` instead of
 `Bot <n>`: `PW.BotsManager._PickName(PW.BotsManager.NamePool, taken, roll)` picks a pool name that no connected player
 has (compared without case; `taken` from `_TakenNames(entries)`, every `PW.BotsEntry` carries `name = Nick()`; names
-created in the same step are added). When every pool name is taken, a pool name with the lowest free number
-(`"Viper 2"`). The pool is the data file `modules/bots_manager/sh_name_pool.lua` (about 100 original first names,
-surnames and callsigns; unique, editable). The personality is not used as a hint: it is assigned after the team is known,
-later than the name. Killfeed, scoreboard and postmatch read `Nick()`. Bot operators (models) are in `operators.md`.
+created in the same step are added). When every pool name is taken, the first pool entry in its existing order gets the
+lowest unused numeric suffix starting at 2 (`"Mike 2"`). This fallback never draws RNG: identical `pool` and `taken`
+produce the same result regardless of `roll`. An empty pool uses `"Operator"` as the base, with the same suffix rule.
+
+Names are reserved by the current connected-player snapshot, not a permanent used-name set. A kicked bot still
+connected reserves its name; after it leaves, its name can be reused by the next creation step. Human names are
+reserved in the same way. The pool is the data file `modules/bots_manager/sh_name_pool.lua` (about 100 original first
+names, surnames and callsigns; no empty entries or case-insensitive duplicates, editable). The personality is not used
+as a hint: it is assigned after the team is known, later than the name. Killfeed, scoreboard and postmatch read `Nick()`.
+Bot operators (models) are in `operators.md`.
 
 ## Combat movement
 
@@ -680,6 +713,52 @@ mode field. The commander calls it through `PW.Call` at 1 Hz per team and stores
   flag of the team that is not fully held (value below 95 of 100) is `capture` 0.9 (`want` 2); a fully held flag is
   `defend` 0.3 (`want` 1). KC derivation: an enemy tag is `collect` 0.6, a tag of the team's own dead `deny` 0.5
   (`want` 1 each; radius 24). Flag radius 160.
+
+### Eligible objective actions extension (frozen, implemented)
+
+Orchestrator-approved extension (2026-11-08); tests precede implementation. The six existing objective fields,
+legacy callers and Domination behavior stay valid; no additional engine scans or secret information are introduced.
+
+| Field/signature | Meaning |
+| --- | --- |
+| `PW.BotObjective.eligible?: table<integer, boolean>` | Server-only allow-set keyed by current `Player:UserID()`. Absent = all eligible; empty = none. Only positive integer keys with value exactly `true` survive sanitization. A malformed present allow-set rejects the objective, never becomes unrestricted. The mode supplies only role/roster/carrier eligibility, not hidden enemy facts. |
+| `PW.BotObjective.revision?: integer` | Nonnegative generation of this objective visit/state. Absent keeps legacy identity. A changed revision invalidates the previous order and interaction immediately, even inside a sticky capture/hold; stable id/action/revision keeps existing anti-dither behavior. Round/visit ids must not be reused within a match. |
+| `action = "plant" or "defuse"` | `pos` is a reachable interaction point, `radius` the authoritative maximum use distance, not a loose nav arrival radius. Require `eligible`, `revision`, finite position and positive finite radius for these new actions. No duration/progress field: the mode alone owns hold validation, clock and verdict. |
+| `PW.BotCommander.Sanitize(raw: any) -> PW.BotObjective[]` | Promote the existing private sanitizer to a pure shared function; copy only documented fields, including a copied allow-set/revision; no callbacks, roles, entity references, enemy positions or arbitrary metadata. Reject malformed new fields and duplicate ids; never mutate the source. Legacy actions keep their existing behavior/defaults. |
+| `PW.BotCommander.Eligible(objective: PW.BotObjective, botId: integer) -> boolean` | Shared pure allow-set predicate used before every assignment/retention and local fallback choice, and rechecked by the behavior before holding use. Missing module must fail closed for restricted/new actions, not make them unrestricted. |
+| `PW.BotObjective.zone?: PW.BotObjectiveZone` | Optional authoritative cylinder `{ pos: Vector, radius: number, above: number, below: number }`, finite position/dimensions, positive radius, nonnegative vertical bounds. Whitelist and copy it through sanitizer/fallback. Actual and projected nav arrival must be inside this cylinder; never trust a projected `arrived` flag alone. |
+| `PW.BotCommander.ArrivalFits(objective, projected, radius) -> boolean` | Shared pure helper: the entire horizontal arrival disc and projected height must fit the authoritative cylinder. The objective behavior validates immediately after `SetGoal`, clearing an invalid projected goal synchronously, and separately checks actual position/height before holding. Legacy objectives without a cylinder keep their existing behavior. |
+| `PW_PlayerTeamChanging(ply, from, to, reason)` | Synchronous server notification before team mutation; brain stops its stack. Humans and bots both trigger invalidation because every bot's relationships may change. |
+| `PW_PlayerTeamChanged(ply, from, to, reason)` | Synchronous server notification after team/manager-board mirror update. Commander clears orders/hunt and its retained assignment state for all managed bots; each other owner clears only its own state. |
+| `PW_ObjectiveInvalidated(id: string, revision: integer)` | Server notification invalidating one old objective visit. Commander calls its own `InvalidateObjective(id, revision)` helper, releasing matching orders and goals through public `PW.Bot.ClearGoal`. Other revisions/objectives are untouched. The mode invalidates before publishing the next visit. |
+
+Eligibility overrides all assignment passes, including active capture/hold and hysteresis. Ineligible retained
+orders release immediately, even with the same id/action/revision. For local fallback, filter before ranking;
+an ineligible best candidate must not hide an eligible second candidate. Preserve approved fields through
+`PW.BotObjectives.Resolve`, including its fallback. Re-resolve current generation/eligibility before
+interaction rather than trusting a one-second-old commander order. No new defend-cap bypass is proposed.
+
+For plant/defuse the behavior approaches through `SetGoal`, verifies actual distance (not only projected nav
+arrival), stops locomotion/sprint, looks at the public interaction point and holds `IN_USE` through ordinary
+`intent.buttons`/`StartCommand`. It never calls plant/defuse or modifies objective progress directly. Existing
+input conflict rules still forbid use with attack. Release objective-owned use on suspend/end, invalid actor,
+changed id/action/revision, lost eligibility or leaving range; resume must revalidate. Mode-side validation
+remains authoritative on every input tick. Capture/hold drift, collect/deny and Domination caps stay unchanged.
+
+Tests-first cases in `tests/privatewar/bots_snd.lua`: carrier-only assignment despite a nearer ineligible
+bot; eligibility removes even sticky holds; revision releases a hold immediately; sanitizer copies eligibility
+and rejects malformed restrictions without forwarding secret fields. `snd_input.lua` additionally exercises
+held-use cleanup, actual StartCommand plant/defuse input and travel from an authored spawn through planting and
+guarding. The behavior records `ctx.state.id` / `revision`; matching `PW_ObjectiveInvalidated` synchronously ends
+running/suspended objective frames through the brain owner and normal OnEnd cleanup. Test evidence does not pass
+the human bot-quality or visual checkpoint.
+
+**Narrow ownership request before implementation:** the S&D agent also needs
+`modules/bots_objectives/shared.lua`, only `PickObjective`/`Resolve`, to preserve/validate these fields and filter
+the local fallback. Their optional bot-id parameter and copied metadata must preserve all existing callers.
+Without that serialized grant, commander-only changes would leave a bypass and lose the interaction fields.
+This narrow ownership and the unified team/round notifications are now approved. Commander also clears all
+its orders/hunt/retained state on `PW_RoundPrepared`; it never accesses another layer's private stores.
 
 ## Commander
 

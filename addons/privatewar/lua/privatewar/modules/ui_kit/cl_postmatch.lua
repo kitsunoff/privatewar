@@ -172,10 +172,12 @@ function pm.Gather()
     }
     local now = wallet()
     if now ~= nil then data.earned = pm.Earned(state.currency, now) end
-    if prog == nil or summary == nil then return data end
-    data.steps = levelSteps(prog, summary)
-    data.medals = pm.Medals(summary.medals, medals ~= nil and medals.Ids or nil, medalName)
-    data.weapons = pm.Weapons(summary.weapons, weaponName)
+    if prog ~= nil and summary ~= nil then
+        data.steps = levelSteps(prog, summary)
+        data.medals = pm.Medals(summary.medals, medals ~= nil and medals.Ids or nil, medalName)
+        data.weapons = pm.Weapons(summary.weapons, weaponName)
+    end
+    PW.Notify("PW_PostmatchGathered", data, me:UserID())
     return data
 end
 
@@ -248,6 +250,13 @@ end)
 hook.Add("PW_ProgressionSummary", hookName, function(summary)
     state.summary = summary
     apply("summary")
+end)
+
+-- Authoritative extension data may arrive after the root was built. Never reopen a dismissed/other root.
+hook.Add("PW_PostmatchDataChanged", hookName, function()
+    if not kitValid() or PW.Phase.GetPhase() ~= "POSTMATCH" or openId() ~= pm.RootId then return end
+    local root = lib.CurrentRoot() --[[@as PWRoot?]]
+    if root ~= nil then root:Rebuild() end
 end)
 
 -- A missed event, a reload and the return from the pause menu are caught here.

@@ -116,6 +116,10 @@ end
 
 PW._BotsManager = PW._BotsManager or lib._NewStore()
 
+function lib.IsLeaving(ply)
+    return PW._BotsManager.kicking[ply] == true
+end
+
 ---Why the store must stay idle now (the Singleplayer refusal is logged once); nil when it may act.
 ---@param store PW.BotsStore
 ---@param anyPhase? boolean ignore the phase and the navmesh generation (kicking every bot)
@@ -250,23 +254,28 @@ local function targetFor(store, humans)
 end
 
 ---@param entries PW.BotsEntry[]
+---@param includeWaiting? boolean
 ---@return integer
-local function countHumans(entries)
+local function countHumans(entries, includeWaiting)
     local humans = 0
     for _, entry in ipairs(entries) do
-        if not entry.bot and not entry.spectating then humans = humans + 1 end
+        if not entry.bot and (includeWaiting or not entry.spectating) then humans = humans + 1 end
     end
     return humans
 end
 
-function lib._Step(store, prefer)
+function lib._Step(store, prefer, boundary)
     if idleReason(store) ~= nil then return 0, 0 end
     local entries = livePlayers(store)
     local n = store.teams()
     for _, entry in ipairs(entries) do
         if entry.bot then refreshBoard(store, entry, n) end
     end
-    local plan = lib._Plan(targetFor(store, countHumans(entries)), entries, n, prefer)
+    local mode = PW.ActiveMode
+    local rounds = mode ~= nil and (mode.BotQuotaPolicy == "rounds"
+        or (mode.BotQuotaPolicy == nil and mode.TeamPolicy == "managed"))
+    if rounds and store.phase() == "LIVE" and not boundary then return 0, 0 end
+    local plan = lib._Plan(targetFor(store, countHumans(entries, boundary)), entries, n, prefer)
     for _, ent in ipairs(plan.kick) do kickBot(store, ent, "bot quota") end
     return createBots(store, plan.create), #plan.kick
 end
@@ -336,6 +345,24 @@ PW.Bot = botLib
 
 function botLib.Get(bot)
     return PW._BotsManager.boards[bot]
+end
+
+local function mirrorTeams()
+    local n = engineTeams()
+    for key, board in pairs(PW._BotsManager.boards) do
+        local ply = key --[[@as Player]]
+        if IsValid(ply) then
+            local index = ply:Team()
+            board.team = index >= 1 and index <= n and index or nil
+        end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() mirrorTeams() end
+function MODULE:PW_RoundPrepared() mirrorTeams() end
+
+function MODULE:PW_RoundPreparing()
+    lib._Step(PW._BotsManager, nil, true)
 end
 
 ---@param phase PW.PhaseName

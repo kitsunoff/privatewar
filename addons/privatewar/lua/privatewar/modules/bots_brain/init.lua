@@ -84,6 +84,42 @@ local function tickBot(ply, board, now)
     end
 end
 
+local function stopAll()
+    local now = CurTime()
+    for ply, state in pairs(store.states) do
+        local board = botLib.Get(ply)
+        if board ~= nil then lib.Stop(state, envFor(ply, board, now), now, "relationships changed") end
+    end
+end
+
+local function clearAll()
+    for ply in pairs(store.states) do
+        store.states[ply] = lib.NewState()
+        local board = botLib.Get(ply)
+        if board ~= nil then board.target, board.behavior, board.intent = nil, nil, { buttons = 0 } end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanging() stopAll() end
+function MODULE:PW_RoundPreparing() stopAll() end
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+
+function MODULE:PW_MatchEnd()
+    stopAll()
+    clearAll()
+end
+
+---@param id string
+---@param revision integer
+function MODULE:PW_ObjectiveInvalidated(id, revision)
+    local now = CurTime()
+    for ply, state in pairs(store.states) do
+        local board = botLib.Get(ply)
+        if board ~= nil then lib._InvalidateObjective(state, envFor(ply, board, now), now, id, revision) end
+    end
+end
+
 ---@param ply Player
 local function register(ply)
     local scheduler = rawget(PW, "BotScheduler") --[[@as PW.BotSchedulerLib?]]

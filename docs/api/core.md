@@ -214,13 +214,33 @@ Internal (d.14), listed so other lanes do not depend on them:
 
 | Name | Meaning |
 | --- | --- |
-| `registry._Disable(id, reason)` | Disables an entity until `_Enable`: `IsValid` false, subscriptions removed. Survives re-registration and resolution. Used by enable ConVars (T-1.4) and `PW.Call` |
+| `registry._Disable(id, reason)` | Disables an entity until `_Enable`: `IsValid` false, subscriptions removed, live instances of that exact resolved definition removed, then `PW_EntityDisabled` notified once for the enabled-to-disabled transition. Survives re-registration and resolution. Used by enable ConVars (T-1.4) and `PW.Call` |
 | `registry._Enable(id)` | Clears a disable; the entity is subscribed again if its kind subscribes |
 | `registry._DisabledReason(id) -> string?` | The reason given to `_Disable`, `nil` when enabled |
 | `registry._Release(keep?)` | Removes every subscription and invalidates every entity of the registry (it is replaced), except the ids in `keep` (`{ [id] = true }`), which stay valid |
 | `registry._Released() -> boolean` | Whether `_Release` ran |
 | `PW.Registry._HookMethods(tbl) -> string[]` | Names of the `PW_*` functions of a table, sorted |
 | `entity._Registry` | The registry that resolved the entity |
+
+### Disable cleanup notification
+
+`PW_EntityDisabled(kind: string, id: string, definition: table, reason: string)` is a synchronous notification
+on the realm applying the disable, not a network message. The definition is the exact resolved registry table,
+not its stored class table. It fires only for an actual enabled-to-disabled transition of a valid definition;
+repeating `_Disable` does not notify again. `_Enable` allows a later disable to notify again.
+
+Before dispatch the definition is disabled, its ordinary subscriptions are removed, and the core has removed
+every live instance whose own `_Definition` is that exact table. Identity is not inferred from `ClassName`:
+another registry's same id, another definition, and unrelated instances are untouched.
+
+An owner module may use a stable `hook.Add` identifier independent of its auto-subscription for cleanup only:
+revoke its owned caches, effects and replication when it or its content is disabled. A disabled module's ordinary
+`PW_*` methods cannot perform this cleanup because they have already been unsubscribed. Cleanup listeners must
+not perform gameplay, regrant effects, spawn content, return a value or throw an error. Standard GMod dispatch
+still applies: a returned value skips later listeners, and an error aborts dispatch. There is no global hook
+transaction or rollback; either misuse cannot undo the already completed core invalidation/instance cleanup.
+Replacement, re-resolution and registry release are not disable notifications; kept active definitions remain valid.
+This is an additive API 1 hook; `PW.API` remains unchanged.
 
 ## Enable ConVars
 
@@ -417,7 +437,9 @@ Source: `gamemodes/privatewar/gamemode/core/sh_call.lua` (shared, T-1.8), `desig
 `PW.Call(entity, method, ...) -> ...`:
 
 1. Returns nothing without calling when `entity[method]` is not a function, when the entity failed earlier without
-   a registry, or when `entity.IsValid` is a function and returns `false`.
+   a registry, or when `entity.IsValid` is a function and returns `false`. The sole removal-only admission below
+   lets the real `instance:Remove()` call its `OnUnequip` once despite instance/source invalidity; arbitrary
+   callers cannot create that admission.
 2. Otherwise runs `pcall(entity[method], entity, ...)` and returns the method's results.
 3. On error it returns nothing and:
    - for an entity that is not `PW.ActiveMode`: logs one line
@@ -456,23 +478,36 @@ state of a definition (perk, streak, equipment) with hooks and timers that end w
 | Function | Contract |
 | --- | --- |
 | `PW.Instance(def, owner) -> PW.Instance` | A new table whose missing fields are read from `def` (`__index`), with `IsValid`, `Hook`, `Timer`, `Remove` set on it (they shadow fields of `def`). Calls `PW.Call(instance, "OnEquip", owner)` and returns the instance |
-| `instance:IsValid() -> boolean` | `false` once the instance was removed or one of its calls through `PW.Call` errored. Independent of the definition's `IsValid` |
+| `instance:IsValid() -> boolean` | `false` once removal starts, one of its calls through `PW.Call` errored, or its source definition has an `IsValid` function returning false. Plain non-registry definitions without `IsValid` still work |
 | `instance:Hook(name, fn)` | `hook.Add(name, instance, ...)`: on the hook, `fn(instance, ...)` runs through `PW.Call` and its results are returned (it may answer a question hook). One callback per hook name; a second `Hook` with the same name replaces it. Ignored on an invalid instance |
 | `instance:Timer(delay, reps, fn)` | `timer.Create` with a unique name (`PW.Instance.<n>`); `fn(instance)` runs through `PW.Call`. `reps` as in `timer.Create` (0 = forever). Ignored on an invalid instance |
-| `instance:Remove()` | Runs once: `PW.Call(instance, "OnUnequip", owner)`, then the instance becomes invalid and its hooks and timers are removed |
+| `instance:Remove()` | Runs once: blocks gameplay, runs `OnUnequip(owner)` through `PW.Call` with a protected, single-use cleanup admission even if the instance failed or its definition is disabled, then removes all owned hooks, timers and the live entry. Reentrant calls do nothing |
 
 - Errors: an error in `OnEquip`, a hook callback or a timer callback makes the instance invalid (`PW.Call` keeps
-  it in its failed set; the definition is not disabled). `OnUnequip` is skipped for a failed instance, because
-  `PW.Call` no longer calls it. After a failed hook or timer callback the instance is removed at once.
-- An error in `OnEquip` does not remove the instance at once: it stays invalid (no hooks or timers can be added)
-  until `Remove()` or the end of the match.
+  it in its failed set; the definition is not disabled). After a failed hook or timer callback the instance is
+  removed at once. Removal still calls `OnUnequip` exactly once; this cleanup-only exception does not resume
+  ordinary `PW.Call` gameplay. The central caller profiles cleanup normally when `pw_profile` is 1, including
+  failed cleanup. An `OnUnequip` error is logged with the definition id and method, never rethrown, never disables
+  the definition, and cannot skip core hook/timer/live-entry cleanup even when the logger itself errors.
+- Cleanup admission is created only inside the real `Remove` and consumed before entering `OnUnequip`.
+  Nested `PW.Call(instance, "OnUnequip")`, other methods, hooks and timers remain blocked while ending.
+  There is no caller-controlled bypass argument or public removal flag. Outside actual removal, ordinary
+  `PW.Call` still skips failed/invalid instances, including arbitrary calls to their `OnUnequip`.
+- After `OnEquip` returns, the constructor settles validity immediately: an already invalid definition skips
+  equipping and is removed without a live-entry leak; failed equipping removes its hooks/timers and invokes
+  `OnUnequip` once before returning the invalid instance. Later `Remove` calls remain no-ops.
 - Cleanup on the server: the core removes every live instance on `PW_MatchEnd` (listener `"PW.Instance"`).
 - Cleanup on the client (`PW_MatchEnd` is server only): the core removes every live client instance when the
   networked phase leaves `LIVE`, before `PW_PhaseChanged` fires (see "Phase networking").
-- Disabling the definition (`registry._Disable`) does not affect instances that already exist. A re-resolved
-  definition does not either: an existing instance keeps reading the old table.
-- `PW._Instances` (live set, timer counter) and `PW._EndInstances()` (removes every live instance) are internal
-  (d.14).
+- Disabling the definition (`registry._Disable`) synchronously removes existing instances of that exact resolved
+  table before `PW_EntityDisabled`. Re-enabling does not revive removed instances. An existing instance keeps
+  reading its original table across replacement/re-resolution/release, but gameplay checks that source's validity;
+  a kept active definition remains valid. This does not introduce eager instance cleanup on replacement/release.
+- `PW._Instances` (live set, timer counter), `instance._Definition` (own source-table reference),
+  `PW._EndInstances()` (removes every live instance), and `PW._EndDefinitionInstances(definition)` (removes only
+  live instances with that exact source reference) are internal (d.14). The registry calls the latter only when
+  the instance core has loaded. `PW._TakeInstanceCleanup(entity, method)` is an internal read-once admission
+  predicate for `PW.Call`; it cannot create admission. Its pending state is private to the instance core.
 
 ## Phases and match
 
@@ -564,8 +599,9 @@ Source: `gamemodes/privatewar/gamemode/core/sv_mapchange.lua` (server), `cl_read
 - `PW.MapChange.IsChanging() -> boolean`: `true` from the announcement (below) or the `changelevel` command until the
   new map (the Lua state resets) or the 10 s fallback. While it is `true`, `PW.Match.Start` refuses.
 - Delayed change (T-11.10): `PW.Match.Start(mode, otherMap)` calls `PW.MapChange.Schedule(mode, map)`. With
-  `pw_mapchange_delay` (archived, default 5, 0-60 s) above 0 it announces the change and begins it that many seconds
-  later from the `Think` tick; with 0 it begins at once. The announcement is three NW2 globals, written map, mode, end
+  `pw_mapchange_delay` (archived, default 5, range 1-60 s), it always announces before beginning the change that many
+  seconds later from the `Think` tick. Scheduling clamps to 1-60 s too, including a zero or negative injected delay.
+  The announced deadline is the same stored deadline used to start the change. The announcement is three NW2 globals, written map, mode, end
   time: `pw_mapchange_map` (string), `pw_mapchange_mode` (mode id), `pw_mapchange_at` (`CurTime()` of the change, `-1`
   for none); both realms read them with `PW.Phase.GetMapChange() -> map, mode, at` (keys in `PW.Phase._ChangeKeys`).
   Clients show the map change popup and the START button countdown (`ui.md`, "Match flow in the lobby"). Any phase
@@ -732,6 +768,7 @@ method with the hook's name as the default implementation, called after the list
 | Hook | Type | Arguments | Contract |
 | --- | --- | --- | --- |
 | `PW_PreRegister` | question, via `PW.Ask` | `kind: string, id: string, tbl: table` | Runs before every registration (file or programmatic, early or late), before `Base` resolution. Edit `tbl` in place to patch; return `false` to veto. Any other return value is ignored (d.10) |
+| `PW_EntityDisabled` | notification, via `PW.Notify` | `kind: string, id: string, definition: table, reason: string` | Both realms, locally. Once per actual enabled-to-disabled transition, after invalidation, unsubscription and exact-definition live-instance cleanup. Cleanup-only stable listeners must not return, error, regrant or perform gameplay; see "Disable cleanup notification" |
 | `PW_PhaseChange` | notification, via `PW.Notify` | `phase: PW.PhaseName, oldPhase: PW.PhaseName, endsAt: number` | Server. Fired on every transition (also the `PREMATCH -> PREMATCH` countdown), after the phase and its end time (`CurTime()` based, `-1` = none) are stored. Order: exit actions of the old phase (`MODE:Cleanup`, `PW_MatchEnd`), then `PW_PhaseChange`, then entry actions (`PW.ActiveMode` set or cleared, `MODE:Start`, `PW_MatchStart`) |
 | `PW_MatchStart` | notification, via `PW.Notify` | — | Server. Entering `LIVE`: after `PW_PhaseChange` and after `MODE:Start` |
 | `PW_MatchEnd` | notification, via `PW.Notify` | `result: any` | Server. Leaving `LIVE` (to `POSTMATCH`, or to `LOBBY` by abort): after `MODE:Cleanup`, before `PW_PhaseChange`. `result` is the value given to `Finish`, `nil` on abort. `MODE:Cleanup` and `PW_MatchEnd` run only if the match started (`LIVE` was entered); an abort from `PREMATCH` fires neither. The core removes every live instance here |

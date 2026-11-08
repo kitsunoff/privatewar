@@ -6,6 +6,7 @@
 local lib = PW.Streaks --[[@as PW.StreaksLib]]
 
 util.AddNetworkString(lib.RevealNet)
+util.AddNetworkString("pw_reveal_reset")
 
 ---@param list any[]
 ---@return Player[]
@@ -48,6 +49,14 @@ local function defaultJamSend(recipients, duration)
     net.Send(to)
 end
 
+---@param recipients any[]
+local function defaultReset(recipients)
+    local to = humans(recipients)
+    if #to == 0 then return end
+    net.Start("pw_reveal_reset")
+    net.Send(to)
+end
+
 ---@param a any
 ---@param b any
 ---@return boolean
@@ -68,10 +77,18 @@ end
 ---@param viewer any
 ---@param target any
 ---@param pos Vector
-local function defaultStimulus(viewer, target, pos)
+---@param sourceToken? table
+---@param expiresAt? number
+local function defaultStimulus(viewer, target, pos, sourceToken, expiresAt)
     local bot = rawget(PW, "Bot") --[[@as PW.BotLib?]]
     if bot == nil or bot.AddStimulus == nil then return end
-    bot.AddStimulus(viewer, "radar", { ent = target, pos = pos })
+    bot.AddStimulus(viewer, "radar", { ent = target, pos = pos, sourceToken = sourceToken, expiresAt = expiresAt })
+end
+
+---@param token table?
+local function retireBot(token)
+    local bot = PW.Bot
+    if token ~= nil and bot ~= nil and bot.RetireStimulusSource ~= nil then bot.RetireStimulusSource(token) end
 end
 
 function lib._NewRevealStore(opts)
@@ -84,7 +101,10 @@ function lib._NewRevealStore(opts)
         players = opts.players or player.GetAll,
         send = opts.send or defaultSend,
         jamSend = opts.jamSend or defaultJamSend,
-        stimulus = opts.stimulus or defaultStimulus
+        stimulus = opts.stimulus or defaultStimulus,
+        reset = opts.reset or defaultReset,
+        pulses = {}, knownSources = setmetatable({}, { __mode = "k" }),
+        retiredSources = setmetatable({}, { __mode = "k" })
     }
 end
 
@@ -95,12 +115,39 @@ local function store()
     return PW._Reveal --[[@as PW.RevealStore]]
 end
 
+---@param s PW.RevealStore
+---@param now number
+local function prunePulses(s, now)
+    local pulses = s.pulses or {}
+    for i = #pulses, 1, -1 do
+        if pulses[i].ends <= now then
+            if pulses[i].sourceToken == nil then retireBot(pulses[i].botToken) end
+            table.remove(pulses, i)
+        end
+    end
+end
+
+local nextPrune = 0
+PW.HookFor(MODULE, "Think", function()
+    local now = CurTime()
+    if now < nextPrune then return end
+    nextPrune = now + 1
+    local s = store()
+    prunePulses(s, s.clock())
+    lib._Prune(s.jams, s.clock())
+end)
+
 ---@param viewer integer|Player
 ---@param targets Player[]
 ---@param duration number
+---@param owner? Player
+---@param sourceToken? table
 ---@return integer
-function PW.Reveal(viewer, targets, duration)
+function PW.Reveal(viewer, targets, duration, owner, sourceToken)
     local s = store()
+    if sourceToken ~= nil and (not istable(sourceToken)
+        or (s.retiredSources ~= nil and s.retiredSources[sourceToken]) or not isnumber(duration)
+        or duration ~= duration or duration <= 0 or duration >= math.huge) then return 0 end
     local now = s.clock()
     lib._Prune(s.jams, now)
     local recipients = s.members(viewer)
@@ -108,15 +155,97 @@ function PW.Reveal(viewer, targets, duration)
     if ref == nil then return 0 end
     ---@type PW.RevealBlip[]
     local blips = {}
+    ---@type Player[]
+    local disclosed = {}
     for _, target in ipairs(lib._Filter(targets, ref, s.jams, now, s.isEnemy)) do
-        if IsValid(target) and #blips < lib.MaxBlips then
-            blips[#blips + 1] = { index = target:EntIndex(), pos = target:GetPos() }
+        if IsValid(target) and #blips < lib.MaxBlips and PW.Ask("PW_CanReveal", viewer, target, owner) ~= false then
+            ---@type Vector
+            local pos = target:GetPos()
+            blips[#blips + 1] = { index = target:EntIndex(), pos = Vector(pos.x, pos.y, pos.z) }
+            disclosed[#disclosed + 1] = target
         end
     end
     if #blips == 0 then return 0 end
+    local pulses = s.pulses or {}
+    s.pulses = pulses
+    prunePulses(s, now)
+    if #pulses >= 128 then
+        if pulses[1].sourceToken == nil then retireBot(pulses[1].botToken) end
+        table.remove(pulses, 1)
+    end
+    local botToken = sourceToken or {}
+    if sourceToken ~= nil then
+        s.knownSources = s.knownSources or setmetatable({}, { __mode = "k" })
+        s.knownSources[sourceToken] = true
+    end
+    pulses[#pulses + 1] = { owner = owner, recipients = recipients, blips = blips, ends = now + duration,
+        sourceToken = sourceToken, botToken = botToken }
     s.send(recipients, blips, duration)
-    for i, blip in ipairs(blips) do s.stimulus(viewer, targets[i] ~= nil and Entity(blip.index) or nil, blip.pos) end
+    for i, blip in ipairs(blips) do s.stimulus(viewer, disclosed[i], blip.pos, botToken, now + duration) end
     return #blips
+end
+
+-- Rebuild only derived radar data; unrelated owned instances/inventory are not touched.
+---@param s PW.RevealStore
+local function replay(s)
+    local now = s.clock()
+    lib._Prune(s.jams, now)
+    local reset = s.reset or defaultReset
+    reset(s.players())
+    for _, pulse in ipairs(s.pulses or {}) do
+        if pulse.ends > now then s.send(pulse.recipients, pulse.blips, pulse.ends - now) end
+    end
+    for _, jam in ipairs(s.jams) do
+        ---@type Player[]
+        local hostile = {}
+        for _, ply in ipairs(s.players()) do
+            if s.isEnemy(jam.owner, ply) then hostile[#hostile + 1] = ply end
+        end
+        s.jamSend(hostile, jam.ends - now)
+    end
+end
+
+function lib.RetireRevealSource(token)
+    local s = store()
+    if token == nil or s.knownSources == nil or not s.knownSources[token]
+        or (s.retiredSources ~= nil and s.retiredSources[token]) then return end
+    s.retiredSources = s.retiredSources or setmetatable({}, { __mode = "k" })
+    s.retiredSources[token] = true
+    local changed, now = false, s.clock()
+    local pulses = s.pulses or {}
+    for i = #pulses, 1, -1 do
+        if rawequal(pulses[i].sourceToken, token) then
+            changed = changed or pulses[i].ends > now
+            table.remove(pulses, i)
+        end
+    end
+    retireBot(token)
+    if changed then replay(s) end
+end
+
+function lib._RemoveEffects(owner)
+    local s = store()
+    for i = #s.jams, 1, -1 do
+        if s.jams[i].owner == owner then table.remove(s.jams, i) end
+    end
+    local pulses = s.pulses or {}
+    for i = #pulses, 1, -1 do
+        if pulses[i].owner == owner or pulses[i].ends <= s.clock() then
+            -- Expiring somebody else's old pulse does not retire their still-live periodic producer.
+            if pulses[i].owner == owner or pulses[i].sourceToken == nil then retireBot(pulses[i].botToken) end
+            table.remove(pulses, i)
+        end
+    end
+    s.pulses = pulses
+    replay(s)
+end
+
+function lib._ResetEffects()
+    local s = store()
+    for _, pulse in ipairs(s.pulses or {}) do retireBot(pulse.botToken) end
+    s.jams, s.pulses = {}, {}
+    local reset = s.reset or defaultReset
+    reset(s.players())
 end
 
 function lib.Jam(owner, duration)

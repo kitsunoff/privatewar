@@ -11,6 +11,11 @@
 
 local lib = PW.MatchRules --[[@as PW.MatchRulesLib]]
 
+function lib.Spawn(ply)
+    ply:Spawn()
+    PW.Notify("PW_PlayerSpawned", ply)
+end
+
 ---@param mode table?
 ---@return integer
 local function teamCount(mode)
@@ -47,10 +52,10 @@ end
 ---@param dmg CTakeDamageInfo
 ---@return Weapon?
 local function weaponOf(attacker, dmg)
+    local ammo = rawget(PW, "WeaponAmmo") --[[@as PW.WeaponAmmoLib?]]
+    if ammo ~= nil and ammo.DamageWeapon ~= nil then return (ammo.DamageWeapon(attacker, dmg)) end
     local inflictor = dmg:GetInflictor()
     if IsValid(inflictor) and inflictor:IsWeapon() then return inflictor --[[@as Weapon]] end
-    local active = attacker:GetActiveWeapon()
-    if IsValid(active) then return active end
     return nil
 end
 
@@ -137,13 +142,18 @@ function MODULE:PW_MatchStart()
     local free = teamCount(PW.ActiveMode) == 0
     for _, ply in ipairs(sortedPlayers()) do
         if free then ply:SetTeam(lib.FreeTeam) end
-        ply:Spawn()
+        lib.Spawn(ply)
     end
 end
 
 PW.HookFor(MODULE, "DoPlayerDeath", function(_, victim, attacker, dmg)
     if not live() then return end
     PW.Notify("PW_PlayerKilled", victim, attacker, dmg)
+end)
+
+PW.HookFor(MODULE, "EntityTakeDamage", function(_, target, dmg)
+    if not live() or not target:IsPlayer() then return end
+    if PW.Ask("PW_CanTakeDamage", target, dmg:GetAttacker(), dmg) == false then return true end
 end)
 
 ---The death think of one dead player in LIVE: sets the respawn time on the first call, respawns once it is due.
@@ -155,7 +165,7 @@ local function deathThink(ply)
         local delay = PW.Ask("PW_RespawnDelay", ply)
         store.respawnAt[ply] = now + (isnumber(delay) and delay --[[@as number]] or lib._DefaultDelay)
     end
-    if lib._RespawnDue(now, store.respawnAt[ply]) and PW.Ask("PW_CanRespawn", ply) ~= false then ply:Spawn() end
+    if lib._RespawnDue(now, store.respawnAt[ply]) and PW.Ask("PW_CanRespawn", ply) ~= false then lib.Spawn(ply) end
 end
 
 PW.HookFor(MODULE, "PlayerDeathThink", function(_, ply)

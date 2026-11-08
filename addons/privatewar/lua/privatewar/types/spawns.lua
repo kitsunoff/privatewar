@@ -59,6 +59,7 @@
 ---@field sample? integer candidates to evaluate; default Budget.sample
 ---@field enemies? PW.SpawnActor[] instead of the living enemies of the player (measurement, tests)
 ---@field mates? PW.SpawnActor[] instead of the living teammates of the player
+---@field spawns? PW.MapSpawns authored side-indexed pool instead of the ordinary whole-map spawn source
 
 ---Random integer in m..n (the signature of math.random(m, n)).
 ---@alias PW.SpawnRand fun(m: integer, n: integer): integer

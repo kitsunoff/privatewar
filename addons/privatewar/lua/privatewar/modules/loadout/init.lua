@@ -54,6 +54,10 @@ end
 PW._Wildcards = PW._Wildcards or setmetatable({}, { __mode = "k" })
 
 function lib._EquipWildcards(ply, loadout, lookup)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "wildcards") == false then
+        PW._Wildcards[ply] = nil
+        return
+    end
     local ids = lib._Items(loadout[lib.WildcardSlot]) or {}
     ---@type string[]
     local equipped = {}
@@ -89,6 +93,15 @@ function MODULE:PW_LoadoutGiven(ply, loadout)
     local perks = rawget(PW, "Perks") --[[@as PW.PerksLib?]]
     -- The perks module recomputes on the same notification; do it again in case it ran first.
     if perks ~= nil and perks._Recompute ~= nil then perks._Recompute(ply) end
+end
+
+---@param ply Player
+function MODULE:PW_PlayerTeamChanged(ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "wildcards") == false then PW._Wildcards[ply] = nil end
+end
+
+function MODULE:PW_MatchEnd()
+    PW._Wildcards = setmetatable({}, { __mode = "k" })
 end
 
 function lib._OnPlayerLoadout(ply)

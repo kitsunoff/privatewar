@@ -40,6 +40,13 @@ function lib.Clear(state)
     state.recognisedTo = nil
 end
 
+function lib.HideSight(state)
+    for _, contact in pairs(state.memory) do
+        contact.visible = false
+        if contact.observed ~= nil then contact.observed.visible = false end
+    end
+end
+
 ---Puts a stimulus into the memory of a state; false when it lacks the entity or the position.
 ---@param state PW.BotPerceptionState
 ---@param kind string
@@ -47,8 +54,24 @@ end
 ---@return boolean
 function lib.AddStimulus(state, kind, data)
     if not istable(data) or data.ent == nil or not isvector(data.pos) then return false end
+    if kind == "radar" then
+        local token, ends = data.sourceToken, data.expiresAt
+        if token ~= nil and (not istable(token) or lib._RetiredRadarSources[token]) then return false end
+        if (token ~= nil or ends ~= nil) and data.time ~= nil and not isnumber(data.time) then return false end
+        if ends ~= nil and (not isnumber(ends) or ends ~= ends or ends >= math.huge
+            or ends <= CurTime() or ends <= (data.time or CurTime())) then
+            return false
+        end
+        if (token ~= nil or ends ~= nil) and data.time ~= nil
+            and (data.time ~= data.time or math.abs(data.time) == math.huge
+                or CurTime() - data.time > lib.Config.memorySeconds) then return false end
+        if token ~= nil then lib._KnownRadarSources[token] = true end
+    end
     lib.Remember(state.memory, data.ent, {
-        pos = data.pos, vel = data.vel, time = data.time or CurTime(), source = kind, visible = false, dir = data.dir
+        pos = data.pos, vel = data.vel, time = data.time or CurTime(), source = kind, visible = false, dir = data.dir,
+        sourceToken = kind == "radar" and data.sourceToken or nil,
+        expiresAt = kind == "radar" and data.expiresAt or nil,
+        now = (data.sourceToken ~= nil or data.expiresAt ~= nil) and CurTime() or nil
     })
     return true
 end
@@ -92,6 +115,8 @@ function lib.Dispatch(botOrTeam, kind, data)
     end
     if not isstring(kind) or not istable(data) then return 0 end
     local stimulus = data --[[@as PW.BotStimulusData]]
+    if kind == "footstep" and PW.Perks ~= nil and IsValid(stimulus.ent)
+        and not PW.Perks.FootstepsAudible(stimulus.ent --[[@as Player]]) then return 0 end
     local fed = 0
     for _, target in ipairs(targets(botOrTeam)) do
         if isEnemy(target.key, stimulus.ent) and lib.AddStimulus(target.state, kind, stimulus) then
@@ -109,6 +134,8 @@ end
 ---@param random PW.BotRandomFn?
 ---@return integer heard
 function lib.HearSound(listeners, kind, pos, source, random)
+    if kind == "footstep" and PW.Perks ~= nil and IsValid(source)
+        and not PW.Perks.FootstepsAudible(source) then return 0 end
     local heard = 0
     for _, listener in ipairs(listeners) do
         if listener.key ~= source and lib.CanHear(kind, listener.ear, pos) then
@@ -128,6 +155,12 @@ end
 ---@param now number
 ---@return integer
 function lib.Share(sender, mates, contact, now)
+    local token = contact.sourceToken
+    if token ~= nil and lib._RetiredRadarSources[token] then return 0 end
+    if contact.expiresAt ~= nil and contact.expiresAt <= now then return 0 end
+    if contact.source == "radar" and token ~= nil then
+        lib._KnownRadarSources[token] = true
+    end
     local sent = 0
     for _, mate in ipairs(mates) do
         local params = mate.params
@@ -137,7 +170,8 @@ function lib.Share(sender, mates, contact, now)
             if #pending >= pendingCap then table.remove(pending, 1) end
             pending[#pending + 1] = {
                 at = now + params.share_delay, ent = contact.ent, pos = contact.pos, vel = contact.vel,
-                time = contact.time
+                time = contact.time, radar = contact.source == "radar",
+                sourceToken = contact.sourceToken, expiresAt = contact.expiresAt
             }
             sent = sent + 1
         end
@@ -153,8 +187,7 @@ local function deliverPending(state, now)
     local keep = {}
     for _, message in ipairs(state.pending) do
         if message.at <= now then
-            lib.Remember(state.memory, message.ent,
-                { pos = message.pos, vel = message.vel, time = message.time, source = "shared", visible = false })
+            lib.AddStimulus(state, message.radar and "radar" or "shared", message)
         else
             keep[#keep + 1] = message
         end
@@ -230,6 +263,57 @@ local function contactList(memory)
     return list
 end
 
+function lib.RefreshContacts(state) state.contacts = contactList(state.memory) end
+
+---@param contact PW.BotContact
+---@param token table
+---@return integer
+local function retireRadar(contact, token)
+    local radar, removed = contact.radar, 0
+    if radar == nil then return 0 end
+    for i = #radar, 1, -1 do
+        if rawequal(radar[i].sourceToken, token) then table.remove(radar, i) removed = removed + 1 end
+    end
+    return removed
+end
+
+---@param pending PW.BotPending[]
+---@param token table
+---@return integer
+local function retirePending(pending, token)
+    local removed = 0
+    for i = #pending, 1, -1 do
+        if pending[i].radar and rawequal(pending[i].sourceToken, token) then
+            table.remove(pending, i)
+            removed = removed + 1
+        end
+    end
+    return removed
+end
+
+---@param state PW.BotPerceptionState
+---@param token table
+---@param now number
+---@return integer
+local function retireFrom(state, token, now)
+    ---@type integer
+    local removed = 0
+    for _, contact in pairs(state.memory) do
+        removed = removed + retireRadar(contact, token)
+    end
+    removed = removed + retirePending(state.pending, token)
+    if removed > 0 then lib.Decay(state.memory, now) lib.RefreshContacts(state) end
+    return removed
+end
+
+function lib.RetireSource(token, now)
+    if token == nil or not lib._KnownRadarSources[token] then return 0 end
+    lib._RetiredRadarSources[token] = true
+    local removed = 0
+    for _, state in pairs(lib.States) do removed = removed + retireFrom(state, token, now) end
+    return removed
+end
+
 ---One perception step at time now: pushes the snapshot of what is visible, recognises through the reaction queue,
 ---delivers due shared contacts, decays the memory and rebuilds the contacts. Returns the sightings that were
 ---recognised and are due for sharing.
@@ -240,7 +324,7 @@ end
 function lib.Think(state, ctx, now)
     rollDelay(state, ctx, now)
     lib.QueuePush(state.queue, now, ctx.seen or {})
-    for _, contact in pairs(state.memory) do contact.visible = false end
+    lib.HideSight(state)
     deliverPending(state, now)
     ---@type PW.BotSighting[]
     local fresh = {}

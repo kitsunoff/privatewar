@@ -106,7 +106,7 @@
 ---The bot name pool (sh_name_pool.lua, 06-progression.md d.7): about 100 original names; unique, editable.
 ---@field NamePool string[]
 ---Pure: a pool name not in taken (lowercase names in use; roll in [0, 1) picks among the free ones); when every pool
----name is taken, a pool name with the lowest free number ("Viper 2").
+---name is taken, the first pool name with the lowest unused suffix from 2, without rolling; empty pools use Operator.
 ---@field _PickName fun(pool: string[], taken: table<string, boolean>, roll: fun(): number): string
 ---Pure: the lowercase names of the entries (entries without a name are skipped).
 ---@field _TakenNames fun(entries: PW.BotsEntry[]): table<string, boolean>
@@ -120,7 +120,7 @@
 ---Internal (server): a fresh store (tests use their own; the real one is PW._BotsManager).
 ---@field _NewStore? fun(opts?: PW.BotsStoreOptions): PW.BotsStore
 ---Internal (server): one reconciliation step; returns the created and the kicked count.
----@field _Step? fun(store: PW.BotsStore, prefer?: integer): integer, integer
+---@field _Step? fun(store: PW.BotsStore, prefer?: integer, boundary?: boolean): integer, integer
 ---Internal (server): kicks every bot (entering LOBBY, a map that stays in LOBBY); returns the kicked count.
 ---@field _KickAll? fun(store: PW.BotsStore, reason: string): integer
 ---Internal (server): a human joined: one step that kicks a bot of the team the human will get.

@@ -128,6 +128,9 @@ local function enterPhase(store, from, to)
     elseif to == "LIVE" then
         store.modeStarted = true
         if store.mode ~= nil then PW.Call(store.mode, "Start") end
+        -- Preparation can queue Abort/Finish while this transition is busy. Ordinary Start keeps its legacy events.
+        local prepares = store.mode ~= nil and isfunction(store.mode.PrepareRound)
+        if prepares and (store.abortReason ~= nil or #store.queue > 0) then return end
         store.matchStarted = true
         PW.Notify("PW_MatchStart")
     end

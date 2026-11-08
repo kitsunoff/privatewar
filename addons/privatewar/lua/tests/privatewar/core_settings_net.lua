@@ -114,7 +114,8 @@ local function installMapChange(state, map, count)
         time = function() return state.time end,
         map = function() return map end,
         mapChangeCount = function() return count end,
-        delay = function() return 0 end, -- the delayed change has its own cases (match_flow_ui.lua)
+        delay = function() return 1 end, -- minimum delay; countdown boundaries have dedicated match-flow cases
+        announce = function() end, -- isolate the fake clock from the real client globals
         bots = function() return 0 end,
         resolveMode = function(id) return id == "pwt_tdm" and tdm(state) or nil end,
         changelevel = function(target)
@@ -270,6 +271,11 @@ return {
                 expect(settings().Set("pwt_bots.count", 2)).to.beTrue()
                 expect(settings().Set("pwt_tdm.tags", { "b", "a" })).to.beTrue()
                 expect(match().Start(tdm(state), otherMap)).to.beTrue()
+                local calls = state.changelevels --[[@as table[] ]]
+                expect(#calls).to.equal(0)
+                local now = state.now --[[@as number]]
+                state.now = now + 1
+                changer()._Tick()
                 local call = must((state.changelevels --[[@as table[] ]])[1]) --[[@as { text: string? }]]
                 local written = must(changer()._Decode(must(call.text)))
                 expect(written.settings).to.deepEqual({

@@ -74,21 +74,6 @@ local function gather()
     return groups, alive, dead
 end
 
----@param raw any
----@return PW.BotObjective[]
-local function sanitize(raw)
-    ---@type PW.BotObjective[]
-    local out = {}
-    if not istable(raw) then return out end
-    for _, o in ipairs(raw --[[@as table[] ]]) do
-        if istable(o) and isstring(o.id) and isvector(o.pos) and isstring(o.action) then
-            out[#out + 1] = { id = o.id, pos = o.pos, action = o.action, radius = tonumber(o.radius) or 160,
-                weight = tonumber(o.weight) or 0, want = math.floor(tonumber(o.want) or 1) }
-        end
-    end
-    return out
-end
-
 ---@param team integer
 ---@return PW.BotObjective[]
 local function objectivesFor(team)
@@ -96,10 +81,10 @@ local function objectivesFor(team)
     if mode == nil then return {} end
     ---@type PW.BotObjective[]?
     local own = nil
-    if isfunction(mode.BotObjectives) then own = sanitize(PW.Call(mode, "BotObjectives", team)) end
+    if isfunction(mode.BotObjectives) then own = lib.Sanitize(PW.Call(mode, "BotObjectives", team)) end
     local derive = rawget(PW, "BotObjectives") --[[@as PW.BotObjectivesLib?]]
     if derive == nil then return own or {} end
-    return sanitize(derive.Derive(mode.ClassName, own, {}, {}, team))
+    return lib.Sanitize(derive.Derive(mode.ClassName, own, {}, {}, team))
 end
 
 ---@param group PW.CommanderGroup
@@ -158,6 +143,40 @@ function lib.Step(now)
     for _, group in pairs(groups) do assignTeam(group, now) end
     huntPass(alive, now)
 end
+
+---@param predicate fun(order: PW.BotOrder?): boolean
+local function release(predicate)
+    local botLib = rawget(PW, "Bot") --[[@as PW.BotLib?]]
+    if botLib == nil or botLib.Get == nil then return end
+    for _, entry in players() do
+        local ply = entry --[[@as Player]]
+        local board = botLib.Get(ply)
+        if board ~= nil and predicate(board.order) then
+            board.order, board.hunt = nil, nil
+            if botLib.ClearGoal ~= nil then botLib.ClearGoal(ply) end
+        end
+    end
+    store.nextRun = 0
+end
+
+function lib.Clear()
+    release(function() return true end)
+    store.hunt = lib.NewHuntState()
+end
+
+function lib.InvalidateObjective(id, revision)
+    release(function(order)
+        return order ~= nil and order.id == id and order.objective.revision == revision
+    end)
+end
+
+function MODULE:PW_RoundPrepared() lib.Clear() end
+function MODULE:PW_PlayerTeamChanged() lib.Clear() end
+function MODULE:PW_MatchEnd() lib.Clear() end
+
+---@param id string
+---@param revision integer
+function MODULE:PW_ObjectiveInvalidated(id, revision) lib.InvalidateObjective(id, revision) end
 
 PW.HookFor(MODULE, "Think", function()
     local now = CurTime()

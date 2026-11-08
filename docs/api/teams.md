@@ -76,6 +76,40 @@ The module also listens to core hooks (auto-subscribed `PW_*` methods): `PW_Phas
 - `PW_PendingMatchApplied(pending)`: restores `pending.teams` (keys of digits, integer teams `>= 1`) as
   preferences for the next assignment.
 
+## Managed placement and transitions
+
+`MODE.TeamPolicy` is `"balanced"` (also the default) or `"managed"`. Initial assignment stays balanced
+for both; a managed mode prepares its roles before playable spawning. Managed late placement asks
+`PW_SelectLateTeam(ply)`: a validated integer in `1..N` places the participant, `false`/`nil`/invalid
+defers without smallest-team fallback. Unadmitted JIP spectators stay out. Managed quota replacement
+is between rounds only, never an automatic midround smallest-team kick.
+
+Server `PW.Teams.Transition(ply, to, reason) -> boolean, string?` validates module enabled, valid active
+mode, `LIVE`, valid admitted non-spectating player, finite integer destination `1..N`, and reason
+`round_prepare`, `role_change`, `late_join` or `replacement`. Dead participants and initial pre-spawn
+observer bodies are eligible; observer mode alone does not exclude them. `PW_CanChangeTeam(ply, from,
+to, reason)` must answer exactly `true`. **First non-nil answer wins**: an earlier false blocks, but a
+later false cannot override an earlier true. There is no global false-veto priority.
+
+Invalid/reentrant requests fail without mutation/events; authorized same-team requests succeed without
+events. Changed-team order, synchronously before return:
+
+1. Notification `PW_PlayerTeamChanging(ply, from, to, reason)` stops all managed brains, including
+   their OnEnd callbacks, before `SetTeam`.
+2. Teams owns `SetTeam(to)`; no spawn, heal, loadout give or scoring occurs here.
+3. Notification `PW_PlayerTeamChanged(ply, from, to, reason)` lets each owner clear its own state for
+   **all managed bots**, even when the changed participant is human, and immediately mirrors board teams.
+
+Listeners return nothing. No rollback/transaction guarantee is made for foreign hook errors.
+The same reset helpers consume `PW_RoundPreparing` (stop brains) / `PW_RoundPrepared` (clear others)
+from `round_base`, even when teams did not change. Perception queues/sharing, targets, action stacks,
+evaluations, goals/path callbacks, aim/fire/input state and commander orders/hunt must not survive.
+Cancel pending work or reject its old generation; never create contacts during reset.
+`PW_CanRunBotBehavior(bot, behaviorId)` follows first-answer-wins questions: false rejects candidates,
+running/cached frames, ChangeTo, SuspendFor and resume; absent provider preserves ordinary admission.
+
+Types: `types/teams.lua`, `types/bots_brain.lua`; tests: `teams_transition.lua`, `infection_role_transition.lua`.
+
 ## Internal
 
 `PW.Teams._TeamCount`, `_Assign`, `_Smallest`, `_Counts`, `_IsEnemyRule`, `_ForFile`, `_FromFile`,

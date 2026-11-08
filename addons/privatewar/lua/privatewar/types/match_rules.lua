@@ -1,11 +1,12 @@
 ---@meta
+---@alias PW.CanTakeDamageHook fun(victim: Player, attacker: Entity, damage: CTakeDamageInfo): boolean?
 -- Types of the match_rules module (T-2.2; 02-modes.md d.5, d.7; 00-core.md d.3, d.5). Source:
 -- lua/privatewar/modules/match_rules/ (shared.lua: API, pure rules and reading; init.lua: server glue) and the
 -- modes tdm and ffa (lua/privatewar/modes/).
 
 ---One entry of the standings: a team index (team modes) or a player (FFA), and its score toward the limit.
 ---@class PW.Standing
----@field id any team index (integer) in a team mode, the Player in FFA (any value in pure tests)
+---@field id any team index in team modes; Player or saved positive UserID in personal results (any in pure tests)
 ---@field score integer
 
 ---Result of a match, the value a mode gives to PW.Match.Finish (and PW_MatchEnd receives).
@@ -49,6 +50,8 @@
 ---Team index of FFA players: a real engine team, so the base GM:PlayerSpawn (GM.TeamBased) does not make them
 ---spectators. Outside 1..N, so it never counts as a team of the match (no team score, every player an enemy).
 ---@field FreeTeam integer
+---Server: engine Spawn once, then synchronous PW_PlayerSpawned after base/loadout initialization returns.
+---@field Spawn? fun(ply: Player)
 ---Server: the mode's default reaction to PW_PlayerKilled: awards "kill" (and "headshot") to the attacker for an
 ---enemy kill and counts the kill toward the score limit; suicides, team kills and world kills score nothing.
 ---@field ScoreKill? fun(victim: Player, attacker: Entity, dmg: CTakeDamageInfo)
@@ -106,3 +109,5 @@
 ---@class PW
 ---@field MatchRules? PW.MatchRulesLib the match_rules module (nil when the module is missing)
 ---@field _MatchRules PW.MatchRulesStore internal
+
+---@alias PW.PlayerSpawnedHook fun(ply: Player)

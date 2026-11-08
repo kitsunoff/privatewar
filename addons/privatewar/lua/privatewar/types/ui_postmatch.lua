@@ -114,6 +114,13 @@
 ---@field weapons PW.UIPostmatchWeapon[]
 ---@field earned? integer currency earned this match (nil without the economy module or a baseline)
 ---@field map string
+---@field scoreLabel? string optional metric label; nil preserves SCORE
+
+---Client notification after each complete Gather, including progression-disabled/summary-pending paths.
+---Listeners may change presentation data only and must return nothing.
+---@alias PW.PostmatchGatheredHook fun(data: PW.UIPostmatchData, ownId: integer)
+---Client notification that authoritative extension data changed. Only rebuilds an enabled open POSTMATCH root.
+---@alias PW.PostmatchDataChangedHook fun()
 
 ---@class PW.UIPostmatchLib
 ---@field Titles table<PW.UIPostmatchKind, string>

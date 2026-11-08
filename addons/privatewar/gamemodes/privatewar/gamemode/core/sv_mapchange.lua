@@ -19,7 +19,7 @@
 local ackName = "pw_client_ready_ack"
 
 local delayVar = CreateConVar("pw_mapchange_delay", "5", { FCVAR_ARCHIVE },
-    "Private War: seconds the map change popup shows before changelevel", 0, 60)
+    "Private War: seconds the map change popup shows before changelevel", 1, 60)
 
 ---@param message string
 local function defaultLog(message)
@@ -219,8 +219,7 @@ end
 ---@return boolean
 function lib.Schedule(mode, map)
     local store = PW._MapChange
-    local delay = store.delay()
-    if delay <= 0 then return lib._Begin(mode, map) end
+    local delay = math.Clamp(store.delay(), 1, 60)
     local at = store.clock() + delay
     store.scheduled = { mode = mode, map = map, at = at }
     store.announce(map, tostring(mode.ClassName), at)

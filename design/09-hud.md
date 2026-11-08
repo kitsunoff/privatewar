@@ -47,6 +47,12 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
      - The Domination flag tiles stay in the top centre.
   4. **No "Match starts in N" message (user request after the playtest, T-11.10).** The lobby stays open in `PREMATCH` and its START button shows the countdown ("STARTING N…", accent text on a dark fill); an announced map change shows "MAP CHANGE N…" on the same button and a map change popup (`00-core.md` d.9, `08-lobby.md`). Pending confirmation of the exact look: the local manual checklist (not published) section 45.
 
+- **Revision 2026-11-08 (user-approved T-11.11; overrides decision 1 for health and ammo only):**
+  - Bottom left: the local player's nickname, below it three small armor bars representing 50 armor each (150 in total), below them a simple health bar. Armor fills continuously within each segment; presentation clamps to 0..150. Health uses the player's actual maximum. No numeric health/armor or portrait.
+  - Bottom right: only the active weapon's localized name and magazine / reserve primary ammo. A clipless weapon shows `- / reserve`, never a fabricated magazine; a weapon without primary ammo shows its name only. Long names fit without splitting UTF-8.
+  - These elements appear only for the living local player during `LIVE`, never an observed player. Hide the corresponding native health/battery or ammo panels only while their custom replacement is enabled, visible and successfully drawing; disabling the HUD or a replacement, or an error/missing module, restores vanilla.
+  - Preserve grenade equipment above the weapon and the bottom XP strip. Use the existing palette and font families. No changes to health/armor maxima, damage, loadouts or balance; crosshair, killfeed, Tab, radar, XP, streaks and other elements keep their existing decisions.
+
 3. **One `HUDPaint` iterating the `HUDELEMENT` registry (kind `hud/`).**
    - An element is a `Draw` function plus subscriptions to events; modes and modules bring their own elements (Domination: points; streaks module: radar).
    - Element calls go through `PW.Call` (pcall + profiler, `00-core.md` decision 6; `01-extensibility.md` decision 15).

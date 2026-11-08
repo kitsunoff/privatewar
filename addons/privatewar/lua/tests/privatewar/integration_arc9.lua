@@ -209,14 +209,25 @@ local function bot(state, key)
     return found
 end
 
+---@param label string
+---@param ply Player
+---@param wep PW.Arc9Weapon
+local function observeWeapon(label, ply, wep)
+    print(string.format("[PW] ARC9 native %s phase=%s alive=%s observer=%d team=%d valid=%s processed=%s owner=%s",
+        label, must(PW.Match).GetPhase(), tostring(ply:Alive()), ply:GetObserverMode(), ply:Team(),
+        tostring(IsValid(wep)), type(wep.GetProcessedValue), tostring(IsValid(wep) and wep:GetOwner() == ply)))
+end
+
 ---Gives class to ply through the ammo module (the loadout path); a held copy is stripped first.
 ---@param ply Player
 ---@param class string
 ---@return PW.Arc9Weapon
 local function give(ply, class)
     if ply:HasWeapon(class) then ply:StripWeapon(class) end
-    local wep = PW.WeaponAmmo.Give(ply, class, { magazines = 1 })
+    local wep = must(PW.WeaponAmmo.Give(ply, class, { magazines = 1 }))
     assert(IsValid(wep), "could not give " .. class .. " to " .. ply:Nick())
+    observeWeapon("given " .. class .. " arc9_base=" .. tostring(weapons.IsBasedOn(class, "arc9_base")),
+        ply, wep --[[@as PW.Arc9Weapon]])
     return wep --[[@as PW.Arc9Weapon]]
 end
 
@@ -238,17 +249,31 @@ local function bashRifle()
     error("no ARC9 rifle of the installed packs has its bash on")
 end
 
----Whether a second player fits 48 units from a standing spot along yaw. Players do not count as obstacles.
+---A standing hull on walkable ground, not a spawn or a recently moved player's still-airborne origin.
+---@param point Vector
+---@return Vector?
+local function groundAt(point)
+    local tr = util.TraceHull({ mins = Vector(-16, -16, 0), maxs = Vector(16, 16, 64),
+        filter = player.GetAll(), mask = MASK_PLAYERSOLID,
+        start = point + Vector(0, 0, 8), endpos = point - Vector(0, 0, 256) })
+    if not tr.Hit or tr.StartSolid or tr.HitNormal.z < 0.7 then return nil end
+    return tr.HitPos
+end
+
+---Whether two grounded players fit 48 units apart along yaw. Players do not count as obstacles.
 ---@param from Vector
 ---@param yaw number
----@return Vector? spot, string why
+---@return Vector? spot, string why, Vector? stand
 local function roomAt(from, yaw)
-    local spot = from + Angle(0, yaw, 0):Forward() * 48
+    local stand = groundAt(from)
+    if stand == nil then return nil, "no standing ground", nil end
+    local spot = groundAt(stand + Angle(0, yaw, 0):Forward() * 48)
+    if spot == nil or math.abs(spot.z - stand.z) > 4 then return nil, "no level target ground", nil end
     local hull = { mins = Vector(-16, -16, 0), maxs = Vector(16, 16, 64), filter = player.GetAll(),
-        mask = MASK_PLAYERSOLID, start = from + Vector(0, 0, 8), endpos = spot + Vector(0, 0, 8) }
+        mask = MASK_PLAYERSOLID, start = stand + Vector(0, 0, 8), endpos = spot + Vector(0, 0, 8) }
     local tr = util.TraceHull(hull)
-    if tr.Hit then return nil, "blocked by " .. tostring(tr.Entity) end
-    return spot, ""
+    if tr.Hit then return nil, "blocked by " .. tostring(tr.Entity), nil end
+    return spot, "", stand
 end
 
 ---Puts ply on a standing spot (where it is, else a player spawn point) with room for a target 48 units along its
@@ -266,9 +291,10 @@ local function roomAhead(ply)
     ---@type string[]
     local tried = {}
     for _, from in ipairs(spots) do
-        local spot, why = roomAt(from, yaw)
+        local spot, why, stand = roomAt(from, yaw)
         if spot ~= nil then
-            ply:SetPos(from)
+            ply:SetPos(must(stand))
+            ply:SetLocalVelocity(vector_origin)
             return spot
         end
         if #tried < 3 then tried[#tried + 1] = tostring(from) .. ": " .. why end
@@ -278,19 +304,49 @@ end
 
 local known = { ar = true, smg = true, sniper = true, shotgun = true, pistol = true, lmg = true, special = true }
 
+---@param state table<string, any>
+local function restoreNative(state)
+    hook.Remove("EntityTakeDamage", "PW test arc9 bash")
+    hook.Remove("PW_PlayerLoadout", "PW test arc9 native loadout")
+    for _, ply in pairs(state.pool --[[@as table<string, Player>]]) do
+        PW.BotInput.SetScripted(ply, nil)
+        if IsValid(ply) then
+            PW.SetStatMods(ply, {})
+            ply:Kick("PW arc9 test finished")
+        end
+    end
+    local native = state.native --[[@as { ownsMatch: boolean }]]
+    if native.ownsMatch then
+        must(PW.Match).Abort("ARC9 native fixture finished")
+        native.ownsMatch = false
+    end
+    for name, value in pairs(state.saved --[[@as table<string, string>]]) do must(GetConVar(name)):SetString(value) end
+end
+
 return {
     groupName = "PW ARC9 integration",
     beforeAll = function(state)
         state.pool = {}
+        state.saved = {}
+        state.native = { ownsMatch = false } -- case state is copied; retain ownership in the shared fixture table
     end,
-    afterAll = function(state)
-        hook.Remove("EntityTakeDamage", "PW test arc9 bash")
-        for _, ply in pairs(state.pool --[[@as table<string, Player>]]) do
-            PW.BotInput.SetScripted(ply, nil)
-            if IsValid(ply) then ply:Kick("PW arc9 test finished") end
-        end
-    end,
+    afterAll = restoreNative,
     cases = {
+        {
+            name = "Bash fixture: airborne positions are grounded before placing either player",
+            func = function()
+                stub(util, "TraceHull").with(function(trace)
+                    if trace.endpos.z < trace.start.z then
+                        return { Hit = true, HitPos = Vector(trace.start.x, trace.start.y, 0),
+                            HitNormal = Vector(0, 0, 1), StartSolid = false }
+                    end
+                    return { Hit = false }
+                end)
+                local spot, _, stand = roomAt(Vector(0, 0, 128), 0)
+                expect(must(spot).z).to.equal(0)
+                expect(must(stand).z).to.equal(0)
+            end
+        },
         {
             name = "Helpers: slot ids are address paths, parents ordered before children",
             skip = noAddon,
@@ -776,8 +832,48 @@ return {
             end
         },
         {
+            name = "Native fixture: public match start admits both ARC9 actors as live non-observers",
+            skip = noArc9,
+            async = true,
+            timeout = 10,
+            func = function(state)
+                local match = must(PW.Match)
+                assert(match.GetPhase() == "LOBBY", "ARC9 fixture needs an idle lobby, never a foreign match")
+                local saved = state.saved --[[@as table<string, string>]]
+                for _, name in ipairs({ "pw_prematch_timeout", "pw_countdown" }) do
+                    saved[name] = must(GetConVar(name)):GetString()
+                    must(GetConVar(name)):SetString("0")
+                end
+                local a, b = bot(state, "a"), bot(state, "b")
+                hook.Add("PW_PlayerLoadout", "PW test arc9 native loadout", function(ply)
+                    if ply == a or ply == b then return {} end -- no unrelated class perks or weapons
+                end)
+                local native = state.native --[[@as { ownsMatch: boolean }]]
+                native.ownsMatch = true
+                assert(match.Start(must(PW.Modes.Get("tdm"))), "ARC9 fixture could not start TDM")
+                local deadline = CurTime() + 5
+                local function ready()
+                    if match.GetPhase() ~= "LIVE" then
+                        assert(CurTime() < deadline, "ARC9 fixture never reached LIVE")
+                        timer.Simple(0.1, ready)
+                        return
+                    end
+                    for _, ply in ipairs({ a, b }) do
+                        assert(ply:Alive() and ply:GetObserverMode() == OBS_MODE_NONE, "ARC9 actor is not admitted")
+                        expect(ply:GetNW2Bool(must(PW.Jip).NetBool, false)).to.beFalse()
+                        PW.BotInput.SetScripted(ply, { buttons = 0 })
+                    end
+                    print("[PW] ARC9 native fixture admitted both actors through public TDM Start, phase=LIVE")
+                    done()
+                end
+                timer.Simple(0.1, ready) -- let ordinary spawn and queued body cleanup settle first
+            end
+        },
+        {
             name = "Apply on a bot's weapon returns the applied build",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 local chosen = pick(false)
                 local wep = give(bot(state, "a"), chosen.class)
@@ -786,11 +882,15 @@ return {
                 expect(result[chosen.slot]).to.equal(option)
                 expect(installed(wep, chosen.slot)).to.equal(option)
                 expect(adapter():IsValid()).to.beTrue()
+                -- ARC9 PostModify queues native work on this instance; finish it before the next case strips it.
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
             name = "Apply with a conflicting build returns what stuck",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 local chosen = pick(true)
                 local wep = give(bot(state, "a"), chosen.class)
@@ -802,11 +902,14 @@ return {
                 expect(result[other]).toNot.equal(wrong)
                 expect(result[other]).to.equal(installed(wep, other))
                 expect(result["99"]).to.beNil()
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
             name = "Customization lock: ARC9's own customization paths refuse",
             skip = noArc9,
+            async = true,
+            timeout = 5,
             func = function(state)
                 expect(GetConVar("arc9_atts_nocustomize"):GetBool()).to.beTrue()
                 expect(GetConVar("arc9_free_atts"):GetBool()).to.beFalse()
@@ -827,6 +930,7 @@ return {
                 local receiver = must((net.Receivers --[[@as table<string, function?>]])["arc9_randomizeatts"])
                 receiver(0, ply)
                 expect(table.HasValue(arc9().RandomizeQueue, wep)).to.beFalse()
+                timer.Simple(0.1, function() done() end)
             end
         },
         {
@@ -834,6 +938,11 @@ return {
             skip = noArc9,
             async = true,
             timeout = 5,
+            cleanup = function(state)
+                for _, ply in pairs(state.pool --[[@as table<string, Player>]]) do
+                    if IsValid(ply) then PW.SetStatMods(ply, {}) end
+                end
+            end,
             func = function(state)
                 local chosen = pick(false)
                 local ply = bot(state, "a")
@@ -841,11 +950,15 @@ return {
                 local base = wep:GetProcessedValue("ReloadTime") --[[@as number]]
                 PW.SetStatMods(ply, { reload_time = 0.5 })
                 timer.Simple(0.3, function()
+                    observeWeapon("reload delayed", ply, wep)
+                    assert(IsValid(wep), "ARC9 reload weapon was removed before stat observation")
+                    expect(wep:GetOwner()).to.equal(ply)
                     local faster = wep:GetProcessedValue("ReloadTime") --[[@as number]]
                     expect(math.abs(faster - base * 0.5) < 1e-6).to.beTrue()
                     expect(call("SupportedStatMods").reload_time).to.beTrue()
                     PW.SetStatMods(ply, {})
                     timer.Simple(0.3, function()
+                        assert(IsValid(wep), "ARC9 reload weapon was removed before restoration observation")
                         local restored = wep:GetProcessedValue("ReloadTime") --[[@as number]]
                         expect(math.abs(restored - base) < 1e-6).to.beTrue()
                         done()
@@ -858,10 +971,19 @@ return {
             skip = noArc9,
             async = true,
             timeout = 12,
+            cleanup = function(state)
+                hook.Remove("EntityTakeDamage", "PW test arc9 bash")
+                for _, ply in pairs(state.pool --[[@as table<string, Player>]]) do
+                    PW.BotInput.SetScripted(ply, nil)
+                    if IsValid(ply) then
+                        PW.BotInput.SetScripted(ply, { buttons = 0 })
+                    end
+                end
+            end,
             func = function(state)
                 local class = bashRifle()
                 local a, b = bot(state, "a"), bot(state, "b")
-                -- In the lobby a teamless player is an observer (not solid, cannot be hit): two teams, spawned.
+                assert(must(PW.Match).GetPhase() == "LIVE", "ARC9 bash requires the public LIVE body policy")
                 a:SetTeam(1)
                 b:SetTeam(2)
                 a:Spawn()
@@ -870,8 +992,11 @@ return {
                 local wep = give(a, class)
                 call("PrepareForBot", a, wep)
                 a:SelectWeapon(class)
-                -- Both stand still: an intent without a view keeps the eye angles.
-                PW.BotInput.SetScripted(a, { buttons = 0, weapon = class })
+                -- Regression: spawning/teleporting need not leave a grounded origin or a level eye angle.
+                a:SetPos(a:GetPos() + Vector(0, 0, 128))
+                a:SetEyeAngles(Angle(-89, a:EyeAngles().y, 0))
+                -- Aim horizontally through CUserCmd; a reused bot can inherit a steep pitch from its last spawn.
+                PW.BotInput.SetScripted(a, { buttons = 0, weapon = class, view = Angle(0, a:EyeAngles().y, 0) })
                 PW.BotInput.SetScripted(b, { buttons = 0 })
                 local hits = 0
                 hook.Add("EntityTakeDamage", "PW test arc9 bash", function(target, dmg)
@@ -885,31 +1010,35 @@ return {
                     -- A moved player's hitboxes follow on the next ticks: a fresh move waits for the next try.
                     local spot = roomAhead(a)
                     local placed = b:GetPos():Distance(spot) <= 4
-                    if not placed then b:SetPos(spot) end
+                    if not placed then
+                        b:SetPos(spot)
+                        b:SetLocalVelocity(vector_origin)
+                    end
                     b:SetHealth(100)
-                    local started = placed and a:GetActiveWeapon() == wep
-                        and call("BotAction", a, wep, "melee", nil) == true
+                    local active = a:GetActiveWeapon() == wep
+                    local started = placed and active and call("BotAction", a, wep, "melee", nil) == true
                     if not started and tries < 24 then
                         timer.Simple(0.25, try)
                         return
                     end
                     if not started then
+                        observeWeapon("bash refused", a, wep)
+                        assert(IsValid(wep), "ARC9 bash weapon was removed before refusal diagnosis")
                         local s = lib().BashState(a, wep)
+                        print(string.format("[PW] ARC9 bash setup: placed=%s active=%s weapon=%d activeWeapon=%d " ..
+                            "owner=%s spot=%s targetDistance=%.3f", tostring(placed), tostring(active), wep:EntIndex(),
+                            a:GetActiveWeapon():EntIndex(), tostring(wep:GetOwner() == a), tostring(spot),
+                            b:GetPos():Distance(spot)))
                         print(string.format("[PW] ARC9 bash refused: %s; eye %s aim %s, target at %s, %s alive %s",
                             tostring(lib()._BashRefusal(s)), tostring(a:EyePos()), tostring(a:GetAimVector()),
                             tostring(b:GetPos()), tostring(a:GetActiveWeapon()), tostring(b:Alive())))
                     end
+                    expect(placed).to.beTrue()
+                    expect(active).to.beTrue()
                     expect(started).to.beTrue()
                     expect(wep:GetInMeleeAttack()).to.beTrue()
                     timer.Simple(1.5, function()
-                        hook.Remove("EntityTakeDamage", "PW test arc9 bash")
-                        PW.BotInput.SetScripted(a, nil)
-                        PW.BotInput.SetScripted(b, nil)
                         expect(wep:GetInMeleeAttack()).to.beFalse()
-                        a:SetTeam(TEAM_UNASSIGNED)
-                        b:SetTeam(TEAM_UNASSIGNED)
-                        a:Spawn()
-                        b:Spawn()
                         expect(hits).to.equal(1)
                         done()
                     end)
@@ -960,8 +1089,31 @@ return {
                     expect(storedNow ~= first or storedNow ~= second).to.beTrue()
                 end
                 timer.Simple(0.5, function()
+                    observeWeapon("build A delayed", a, wepA)
+                    observeWeapon("build B delayed", b, wepB)
+                    assert(IsValid(wepA) and IsValid(wepB), "ARC9 build instances were removed before observation")
+                    expect(wepA:GetOwner()).to.equal(a)
+                    expect(wepB:GetOwner()).to.equal(b)
                     expect(installed(wepA, chosen.slot)).to.equal(first)
                     expect(installed(wepB, chosen.slot)).to.equal(second)
+                    done()
+                end)
+            end
+        },
+        {
+            name = "Native fixture: abort returns to lobby and restores every changed match setting",
+            skip = noArc9,
+            async = true,
+            timeout = 5,
+            func = function(state)
+                restoreNative(state)
+                timer.Simple(0.1, function()
+                    expect(must(PW.Match).GetPhase()).to.equal("LOBBY")
+                    for name, value in pairs(state.saved --[[@as table<string, string>]]) do
+                        expect(must(GetConVar(name)):GetString()).to.equal(value)
+                    end
+                    local loadoutHooks = hook.GetTable().PW_PlayerLoadout or {}
+                    expect(loadoutHooks["PW test arc9 native loadout"]).to.beNil()
                     done()
                 end)
             end

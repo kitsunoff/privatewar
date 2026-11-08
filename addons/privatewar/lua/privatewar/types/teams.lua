@@ -1,4 +1,15 @@
 ---@meta
+---@alias PW.TeamPolicy "balanced"|"managed"
+---@alias PW.TeamTransitionReason "round_prepare"|"role_change"|"late_join"|"replacement"
+---@alias PW.TeamTransitionNotification fun(ply: Player, from: integer, to: integer, reason: PW.TeamTransitionReason)
+---@alias PW.CanChangeTeamQuestion fun(p:Player,from:integer,to:integer,reason:PW.TeamTransitionReason):boolean?
+---@alias PW.CanChangeTeamMethod fun(self:PW.Mode,p:Player,from:integer,to:integer,r:PW.TeamTransitionReason):boolean?
+---@alias PW.SelectLateTeamQuestion fun(ply: Player): integer|false|nil
+
+---@class PW.Mode
+---@field TeamPolicy? PW.TeamPolicy nil preserves balanced placement
+---@field PW_CanChangeTeam? PW.CanChangeTeamMethod
+---@field PW_SelectLateTeam? fun(self: PW.Mode, ply: Player): integer|false|nil
 -- Types of the teams module (T-1.16, 02-modes.md d.6, 08-lobby.md d.4, 00-core.md d.9).
 -- Source: lua/privatewar/modules/teams/ (shared.lua: API and pure rules; init.lua: server glue).
 
@@ -18,6 +29,9 @@
 
 ---Teams of the active mode (02-modes.md d.6). Team indices are 1..N; there are no TEAM_A / TEAM_B constants.
 ---@class PW.TeamsLib
+---Server: validated, explicitly authorized synchronous transition; never spawns, heals or gives items.
+---Dead admitted participants are eligible. Notification listeners follow standard first-non-nil hook dispatch.
+---@field Transition? fun(ply: Player, to: integer, reason: PW.TeamTransitionReason): boolean, string?
 ---The teams of the active mode as a list { 1, ..., N }; empty in FFA (MODE.Teams = 0) and outside a match. On
 ---the client N comes from the server (published when LIVE starts). The list is cached per N: do not modify it.
 ---@field GetActive fun(): integer[]

@@ -6,6 +6,46 @@ fixtures="$PW_ROOT/tests/gates/fixtures"
 gates="$PW_ROOT/scripts/check"
 failures=0
 
+# Exercise the real hook wrapper without the devShell PATH or any Deck access.
+# Only the gate body is replaced in the scratch workspace; runtimeInputs stay intact.
+expect_hook_runtime() {
+    local work
+    work="$(mktemp --directory)"
+    mkdir --parents "$work/scripts/check"
+    cat >"$work/scripts/check/test.sh" <<'PROBE'
+set -o errexit -o nounset -o pipefail
+failures=0
+if [[ "$(sed --regexp-extended 's/passed=([0-9]+)/\1/' <<<"passed=1381")" != 1381 ]]; then
+    echo "[selftest] FAIL: hook runtime must provide GNU sed" >&2
+    failures=$((failures + 1))
+fi
+ssh_path="$(command -v ssh || true)"
+case "$(uname)" in
+    Darwin)
+        if [[ "$ssh_path" != /usr/bin/ssh ]]; then
+            echo "[selftest] FAIL: Darwin hook must retain system SSH; got $ssh_path" >&2
+            failures=$((failures + 1))
+        fi
+        ;;
+    Linux)
+        if [[ "$ssh_path" != /nix/store/*/bin/ssh ]]; then
+            echo "[selftest] FAIL: Linux hook must provide SSH; got $ssh_path" >&2
+            failures=$((failures + 1))
+        fi
+        ;;
+esac
+((failures == 0))
+PROBE
+    if (cd "$work" && PATH=/usr/bin:/bin "${PW_TEST_GATE:?PW_TEST_GATE must name the evaluated hook wrapper}"); then
+        echo "[selftest] ok: hook runtime provides GNU sed and platform-compatible SSH"
+    else
+        failures=$((failures + 1))
+    fi
+    rm --recursive --force "$work"
+}
+
+expect_hook_runtime
+
 # expect <accept|reject[:text]> <gate script> <fixture>:<destination inside the scratch workspace>...
 # reject:text also requires the gate output to contain text, so the rejection has the intended reason.
 # The type gate also gets the project's type declarations (addons/privatewar/lua/privatewar/types/), so fixtures can use MODE etc.

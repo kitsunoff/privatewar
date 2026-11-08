@@ -48,14 +48,26 @@ local function onError(entity, method, err)
     end
 end
 
+---Removal is cleanup-only: never disable the definition, abort a mode or let logger failure skip profiling.
+---@param entity table<any, any>
+---@param err any
+local function cleanupError(entity, err)
+    local store = PW._Call
+    store.failed[entity] = true
+    local kind, id = describe(entity)
+    local message = string.format("%s %q: OnUnequip cleanup failed: %s", kind, id, tostring(err))
+    pcall(store.log, message)
+end
+
 ---@param entity table<any, any>
 ---@param method string
+---@param cleanup boolean
 ---@param ok boolean
 ---@param ... any
 ---@return any ...
-local function finish(entity, method, ok, ...)
+local function finish(entity, method, cleanup, ok, ...)
     if ok then return ... end
-    onError(entity, method, ...)
+    if cleanup then cleanupError(entity, ...) else onError(entity, method, ...) end
 end
 
 ---@param entity table<any, any>
@@ -82,14 +94,22 @@ end
 ---@param ... any
 ---@return any ...
 function PW.Call(entity, method, ...)
-    local fn = entity[method]
-    if not isfunction(fn) or PW._Call.failed[entity] then return end
-    local isValid = entity.IsValid
-    if isfunction(isValid) and not isValid(entity) then return end
-    if profileVar:GetBool() then
-        return record(entity, SysTime(), finish(entity, method, pcall(fn, entity, ...)))
+    local cleanup = false
+    if method == "OnUnequip" then
+        local take = rawget(PW, "_TakeInstanceCleanup") --[[@as (fun(entity: table, method: string): boolean)?]]
+        cleanup = take ~= nil and take(entity, method)
     end
-    return finish(entity, method, pcall(fn, entity, ...))
+    local fn = entity[method]
+    if not isfunction(fn) then return end
+    if not cleanup then
+        if PW._Call.failed[entity] then return end
+        local isValid = entity.IsValid
+        if isfunction(isValid) and not isValid(entity) then return end
+    end
+    if profileVar:GetBool() then
+        return record(entity, SysTime(), finish(entity, method, cleanup, pcall(fn, entity, ...)))
+    end
+    return finish(entity, method, cleanup, pcall(fn, entity, ...))
 end
 
 PW.Profile = PW.Profile or {}

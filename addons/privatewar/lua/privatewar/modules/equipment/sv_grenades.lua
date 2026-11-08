@@ -22,19 +22,18 @@ function lib._Remember(ply, old, new)
 end
 
 function lib._GiveWeapons(ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "equipment") == false then return end
     local s = store()
     local slots = s.players[ply]
     if slots == nil or not IsValid(ply) then return end
     for slot, entry in pairs(slots) do
-        local class = entry.weapon
-        if class ~= nil then
-            if not entry.armed then
-                entry.armed = true
-                entry.count = lib._CountFor(entry.count, PW.Ask("PW_EquipmentCount", ply, slot, entry.id, entry.count))
-            end
-            if not ply:HasWeapon(class) then ply:Give(class, true) end
-            s.publish(ply, slot, entry.id, entry.count)
+        if not entry.armed then
+            entry.armed = true
+            entry.count = lib._ResolveCount(ply, slot, entry.id, entry.count)
         end
+        local class = entry.weapon
+        if class ~= nil and not ply:HasWeapon(class) then ply:Give(class, true) end
+        s.publish(ply, slot, entry.id, entry.count)
     end
 end
 
@@ -73,7 +72,10 @@ end
 
 function lib._AfterThrow(ply, slot, count)
     if not lib._ShouldSwitchBack(count) then return end
-    timer.Simple(lib.SwitchDelay, function() returnIfEmpty(ply, slot) end)
+    local s, generation = store(), store().players[ply]
+    timer.Simple(lib.SwitchDelay, function()
+        if store() == s and generation ~= nil and s.players[ply] == generation then returnIfEmpty(ply, slot) end
+    end)
 end
 
 function lib._BotThrow(ply, slot, entry, opts)
@@ -87,8 +89,10 @@ function lib._BotThrow(ply, slot, entry, opts)
     local use = opts or {}
     use.weapon = wep
     local thrown = lib._Spend(ply, slot, entry, use)
+    local s, generation = store(), store().players[ply]
     timer.Simple(thrown and lib.BotHold or 0, function()
-        if IsValid(ply) and isGrenade(ply:GetActiveWeapon()) then lib._ReturnTo(ply) end
+        if store() == s and generation ~= nil and s.players[ply] == generation
+            and IsValid(ply) and isGrenade(ply:GetActiveWeapon()) then lib._ReturnTo(ply) end
     end)
     return thrown
 end

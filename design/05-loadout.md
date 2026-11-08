@@ -177,6 +177,58 @@ Inherited from `04-weapons.md`:
     4. If something did not stick (a conflict visible only on the live weapon), the player spawns with what stuck, gets one message ("attachment X not installed: conflicts with Y"), and the class is repaired (decision 12).
     5. Bots follow the same path plus `ADAPTER:PrepareForBot`.
 
+### Approved expansion
+
+16. **Twelve additional perks** (user approval and delegated tuning, frozen by the coordinator,
+    2026-11-08). These supplement, never replace or retune, Adrenaline, Ready Up, Sleight of Hand
+    and Flak Jacket. The existing three groups and Pick X rules remain. Each new perk has
+    `Cost = 1` and `Unlock = 1` for the initial release.
+
+    | Group | Id / name | Frozen effect |
+    | --- | --- | --- |
+    | 1 | `stockpile` / Stockpile | One additional lethal and one additional tactical use, once per life |
+    | 1 | `soft_landing` / Soft Landing | Ordinary fall damage multiplied by 0.5 once; no physics or routing changes |
+    | 1 | `flash_guard` / Flash Guard | Ordinary flash strength and its derived duration multiplied by 0.5 |
+    | 1 | `fleet_foot` / Fleet Foot | Ordinary walk/run baseline multiplied by 1.10; no jump, crouch, slide or special ADS-speed bonus |
+    | 2 | `quick_draw` / Quick Draw | Weapon draw time multiplied by 0.75 where the adapter supports `draw_time` |
+    | 2 | `sightline` / Sightline | ADS transition time multiplied by 0.8 where the adapter supports `ads_time` |
+    | 2 | `recoil_control` / Recoil Control | Weapon recoil multiplied by 0.8 where the adapter supports `recoil` |
+    | 2 | `scavenger` / Scavenger | Eligible direct enemy weapon kill restores half a magazine of that weapon's ordinary reserve |
+    | 3 | `quiet_steps` / Quiet Steps | Mutes stock human footsteps and their matching bot-hearing stimulus |
+    | 3 | `ghost` / Ghost | Conceals the owner from every deliberate `PW.Reveal` source |
+    | 3 | `retaliation` / Retaliation | Eligible attacker with current LOS is revealed for 1.5 seconds, at most once per 5 seconds |
+    | 3 | `continuity` / Continuity | Keeps existing earned streak progress through death; unused inventory is unchanged |
+
+    - All effects, eligibility rules and lifecycle boundaries are identical for human and bot owners.
+      Recoil changes the weapon property, never difficulty or an additional compensation multiplier.
+      Draw/ADS/recoil use the composed cached weapon-mod table, not partial `SetStatMods` calls.
+      Only ARC9 currently supports these keys; HL2 fallback supports none. TFA and MW Base are
+      absent, not compatible by assertion. The class UI warns for the selected unsupported base.
+    - Scavenging adds `max(1, floor(capacity / 2))`, capped at three ordinary reserve magazines per
+      ammo type. Shared ammo is deduplicated. No clip refill, grenade supply, ally kill, suicide,
+      world kill, autonomous streak kill or delayed nonweapon kill qualifies. Provenance must not
+      attribute an unrelated held weapon merely because a player caused the damage. Existing
+      player XP is unchanged; no unrelated held-weapon XP is awarded for a streak kill.
+    - Equipment composition preserves the existing `PW_EquipmentCount` first-answer result, then
+      applies new owner-local additive sources in sorted source-id order. It is resolved once per
+      life; the cached count and grenade ammo are authoritative afterward. No midlife refill.
+    - Quiet Steps does not hide gunfire, sight or remembered contacts. Unsupported custom weapon
+      movement sounds are outside stock-footstep coverage; the description says so.
+    - Ghost filters targets before both human position packets and bot stimuli, for UAV, retaliation,
+      sensors and every other deliberate reveal. CUAV remains independent and unchanged. Visual,
+      sound and damage awareness and already-existing contacts are not removed.
+    - Retaliation requires a living enemy direct-player-weapon attacker and current LOS. It uses
+      the owner's existing `PW.Streaks.Viewer` and `PW.Reveal`, respecting Ghost and CUAV; it is a
+      bounded event-time pulse, never a continuous hidden-position stream.
+    - Continuity snapshots persistence before perk cleanup under either death-listener order.
+      It does not discount thresholds, loop earnings, chain streak kills or change unused inventory.
+    - Movement composes multiplicatively through the public player-overrides owner, relative to
+      the ordinary baseline. It preserves independent role health/speed overrides and never heals
+      during refresh or compounds an already-modified speed. Flash resistance precedes the same
+      ordinary human/bot impairment and derives duration from the resolved strength once.
+
+    Implementation and mounted acceptance are tracked separately; this decision is not a pass claim.
+
 ## Interfaces
 
 TBD.

@@ -2,6 +2,8 @@
 description: Orchestrate TASKS.md - pick the next task, run one task-agent per task, review, merge to main
 ---
 
+# Orchestrate Private War
+
 You are the orchestrator for the Private War gamemode (this repository).
 Your job: move tasks from TASKS.md to done, one task-agent per task, until you reach a checkpoint (CP-*)
 or a question only the user can answer. You do not write gamemode code yourself; you plan, brief, review, merge.
@@ -12,7 +14,7 @@ Extra instructions from the user for this run (may be empty): $ARGUMENTS
 ## Read first (once per session)
 
 CLAUDE.md, DESIGN.md, TASKS.md (sections: "How to read a task", "Mandatory test cases", "Agents and lanes",
-the current phase table), docs/api/*.md, and `git log --oneline -20`. Work out which tasks are already done
+the current phase table), docs/api/*.md, and `git log --oneline --max-count=20`. Work out which tasks are already done
 from the git log and the code, not from memory.
 
 Repository layout: the gamemode addon is `addons/privatewar/` (`gamemodes/`, `lua/`, `addon.json`); integration
@@ -35,15 +37,19 @@ addons are `addons/<name>/`; the dev-only addon is `addons/privatewar-dev/`. Pat
 4. When the agent reports back, verify instead of trusting the report:
    - `git log` / `git diff main...<branch>`: only the lane's directories plus lua/privatewar/types/ and
      lua/tests/privatewar/ changed; every mandatory test case exists by name and is not weakened;
-   - run `nix develop --command make check` and `nix develop --command make test` yourself in the worktree.
+   - run `nix develop --command make check` yourself in the worktree; run
+     `nix develop --command make test` only after the user confirms the Deck is free.
    The gate is: scope check (`git diff --stat main...<branch>`), mandatory test names present, and both
    commands green when run by the orchestrator itself in the agent's worktree. No review skill:
    the user judged it too token-expensive.
-5. If green: `git checkout main && git merge --no-ff --signoff <task branch>` (the user allowed local merges
-   into main while there is no GitHub remote). Update TASKS.md only when the agent found a fact that
-   contradicts it (one short commit `docs(plan): ...` on a branch, merged the same way).
+5. If green: request authorization to push the feature branch if not already granted. Show the complete
+   PR title and body and obtain the user's approval before `gh pr create --draft`. After review, merging
+   requires separate explicit user approval; once the PR is ready, use `gh pr merge --squash --delete-branch`.
+   Never commit or merge locally on main. Update TASKS.md only when the agent found a fact that
+   contradicts it (one short commit `docs(plan): ...` on a branch, reviewed through the same PR workflow).
    If red: send the agent back with the concrete failure (SendMessage), at most 2 rounds; then stop and
-   report to the user.
+   report to the user. If a gate cannot run (including when the user has not confirmed the Deck is free),
+   report it as skipped and the merge gate as incomplete; do not push, create a PR or merge automatically.
 6. At a CP-* row: stop, print the checkpoint checklist for the user, wait for their report.
 7. After each task, give the user a 3-line status in Russian: done / next / anything blocked.
 
@@ -68,14 +74,19 @@ The orchestrator picks the model per agent with the Agent tool `model` parameter
 
 ## Branches
 
-- Task branches: `task/T-<n>.<m>-<slug>`, created from the current main.
-- Never commit directly on main; main changes only by merging a reviewed task branch.
-- No pushes: there is no remote. If one appears, ask the user before switching to PRs.
+- Develop directly in this canonical repository (`kitsunoff/privatewar`);
+  the former research checkout is historical only.
+- Task branches: `task/T-<n>.<m>-<slug>` (or `feat/`, `fix/`, `docs/`), created from the current main.
+- Never commit or merge locally on main; main changes only through reviewed PRs, draft by default.
+- Push only with the user's authorization. Show the PR title and body and obtain approval before creation;
+  merging requires separate explicit user approval and `gh pr merge --squash --delete-branch`.
+- Export tooling is optional (`docs/publishing.md`). Public text stays English; private content, including
+  the local manual checklist and `.deck.env`, must stay outside the public repository and any published tree.
 
 ## Hard rules (also copy them into every brief)
 
 - Decided means decided: never change design/; if the design looks wrong, stop and report.
-- TDD: tests first in lua/tests/privatewar/<area>_<topic>.lua (GLuaTest: expect, stub, async + done).
+- TDD: tests first in `lua/tests/privatewar/<area>_<topic>.lua` (GLuaTest: expect, stub, async + done).
 - Thin glue: pure functions over plain data; engine calls in thin wrappers; testable logic in sh_ files.
 - Gates are never bypassed: no --no-verify, no `git stash` tricks, no disabling lint/type rules
   (only with the user's written approval and a reason in the config).
@@ -116,12 +127,18 @@ Tests go in the task's own test file (lua/tests/privatewar/<area>_<topic>.lua), 
 lua/tests/privatewar/kind_examples.lua: parallel tasks editing it caused merge conflicts.
 
 Setup in the worktree (it is fresh):
-1. git checkout -b task/<T-id>-<slug> main   (then verify `git log --oneline -1` is main's current commit:
+1. git switch --create task/<T-id>-<slug> main   (then verify `git log --oneline --max-count=1` is main's current commit:
    fresh worktrees were created from stale commits before)
 2. cp <main repo path>/.deck.env .   (git-ignored Deck address)
 3. export NIX_CONFIG="access-tokens = github.com=$(gh auth token)"   (avoids GitHub rate limits;
    the sandbox may block the export: continue without it)
-4. All tools only through `nix develop --command <cmd>`; this also installs the git hooks.
+4. Lint, type and test tools only through `nix develop --command <cmd>`; this also installs the git hooks.
+   Run ordinary git commands directly from your own worktree.
+5. Never commit or merge locally on main. No push or PR without the user's approval; merging requires
+   separate explicit user approval. The orchestrator handles the reviewed draft PR workflow.
+
+Run game tests only after the user confirms the Deck is free. If not authorized, report them skipped;
+the full merge gate remains incomplete.
 
 Workflow: write the tests → `nix develop --command make check` → implement → `make check` →
 `nix develop --command make test` (runs GLuaTest in the game on the Steam Deck, about 30 s) → commit.
@@ -154,15 +171,8 @@ Report back: branch name, commits, the list of mandatory cases → test names, `
 `make test` summaries (passed/failed counts), anything left for the checkpoint.
 ```
 
-## Known gaps (as of 2026-11-07)
+## Current queue and known gaps
 
-- Phase 1 is merged. CP-1 waits for the user's manual items: P2P guest, guest lobby, late joiner,
-  guest pw_reload, ULX/SAM, shadowing with real Workshop items.
-  Automated part: `nix develop --command ./scripts/deck/cp1.sh`.
-- Wave 0 before Phase 2 (core follow-ups): disabling a module must also stop its net handlers,
-  engine hooks and client screens; the lobby must retry a lost `pw_lobby_request`;
-  `make check` gets cheap rule checks (net.WriteTable, file/function size limits).
-- Parallel plan after CP-1: slots A modes, B map, C weapons (P3 runs in parallel with P2);
-  after CP-3: loadout, progression, bots. The ui lane fills free slots with HUD T-6.1-T-6.3.
-  D1 still blocks P7 styling.
-- The user wants speed: ask only for real decisions.
+Use TASKS.md "How to continue (handover)" and "Phase 11" for the current queue, known follow-ups and
+items blocked on the user. Use its recorded checkpoint results and design-task decisions; do not infer
+pending work from older phase plans. This command does not maintain a separate status list.

@@ -20,6 +20,14 @@ MODULE.Name = "Bots perception"
 local lib = (rawget(PW, "BotPerception") or {}) --[[@as PW.BotPerceptionLib]]
 PW.BotPerception = lib
 
+---@param ply Player
+---@param now number
+---@return boolean
+function lib._FlashCanSee(ply, now)
+    local status = rawget(PW, "Throwables") --[[@as PW.ThrowablesLib?]]
+    return status == nil or status.Impairment == nil or status.Impairment(ply, now) <= 0.05
+end
+
 lib.Config = {
     fov = 110, -- total cone in degrees (awareViewAngle)
     sightRange = 4500, -- units
@@ -46,6 +54,8 @@ local fields = { "reaction_mean", "reaction_floor", "reaction_jitter", "share_de
 PW.BotProfiles.Reads("difficulty", "perception", fields)
 
 local epsilon = 1e-9
+lib._KnownRadarSources = lib._KnownRadarSources or setmetatable({}, { __mode = "k" })
+lib._RetiredRadarSources = lib._RetiredRadarSources or setmetatable({}, { __mode = "k" })
 
 ---Parameters for a bot: the fields of its difficulty, the tier's (regular by default) for a field it lacks.
 ---@param difficulty table?
@@ -160,18 +170,94 @@ end
 
 ---Stores or refreshes a contact. An older entry never replaces a newer one; the velocity is kept when the new one
 ---has none.
----@param memory table<any, PW.BotContact>
 ---@param ent any
 ---@param c table pos, time, source, and optionally vel, visible, dir
+---@param old PW.BotContact?
 ---@return PW.BotContact
-function lib.Remember(memory, ent, c)
-    local old = memory[ent]
-    if old ~= nil and old.time > c.time then return old end
+local function observation(ent, c, old)
     ---@type PW.BotContact
     local entry = {
         ent = ent, pos = c.pos, vel = c.vel or (old and old.vel) or Vector(0, 0, 0), time = c.time,
-        visible = c.visible == true, source = c.source, dir = c.dir
+        visible = c.visible == true, source = c.source, dir = c.dir,
+        sourceToken = c.sourceToken, expiresAt = c.expiresAt
     }
+    return entry
+end
+
+---@param ent any
+---@param c table
+---@param old PW.BotContact?
+---@return PW.BotContact
+local function snapshot(ent, c, old)
+    local entry = observation(ent, c, old)
+    entry.pos, entry.vel = Vector(entry.pos.x, entry.pos.y, entry.pos.z), Vector(entry.vel.x, entry.vel.y, entry.vel.z)
+    if entry.dir ~= nil then entry.dir = Vector(entry.dir.x, entry.dir.y, entry.dir.z) end
+    return entry
+end
+
+---@param memory table<any, PW.BotContact>
+---@param ent any
+---@param view PW.BotContact
+---@param now number
+---@param seconds number
+---@return PW.BotContact?
+local function radarView(memory, ent, view, now, seconds)
+    local radar, observed = assert(view.radar), view.observed
+    if observed ~= nil and now - observed.time > seconds then observed = nil end
+    local best = observed
+    for i = #radar, 1, -1 do
+        local c = radar[i]
+        if now - c.time > seconds or (c.expiresAt ~= nil and c.expiresAt <= now)
+            or (c.sourceToken ~= nil and lib._RetiredRadarSources[c.sourceToken]) then table.remove(radar, i)
+        elseif best == nil or c.time > best.time then best = c end
+    end
+    if #radar == 0 then memory[ent] = observed return observed end
+    if best == nil then memory[ent] = nil return nil end
+    view.pos, view.vel, view.time, view.visible = best.pos, best.vel, best.time, best.visible
+    view.source, view.dir = best.source, best.dir
+    view.sourceToken, view.expiresAt, view.observed = best.sourceToken, best.expiresAt, observed
+    return view
+end
+
+---@param memory table<any, PW.BotContact>
+---@param ent any
+---@param c table
+---@return PW.BotContact
+local function rememberRadar(memory, ent, c)
+    local old = memory[ent]
+    local view = old ~= nil and old.radar ~= nil and old or observation(ent, c, old)
+    if view.radar == nil then view.radar, view.observed = {}, old ~= nil and snapshot(ent, old, nil) or nil end
+    local radar = assert(view.radar)
+    local entry = snapshot(ent, c, old)
+    local replaced = false
+    for i, previous in ipairs(radar) do
+        if rawequal(previous.sourceToken, c.sourceToken) then
+            if previous.time <= entry.time then radar[i] = entry end
+            replaced = true
+            break
+        end
+    end
+    if not replaced then
+        if #radar >= 128 then table.remove(radar, 1) end
+        radar[#radar + 1] = entry
+    end
+    memory[ent] = view
+    return radarView(memory, ent, view, c.now or c.time, lib.Config.memorySeconds) or entry
+end
+
+---@param memory table<any, PW.BotContact>
+---@param ent any
+---@param c table
+---@return PW.BotContact
+function lib.Remember(memory, ent, c)
+    if c.source == "radar" then return rememberRadar(memory, ent, c) end
+    local old = memory[ent]
+    if old ~= nil and old.radar ~= nil then
+        if old.observed == nil or old.observed.time <= c.time then old.observed = snapshot(ent, c, old.observed) end
+        return radarView(memory, ent, old, c.now or c.time, lib.Config.memorySeconds) or observation(ent, c, nil)
+    end
+    if old ~= nil and old.time > c.time then return old end
+    local entry = observation(ent, c, old)
     memory[ent] = entry
     return entry
 end
@@ -186,9 +272,13 @@ function lib.Decay(memory, now, seconds, valid)
     local limit = seconds or lib.Config.memorySeconds
     local removed = 0
     for ent, contact in pairs(memory) do
-        if now - contact.time > limit or (valid ~= nil and not valid(ent)) then
+        if valid ~= nil and not valid(ent) then
             memory[ent] = nil
             removed = removed + 1
+        elseif contact.radar ~= nil then
+            if radarView(memory, ent, contact, now, limit) == nil then removed = removed + 1 end
+        elseif now - contact.time > limit then
+            memory[ent], removed = nil, removed + 1
         end
     end
     return removed

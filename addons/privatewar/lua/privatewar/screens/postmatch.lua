@@ -41,6 +41,7 @@ SCREEN.Hints = {
 ---@field shownLevel integer
 ---@field earnedText? string
 ---@field earnedAt number RealTime of the last currency refresh
+---@field scoreLabel string
 ---@field OnAction fun(self: PWPostmatchView, action: string)
 
 local timing = { stepTime = 0.9, maxTime = 5, delay = 0.6 }
@@ -108,13 +109,14 @@ local function boardHeight(lines)
 end
 
 ---@param w number
-local function paintColumns(w)
+---@param scoreLabel string
+local function paintColumns(w, scoreLabel)
     local s, font = style(), kit().FontName("small")
     local pad, y = px(20), px(columnsH) / 2
     draw.SimpleText("PLAYER", font, pad + px(56), y, s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     draw.SimpleText("K", font, w - px(320), y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
     draw.SimpleText("D", font, w - px(200), y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText("SCORE", font, w - pad, y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(scoreLabel, font, w - pad, y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
 end
 
 ---@param line PWPostmatchLine
@@ -162,7 +164,7 @@ end
 local function paintBoard(view, w, h)
     local s = style()
     kit().Draw.Rect(0, 0, w, h, s.bg_panel)
-    paintColumns(w)
+    paintColumns(w, view.scoreLabel)
     local y = px(columnsH)
     for index, line in ipairs(view.lines) do
         if line.header then
@@ -266,6 +268,7 @@ end
 ---@param view PWPostmatchView
 local function fill(view)
     local data = view.data
+    view.scoreLabel = data.scoreLabel or "SCORE"
     view.lines = boardLines(data.sections)
     view.board:SetTall(px(boardHeight(view.lines)))
     local summary = data.summary

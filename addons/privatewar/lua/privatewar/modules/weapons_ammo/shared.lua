@@ -18,6 +18,9 @@ MODULE.Settings = {
 local lib = (rawget(PW, "WeaponAmmo") or {}) --[[@as PW.WeaponAmmoLib]]
 PW.WeaponAmmo = lib
 
+if SERVER then AddCSLuaFile("privatewar/modules/weapons_ammo/sh_resupply.lua") end
+include("privatewar/modules/weapons_ammo/sh_resupply.lua")
+
 ---@param capacity number
 ---@param magazines number
 ---@return integer

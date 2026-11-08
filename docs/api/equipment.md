@@ -111,6 +111,25 @@ grenade SWEPs are first given, after the perks and wildcards of the loadout are 
 order). A perk answers it from its instance: `self:Hook("PW_EquipmentCount", function(perk, ply, slot, id, count) ...
 end)`.
 
+### Deterministic additive count sources
+
+Approved by `design/05-loadout.md` d.16; implemented after observed test-first RED.
+The legacy question above retains its first-answer meaning. It is not converted into a chain.
+
+- `PW.Equipment.CountSource(ply, id, fn?)`: register/replace an owner-local additive source;
+  nil removes it. `fn(ply, slot, itemId)` returns an additional count, not a replacement.
+  Sources run in sorted id order, after the single legacy answer has been resolved.
+- Ignore failed, negative, non-number and nonfinite source answers; floor finite nonnegative
+  additions. `_ComposeCount(base, legacyAnswer, sources, ply, slot, itemId)` is the pure seam.
+- Resolve exactly once on the first grant of each life after perks/wildcards equip. Stockpile
+  contributes +1 to lethal and tactical only. Repeated grants, weapon switches or selecting a
+  different class midlife do not refill spent counts. Cached count and grenade ammo remain
+  authoritative. Removing a source does not take back already-granted uses or grant more.
+- A perk unregisters its source on unequip. Source ownership is separate from equipment
+  instance lifetime, so spawn hook order cannot accidentally discard an equipped source.
+
+Tests: `equipment_count_sources.lua`; the existing grenade inventory/cooking cases are unchanged.
+
 ## Keys
 
 No net message: the use message `pw_equipment_use` of T-4.5 is gone, so the release of the grenade SWEP is the only way
@@ -154,6 +173,8 @@ only. Live projectiles are removed without detonating at the end of the match (`
 | --- | --- |
 | `Flash` | `{ radius = 1500, near = 300, behind = 0.2, maxTime = 4, minStrength = 0.05 }` |
 | `Blind(ply, strength)` | Server. Returns whether it blinded; does nothing below `minStrength`. For a human it sends `pw_blind` and, at strength 0.5 or more, sets the ringing DSP; for everyone (bots too) it notifies `PW_Blinded` |
+| `Impairment(ply, now?)` | Server. Current ordinary blind alpha from the authoritative resolved strength/start time; 0 without active status. Bot sight and firing use the same status and expiry, without changing difficulty or erasing memory |
+| `ClearBlind(ply)`, `ClearBlinds()` | Server. Release one/all owned flash statuses, expiry timers, owned DSP and human overlays. Death, disconnect, round end, match end and throwables disable clean up owned state |
 | `FlashAt(pos, inflictor?)` | Server. Blinds every living player within `radius` of `pos` by line of sight, angle and distance; returns how many were blinded |
 | `Blinded` | Client. `{ strength, at }`: the blind being shown (strength 0 = none) and its start time |
 | `_Launch`, `_Fuse`, `_FlashStrength`, `_BlindTime`, `_BlindAlpha`, `_EncodeStrength`, `_DecodeStrength` | Pure helpers (tests) |
@@ -171,7 +192,18 @@ factor is 1 when the player faces the flash within 60 degrees, down to 0.2 when 
 
 `PW_Blinded(ply, strength, seconds)`: notification (`PW.Notify`), server. Fired by `PW.Throwables.Blind` for every
 blinded player, bots included, so the bot perception may listen. `strength` is 0..1, `seconds` is the blind duration.
-Bots do not react to it yet.
+Flash resistance scales strength before this notification. The resolved 8-bit strength and
+its derived duration are identical for human packets and bot status. A weaker simultaneous
+flash cannot shorten a stronger remaining status. Ordinary bots suppress new visual
+recognition and weapon firing while impairment exceeds 0.05; legitimate old memory and
+nonvisual awareness are not deleted. Difficulty parameters and recoil compensation are unchanged.
+
+The canonical throwables `PW_RoundEnd` and `PW_MatchEnd` consumers both call the public
+`ClearBlinds()` and `_RemoveAll()` owners: active flash state is not a field of the projectile
+store. Human ringing DSP is marked owned only when this module actually applies DSP 35.
+Weak flashes and bot status never reset unrelated DSP; a weaker replacement retains an
+already-owned ringing effect until cleanup. The client overlay expiry does not write DSP.
+No DSP getter, general audio mixer or unrelated audio-state restoration is introduced.
 
 ## Bots
 

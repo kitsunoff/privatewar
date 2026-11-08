@@ -16,6 +16,9 @@
 ---@field Description? string
 ---Pick X cost (05-loadout.md d.2); default 1.
 ---@field Cost? number
+---@field Unlock? integer
+---@field SilentFootsteps? boolean
+---@field NextRevealAt? number
 ---Multipliers by stat id, read through PW.Stat. Weapon stats (reload_time, draw_time, ads_time, sprint_to_fire,
 ---recoil, spread) also reach the weapon through PW.SetStatMods.
 ---@field Stats? table<string, number>
@@ -55,6 +58,7 @@
 ---@field players table<any, PW.PerksEntry> weak-keyed: player -> equipped perks
 ---@field stats table<any, table<string, number>> weak-keyed: player -> cached multipliers (PW.Stat)
 ---@field sent table<any, table<string, number>> weak-keyed: player -> the weapon mods last sent
+---@field silent? table<Player, boolean>
 ---@field lookup fun(id: string): PW.Perk? the perk definition; default the perks registry (valid only)
 ---@field send fun(ply: any, mods: table<string, number>) default PW.SetStatMods
 ---@field isPlayer fun(ent: any): boolean default IsValid(ent) and ent:IsPlayer()
@@ -75,6 +79,19 @@
 ---@field _PerkSources? table<string, PW.PerkStatSource> stat sources by id (survive a reload)
 
 ---Perks module.
+---@class PW.PerksLib
+---@field FootstepsAudible fun(ply: Player): boolean
+---@field _RetaliationEligible fun(facts: PW.RetaliationFacts): boolean
+---@field _PublishEffects fun(ply: Player, entry?: PW.PerksEntry)
+
+---@class PW.RetaliationFacts
+---@field now number
+---@field nextAt number
+---@field enemy boolean
+---@field living boolean
+---@field direct boolean
+---@field los boolean
+
 ---@class PW.PerksLib
 ---Perk slot ids, one per group (the slot of group n is Slots[n]).
 ---@field Slots string[]

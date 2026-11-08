@@ -1,4 +1,11 @@
 ---@meta
+---@alias PW.EquipmentCountSource fun(ply: Player, slot: string, itemId: string): number?
+
+---@class PW.EquipmentLib
+---@field CountSource fun(ply: Player, id: string, fn?: PW.EquipmentCountSource)
+---@field _ComposeCount fun(base: number, legacy: any, sources: table<string, PW.EquipmentCountSource>,
+---ply: Player, slot: string, itemId: string): integer
+---@field _ResolveCount fun(ply: Player, slot: string, itemId: string, base: number): integer
 -- Types of equipment (T-4.5; 05-loadout.md d.11). Source: lua/privatewar/kinds/equipment.lua (the kind),
 -- lua/privatewar/modules/equipment/ (shared.lua: slots, pure rules; sh_grenades.lua: grenade rules and ammo types;
 -- init.lua: per-player state, spawn and death hooks, the grenade SWEPs; cl_init.lua: slot keys select the grenade),

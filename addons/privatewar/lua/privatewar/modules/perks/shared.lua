@@ -18,6 +18,9 @@ MODULE.Name = "Perks"
 local lib = (rawget(PW, "Perks") or {}) --[[@as PW.PerksLib]]
 PW.Perks = lib
 
+if SERVER then AddCSLuaFile("privatewar/modules/perks/sh_effects.lua") end
+include("privatewar/modules/perks/sh_effects.lua")
+
 lib.Slots = { "perk1", "perk2", "perk3" }
 
 ---@type table<string, PW.PerkStatSource>

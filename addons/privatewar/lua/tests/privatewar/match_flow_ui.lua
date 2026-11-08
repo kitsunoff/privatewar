@@ -67,14 +67,17 @@ local function restoreChanger(state)
     end
 end
 
----A player stand-in that records SetTeam and Spawn.
+---A player stand-in that records explicit lobby cleanup without spawning again.
 ---@param log string[]
 ---@return Player
 local function fakePlayer(log)
     return {
         IsValid = function() return true end,
         SetTeam = function(_, team) log[#log + 1] = "team:" .. tostring(team) end,
-        Spawn = function() log[#log + 1] = "spawn" end
+        Spawn = function() log[#log + 1] = "spawn" end,
+        StripWeapons = function() log[#log + 1] = "strip" end,
+        RemoveAllAmmo = function() log[#log + 1] = "ammo" end,
+        Spectate = function(_, mode) log[#log + 1] = "observer:" .. tostring(mode) end
     } --[[@as Player]]
 end
 
@@ -230,48 +233,46 @@ return {
             cleanup = restoreChanger
         },
         {
-            name = "Map change: no delay runs at once; a cancelled change never runs and clears the announcement",
+            name = "Map change: a cancelled change never runs and clears the announcement",
             func = function(state)
                 state.now = 1000
-                installChanger(state, 0)
+                installChanger(state, 5)
                 local begun = 0
                 stub(changer(), "_Begin").with(function()
                     begun = begun + 1
                     return true
                 end)
                 expect(changer().Schedule({ ClassName = "pwt_flow" }, "gm_flow_there")).to.beTrue()
-                expect(begun).to.equal(1)
-                expect(#state.announced).to.equal(0)
-                installChanger(state, 5)
-                expect(changer().Schedule({ ClassName = "pwt_flow" }, "gm_flow_there")).to.beTrue()
+                expect(begun).to.equal(0)
+                expect(#state.announced).to.equal(1)
                 expect(changer()._Cancel("test")).to.beTrue()
                 expect(changer().IsChanging()).to.beFalse()
                 local cleared = must(state.announced[2]) --[[@as { map: string, mode: string, at: number }]]
                 expect(cleared.at).to.equal(-1)
                 state.now = 1010
                 changer()._Tick()
-                expect(begun).to.equal(1)
+                expect(begun).to.equal(0)
                 expect(changer()._Cancel("again")).to.beFalse()
             end,
             cleanup = restoreChanger
         },
         {
-            name = "Map change delay setting: pw_mapchange_delay exists with the default 5, range 0..60",
+            name = "Map change delay setting: pw_mapchange_delay exists with the default 5, range 1..60",
             func = function()
                 local convar = must(GetConVar("pw_mapchange_delay"))
                 expect(convar:GetDefault()).to.equal("5")
-                expect(convar:GetMin()).to.equal(0)
+                expect(convar:GetMin()).to.equal(1)
                 expect(convar:GetMax()).to.equal(60)
             end
         },
         {
-            name = "Lobby unspawn rule: entering LOBBY from a match unspawns; the first lobby and other phases do not",
+            name = "Lobby unspawn rule: initial and returning LOBBY unspawn; repeated LOBBY and other phases do not",
             func = function()
                 expect(jip()._Unspawns("LOBBY", "POSTMATCH")).to.beTrue()
                 expect(jip()._Unspawns("LOBBY", "LIVE")).to.beTrue()
                 expect(jip()._Unspawns("LOBBY", "VOTE")).to.beTrue()
                 expect(jip()._Unspawns("LOBBY", "PREMATCH")).to.beTrue()
-                expect(jip()._Unspawns("LOBBY", nil)).to.beFalse()
+                expect(jip()._Unspawns("LOBBY", nil)).to.beTrue()
                 expect(jip()._Unspawns("LOBBY", "LOBBY")).to.beFalse()
                 expect(jip()._Unspawns("POSTMATCH", "LIVE")).to.beFalse()
                 expect(jip()._Unspawns("PREMATCH", "LOBBY")).to.beFalse()
@@ -299,14 +300,17 @@ return {
             end
         },
         {
-            name = "Unspawn is the first lobby's state: no team (TEAM_UNASSIGNED), then a spawn as a spectator",
+            name = "Unspawn is explicit lobby cleanup: no team, weapons or ammo, roaming spectator, no recursive Spawn",
             func = function()
                 ---@type string[]
                 local log = {}
                 local store = must(jip()._NewStore)()
                 store.unspawn(fakePlayer(log))
                 expect(log[1]).to.equal("team:" .. TEAM_UNASSIGNED)
-                expect(log[2]).to.equal("spawn")
+                expect(log[2]).to.equal("strip")
+                expect(log[3]).to.equal("ammo")
+                expect(log[4]).to.equal("observer:" .. tostring(OBS_MODE_ROAMING))
+                expect(#log).to.equal(4)
             end
         }
     }

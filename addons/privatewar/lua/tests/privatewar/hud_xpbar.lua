@@ -285,6 +285,44 @@ return {
                     end
                 end
             end
+        },
+        {
+            name = "LEVEL UP: measured text plus padding and shadow fit every animation scale at 720p 800p and 1080p",
+            func = function()
+                local l = hud()
+                for _, res in ipairs({ { 1280, 720 }, { 1280, 800 }, { 1920, 1080 } }) do
+                    local w, h = res[1], res[2]
+                    local _, sy, s = l._Scale(w, h)
+                    -- Measured-pixel inputs, including the case where the second line is the wider one.
+                    for _, widths in ipairs({ { 370 * s, 180 * s }, { 270 * s, 410 * s } }) do
+                        local titleW, labelW = widths[1], widths[2]
+                        local titleH, labelH = 78 * s, 42 * s
+                        local facts = { width = w, height = h, scale = s, anchorY = 250 * sy,
+                            titleW = titleW, titleH = titleH, labelW = labelW, labelH = labelH }
+                        local out = l._LevelUpLayout(facts, { cx = 0, cy = 0, titleY = 0, labelY = 0,
+                            boxX = 0, boxY = 0, boxW = 0, boxH = 0 })
+                        local padding, shadow = 12 * s, 1
+                        local maxScale = l.LevelUpScaleFrom
+                        expect(out.boxW >= (math.max(titleW, labelW) + 2 * (padding + shadow)) * maxScale - 0.01)
+                            .to.beTrue()
+                        expect(out.boxX >= 0 and out.boxY >= 0).to.beTrue()
+                        expect(out.boxX + out.boxW <= w and out.boxY + out.boxH <= h).to.beTrue()
+                        for step = 0, 60 do
+                            local k = l._LevelUpScale(l.LevelUpPop * step / 60)
+                            for _, line in ipairs({ { titleW, out.titleY, titleH }, { labelW, out.labelY, labelH } }) do
+                                local left = out.cx - line[1] / 2 * k
+                                local right = out.cx + (line[1] / 2 + shadow) * k
+                                local top = out.cy + (line[2] - out.cy) * k
+                                local bottom = out.cy + (line[2] + line[3] + shadow - out.cy) * k
+                                expect(left - padding * k >= out.boxX - 0.01).to.beTrue()
+                                expect(right + padding * k <= out.boxX + out.boxW + 0.01).to.beTrue()
+                                expect(top - padding * k >= out.boxY - 0.01).to.beTrue()
+                                expect(bottom + padding * k <= out.boxY + out.boxH + 0.01).to.beTrue()
+                            end
+                        end
+                    end
+                end
+            end
         }
     }
 }

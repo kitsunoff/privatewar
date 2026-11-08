@@ -36,6 +36,14 @@ include("privatewar/modules/hud/sh_streaks.lua")
 if SERVER then AddCSLuaFile("privatewar/modules/hud/sh_xpbar.lua") end
 include("privatewar/modules/hud/sh_xpbar.lua")
 
+-- User-approved player HUD (T-11.11; 09-hud.md revision 2026-11-08), pure presentation only.
+if SERVER then
+    AddCSLuaFile("privatewar/modules/hud/sh_vitals.lua")
+    AddCSLuaFile("privatewar/modules/hud/sh_weapon.lua")
+end
+include("privatewar/modules/hud/sh_vitals.lua")
+include("privatewar/modules/hud/sh_weapon.lua")
+
 lib.DesignWidth = 1920
 lib.DesignHeight = 1080
 
@@ -123,8 +131,12 @@ function lib._Paint(state, registry, phase, flags)
     local list = state.list
     for i = 1, state.count do
         local element = list[i] --[[@as PW.HudElement]]
+        element._HudPainted = false
         local visible = element:IsValid() and (element.ShouldDraw == nil or PW.Call(element, "ShouldDraw"))
-        if visible then PW.Call(element, "Draw") end
+        if visible then
+            PW.Call(element, "Draw")
+            element._HudPainted = element:IsValid()
+        end
         -- Disabled before this frame or by an error just now: leave the cached list at the next frame.
         if not element:IsValid() then state.dirty = true end
     end

@@ -1,6 +1,6 @@
 # Operators API
 
-Module `operators` (T-11.8, `design/06-progression.md` d.7, `design/10-frontend.md` d.6). One global operator (player
+Module `operators` (T-11.9, `design/06-progression.md` d.7, `design/10-frontend.md` d.6). One global operator (player
 model) per player, used in every match and in the lobby operator panel; random operators for bots. Bot names are part
 of the bots manager (`bots-blackboard.md`, "Bot names").
 
@@ -28,8 +28,11 @@ are dynamic (`core.md`, "Declaring": `options` may be a function):
 ## Resolution (`PW.Operators.Resolve`, pure)
 
 The chosen entry when it exists and is not locked; else the `cl_playermodel` entry when it is an open stock entry; else
-the stock `kleiner`; else the first open entry; else `models/player/kleiner.mdl`. A rejected choice reports `unknown` or
-`locked`. The server and the client use the same function, so the lobby shows what the match will show.
+the first open stock entry in the existing list order (sorted by display name, then id). An open economy entry earlier
+in the list never takes priority over stock for a default. With no usable choice and no open stock entry, `Resolve`
+returns `nil` and the server and client use the last-resort path `models/player/kleiner.mdl`, even for an empty list.
+A rejected choice reports `unknown` or `locked`. The server and the client use the same function, so the lobby shows
+what the match will show.
 
 ## Net message
 
@@ -38,10 +41,15 @@ the stock `kleiner`; else the first open entry; else `models/player/kleiner.mdl`
 | `pw_operator_model` | client to server | `choice` string | `who = "any"`, rate 2 per second, `maxLen` = `MaxChoiceBytes + 1` (65), owner the module |
 
 The client sends it at `InitPostEntity` and on every change of `pw_operators_model` (picker, settings form, console).
-The server drops a bot sender and a malformed choice (`CheckChoice`: 1 to 64 bytes, no control characters), keeps a
-well-formed one and logs one line when it resolves to a fallback. The choice is resolved again at every spawn, so a
-model bought later becomes usable. Outside `LIVE` an alive player gets the new model at once; during `LIVE` from the
-next spawn.
+The server drops a bot sender and a malformed choice (`CheckChoice`: a string of 1 to 64 bytes, no control characters).
+Before storing a well-formed choice, `_OnRequest` checks that its entry exists and is unlocked for the sender; `auto`
+is always a valid sentinel. An unknown or locked choice is rejected and logged, leaving both the previous accepted
+choice and the current model unchanged. `CheckChoice` is only the syntax check, not the ownership validator.
+
+The list and ownership are checked anew on every request and spawn. A model bought later can be selected by sending a
+new request; an accepted model that later becomes locked or unavailable resolves to the safe default at spawn.
+A player with no accepted choice uses `auto`. Outside `LIVE` an alive player gets an accepted new choice at once;
+during `LIVE` from the next spawn.
 
 ## Server: `PlayerSetModel`
 
@@ -52,11 +60,20 @@ next spawn.
 
 ## API
 
+Frozen extension: question `PW_PlayerModelOverride(ply) -> string?` may supply
+a temporary player-model path. Accept it only when registered by `player_manager.AllValidModels()`
+and accepted by `util.IsValidModel`. An invalid/missing/NPC-only path logs once and falls back to the
+ordinary operator, never downloads content. Standard first-non-nil question dispatch applies.
+Server `PW.Operators.Refresh(ply) -> boolean, string?` applies through this same owner; no competing
+PlayerSetModel hook, permanent choice update or private-store access. Removing the provider restores
+the saved human operator or the bot's existing session choice. The Infection candidate
+`models/player/zombie_classic.mdl` still needs installed-asset/animation verification on the Deck.
+
 | Function | Contract |
 | --- | --- |
 | `PW.Operators.List(input) -> PW.OperatorEntry[]` | Shared, pure. `input = { stock, economy, unlocked }` |
 | `PW.Operators.Resolve(entries, choice, auto) -> entry?, reason?` | Shared, pure |
-| `PW.Operators.CheckChoice(choice) -> boolean` | Shared, pure |
+| `PW.Operators.CheckChoice(choice) -> boolean` | Shared, pure syntax check; the server also validates existence and unlocks before storing |
 | `PW.Operators.BotPick(entries, roll) -> entry?` | Shared, pure |
 | `PW.Operators.Colour(facts) -> { r, g, b }` | Shared, pure, in 0..1 |
 | `PW.Operators.Cards(entries, choice, auto) -> cards, selected` | Shared, pure: the picker cards (`Auto` first; locked cards with `lockText` `"<price> CR"` or `"LV <n>"`) |

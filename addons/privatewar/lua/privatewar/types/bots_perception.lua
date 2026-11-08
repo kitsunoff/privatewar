@@ -1,4 +1,6 @@
 ---@meta
+---@class PW.BotPerceptionLib
+---@field _FlashCanSee fun(ply: Player, now: number): boolean
 -- Types of the bots_perception module (T-5.7; 07-bots.md d.7, docs/api/bots-blackboard.md "Stimuli"). Code:
 -- lua/privatewar/modules/bots_perception/ (shared.lua: pure rules; sh_state.lua: the per-bot state and the stimuli;
 -- init.lua: engine glue).
@@ -13,6 +15,10 @@
 ---@field visible boolean currently seen through the reaction queue
 ---@field source string "sight", "sound", "damage", "shared" or a stimulus kind
 ---@field dir? Vector direction to the attacker, damage contacts only
+---@field sourceToken? table server-only radar provenance, never an entity position source
+---@field expiresAt? number absolute radar lifetime
+---@field observed? PW.BotContact independent non-radar observation, without nested provenance
+---@field radar? PW.BotContact[] bounded snapshots of independent radar contributions
 
 ---Perception writes contacts and memory (docs/api/bots-blackboard.md "Blackboard").
 ---@class PW.BotBoard
@@ -58,12 +64,15 @@
 ---@field budget { left: integer } traces left this perception tick, decremented per trace
 
 ---A message of team sharing waiting for its delivery.
----@class PW.BotPending
+---@class PW.BotPending : PW.BotStimulusData
 ---@field at number
 ---@field ent any
 ---@field pos Vector
 ---@field vel Vector
 ---@field time number
+---@field radar? boolean preserve radar provenance through delayed sharing
+---@field sourceToken? table
+---@field expiresAt? number
 
 ---Per-bot perception state (plain data).
 ---@class PW.BotPerceptionState
@@ -83,6 +92,9 @@
 ---@field pos Vector
 ---@field vel Vector
 ---@field time number
+---@field source? string
+---@field sourceToken? table
+---@field expiresAt? number
 
 ---Facts of one perception step.
 ---@class PW.BotThinkCtx
@@ -98,6 +110,8 @@
 ---@field vel? Vector
 ---@field time? number default CurTime()
 ---@field dir? Vector
+---@field sourceToken? table optional opaque radar identity
+---@field expiresAt? number optional absolute radar expiry
 
 ---A listener of a sound: its state and ears.
 ---@class PW.BotListener
@@ -147,11 +161,17 @@
 ---@field HearSound fun(ears: PW.BotListener[], kind: string, pos: Vector, source: any, rnd: PW.BotRandomFn?): integer
 ---@field Share fun(sender: PW.BotSender, mates: PW.BotMate[], contact: PW.BotSighting, now: number): integer
 ---@field Think fun(state: PW.BotPerceptionState, ctx: PW.BotThinkCtx, now: number): PW.BotSighting[]
+---@field RetireSource fun(sourceToken: table?, now: number): integer exact radar contributions, not ordinary memory
+---@field RefreshContacts fun(state: PW.BotPerceptionState) rebuild the public list after synchronous retirement
+---@field HideSight fun(state: PW.BotPerceptionState) suppress visibility including independent radar-overlay baselines
+---@field _KnownRadarSources table<table, boolean> weak tokens, never an unbounded strong entity registry
+---@field _RetiredRadarSources table<table, boolean> weak tombstones reject late delivery while a token is retained
 
 ---@class PW.BotLib
 ---Feeds a stimulus to a bot or to every bot of a team; returns how many bots got it. A table in place of kind is a
 ---stimulus with its kind in the field `kind`.
 ---@field AddStimulus fun(botOrTeam: any, kind: any, data: any): integer
+---@field RetireStimulusSource? fun(sourceToken: table?): integer removes only the exact source's radar evidence
 ---Five search points around the freshest lost contact of the bot (or of ent): last seen, ahead, left, right, far ahead.
 ---@field GetSearchPlan fun(bot: any, ent: any?): Vector[]?
 

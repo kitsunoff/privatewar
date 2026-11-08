@@ -20,6 +20,11 @@
 local lib = PW.BotAim --[[@as PW.BotAimLib]]
 local cfg = lib.Config
 
+function lib._FlashCanFire(ply, now)
+    local status = rawget(PW, "Throwables") --[[@as PW.ThrowablesLib?]]
+    return status == nil or status.Impairment == nil or status.Impairment(ply, now) <= 0.05
+end
+
 PW.Privilege(lib.Privilege, "superadmin")
 
 local weak = { __mode = "k" }
@@ -258,7 +263,7 @@ local function aimBot(bot, now, dt)
         projectileSpeed = fire ~= nil and fire.projectileSpeed or nil }, params)
     local kickP, kickY = kickOf(bot, s, info.recoil, fire ~= nil and fire.rpm or nil, now)
     lib.Step(s, { now = now, dt = dt, eye = eye, point = point, radius = lib.FireHalfSize(info.category),
-        canFire = known.canFire, kickP = kickP, kickY = kickY,
+        canFire = known.canFire and lib._FlashCanFire(bot, now), kickP = kickP, kickY = kickY,
         lineOfFire = lineOfFire(bot, target, point) }, params)
     writeOut(bot, board, s)
 end
@@ -291,5 +296,18 @@ end
 function lib.OwnsView(bot)
     return store.states[bot] ~= nil
 end
+
+local function clearAll()
+    for bot in pairs(store.states) do
+        if boardOf(bot) ~= nil then lib.SetTarget(bot, nil) end
+    end
+    for bot in pairs(store.override) do
+        if boardOf(bot) ~= nil then lib.SetTarget(bot, nil) end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 include("privatewar/modules/bots_aim/sv_command.lua")

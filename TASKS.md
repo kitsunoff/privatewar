@@ -25,16 +25,18 @@ T-<phase>.<n>  Title                                  lane · agent · depends o
 
 ## How to continue (handover)
 
-For an agent that picks the work up in the middle (for example Codex after Claude): everything needed is in this repository. Read `CLAUDE.md` (project rules), `AGENTS.md` (short entry point), this file, then "Phase 11" at the end for the current queue. Task status is not stored per row in the older phase tables; the truth is `git log main` and the code, and "Phase 11" lists what was done, what runs and what waits.
+For an agent that picks the work up in the middle (for example Codex after Claude): everything needed is in this repository. Read `CLAUDE.md` (project rules), `AGENTS.md` (short entry point), this file, then "Phase 11" at the end for the current queue. Task status is not stored per row in the older phase tables; inspect current code and task branches alongside "Phase 11". Pre-snapshot merge hashes and branch references are historical, not instructions to recreate implemented work.
 
 ### Publishing
 
-The public repository is generated, never edited by hand: `bash scripts/export/public.sh <empty-dir>` builds it from `HEAD`, drops the paths in `scripts/export/local-only.txt` (the local manual checklist among them) and fails on Cyrillic or private terms. Public text is English only. See `docs/publishing.md`.
+Develop directly in this canonical repository (`kitsunoff/privatewar`), on feature branches and through reviewed PRs, draft by default. The former research checkout is historical only. Push only with the user's authorization; show the PR title and body and obtain approval before creating it. Merging requires separate explicit user approval. Public text is English only; private content must stay outside the public repository and any published tree. `scripts/export/public.sh` remains optional tooling for a filtered snapshot, not a required development step. See `docs/publishing.md`.
 
-### Current state (2026-11-07 evening)
+### Current state (2026-11-08 overnight closure)
 
-- Running branches: `feat/arc9-perf-profile` (T-11.8), `feat/operators-bot-names` (T-11.9), `fix/match-flow-lobby` (T-11.10). Their worktrees are under `.claude/worktrees/` and may hold committed work. The specs are in the Phase 11 rows and the test cases in "Mandatory test cases".
-- To resume a branch: check it out, merge `main`, copy `.deck.env` into the worktree, run `nix develop --command make check` and `nix develop --command make test` (with `set -o pipefail`), and finish the items still missing in the task row.
+- The initial public snapshot has one root commit, `2d71b09`. Older merge hashes and running-branch/worktree references below are historical, not a current queue. Inspect the current code and task branches before continuing; do not recreate implemented features from old status entries.
+- T-11.8 is implemented in the initial public snapshot, including all mandatory cases; penetration was measured and kept on.
+- T-11.9 is implemented in the initial public snapshot; the independently verified correction from `task/T-11.9-operators-names-fix` is included in the current change set (required request rejection, first-stock default, deterministic overflow names and expanded mandatory tests).
+- Overnight feature integration `integration/overnight-fast` at `3e2c1c9` includes S&D, Hardpoint, Infection, all twelve new perks, all four support streaks and T-11.10 correctives (minimum map-change delay 1 s). Coordinator scope/assertion/visual review accepted; independent full `make check` PASS and unfiltered game suite 1765/0/0 (passed/failed/skipped). This is feature integration only: main unchanged, no push, PR or Workshop publication; manual checkpoints remain pending.
 - The Deck must be free (the user is not playing) before `make test`, because the tests reload the map.
 - User decisions still open: the DOM flag tiles moving up to y about 20; the lobby leave dialog default button (CANCEL recommended); the XP curve (item 46: about 3M XP in total now; options: keep, divide by 10, custom).
 
@@ -44,7 +46,7 @@ The public repository is generated, never edited by hand: `bash scripts/export/p
 2. Task order: lowest-numbered task whose dependencies are merged; skip anything blocked by an open design question (`D1`-`D4`) or marked "pending confirmation"; collect those for the user. The full orchestration rules (briefs, model choice, hard rules) are in `.claude/commands/orchestrate.md`; they apply to any agent.
 3. The merge gate, run in the agent's worktree after merging the latest `main` into the branch: `nix develop --command make check` and `nix develop --command make test`, both green (run them with `set -o pipefail` so a failure inside a pipe is not hidden). Plus: scope check with `git diff --stat main...<branch>` (only the lane's directories, `lua/privatewar/types/`, `lua/tests/privatewar/`), and every mandatory test case below exists by name and is not weakened.
 4. Copy the git-ignored `.deck.env` (Deck address) from the main checkout into every new worktree.
-5. Merge locally: `git checkout main && git merge --no-ff --signoff <branch>`. There is no remote and no pull request yet; if a remote appears, ask the user before switching to PRs.
+5. Never commit or merge locally on `main`. After review and green gates, request authorization to push the feature branch if not already granted. Show the draft PR title and body and obtain the user's approval before `gh pr create --draft`. Merge only with separate explicit user approval, using `gh pr merge --squash --delete-branch` after the PR is ready. No push, PR creation or merge is automatic.
 6. Commits: `git commit --signoff`, semantic message, trailer `Assisted-by: LLM` only. Never `--no-verify`.
 
 ### Steam Deck rules
@@ -56,18 +58,18 @@ The public repository is generated, never edited by hand: `bash scripts/export/p
 
 ### Manual checks and pending decisions
 
-The local manual checklist (not published; the file is listed in `scripts/export/local-only.txt` and stays tracked only in the private development repository) is the place for everything a human must check in the game and for decisions taken by recommendation (its section 7). It may be written in the maintainer's language, but nothing from it is ever published; public text is English only. When a decision is marked "pending confirmation" here or in `design/`, implement the recommendation and add an item there; the user confirms or corrects it later. Do not stop the run for it.
+The local manual checklist (not published; its path is listed in `scripts/export/local-only.txt` and it must stay outside the public repository and any published tree) is the place for everything a human must check in the game and for decisions taken by recommendation (its section 7). It may be written in the maintainer's language, but nothing from it is ever published; public text is English only. When a decision is marked "pending confirmation" here or in `design/`, implement the recommendation and add an item there; the user confirms or corrects it later. Do not stop the run for it.
 
 ## Toolchain
 
-Everything comes from `flake.nix` (`nix develop`, or direnv `use flake`). Agents run commands through `nix develop --command <cmd>` because their shells are non-interactive.
+Lint, type and test tools come from `flake.nix` (`nix develop`, or direnv `use flake`). Agents run these commands through `nix develop --command <cmd>` because their shells are non-interactive. Run ordinary git commands directly in your own worktree.
 
 **Rule: nothing is built from source.** A tool missing from nixpkgs is packaged from its **release binary** under the nixpkgs naming convention `<name>-bin`.
 
 | Tool | Source | Notes |
 | --- | --- | --- |
-| `lua-language-server` (LuaLS) | nixpkgs (3.17.1) | Language server and **type checker** (`--check`) on every platform |
-| `markdownlint-cli2` | nixpkgs (0.21.0) | Docs |
+| `lua-language-server` (LuaLS) | nixpkgs (3.19.2, verified 2026-11-08) | Language server and **type checker** (`--check`) on every platform |
+| `markdownlint-cli2` | nixpkgs (0.24.0, verified 2026-11-08) | Docs |
 | `luajit` | nixpkgs | Same Lua as GMod for quick scripts |
 | `glualint-bin` | Release binary `FPtje/GLuaFixer` 1.30.0 | Assets: `OSX-x86_64` (runs through Rosetta on Apple Silicon), `x86_64-linux`; no native arm64 macOS build |
 | `glua-ls-bin` (optional, editor only) | Release binary `Pollux12/gmod-glua-ls` | Only `glua_ls` has macOS builds (`darwin-arm64-experimental`); `glua_check` ships for linux-x64 and win32 only, so it is **not** the gate |
@@ -142,7 +144,7 @@ scripts/deck/
 | Unit and integration tests | **GLuaTest** (`CFC-Servers/GLuaTest`, GPL-3.0, active) | RSpec/Jest-like syntax, `expect`, `stub`, async cases; runs in a real server, so engine APIs, hooks, timers and bots are testable |
 | Local loop | GLuaTest in the dev server's `addons/` | Tests run on server start; re-run with `pw_reload` / restart |
 | Headless run | GLuaTest Docker runner (`run_local.sh`) | Same runner as CI; needs Docker compose (Colima `nerdctl compose`); x86 server image on Apple Silicon is unverified |
-| CI (optional, when a GitHub remote exists) | GLuaTest reusable workflow on pull requests | `requirements.txt` can pull dependencies (for example weapon bases) |
+| CI (optional) | GLuaTest reusable workflow on pull requests | `requirements.txt` can pull dependencies (for example weapon bases) |
 | Lint and types (mandatory) | `glualint` (linter) + `lua-language-server --check` (type checker, GMod annotations from `luttje/glua-api-snippets`, warnings as errors) + `markdownlint-cli2` for docs + `rules` (`scripts/check/rules.sh`, below) | Enforced by `pre-commit` and the Claude Code `PostToolUse` hook (T-0.7); `make check` runs lint, types, markdown and rules; type and lint errors fail the build; disabling a rule inline or in config needs the user's approval with a written reason |
 | Rules gate (mandatory) | `make rules` (`scripts/check/rules.sh`, also a `nix flake check` and a `pre-commit` hook) | No `net.WriteTable` / `net.ReadTable` outside tests (DESIGN.md global rule 4); a Lua file at most 500 lines and a function at most 60 lines under `gamemodes/`, `lua/privatewar/` and the integration addons (global rule 3), function length measured from the `luajit -bl` prototype listing; `lua/tests/` and `addons/privatewar-dev/` are exempt |
 | Not automatable | Checkpoints (`CP-*`) | P2P, listen-server specifics, feel, visuals |
@@ -365,6 +367,48 @@ Phase 11 — playtest follow-ups (added 2026-11-07; pure unless marked; the case
 - **T-11.8 ARC9 performance profile**: the profile table maps `deck` to exactly the client values (tpik_others 0, lod_distance 0.4, cheapscopes 1, fx_rtvm 0, muzzle_others 0, eject_fx 0) and server values (`arc9_bullet_physics 0`, `arc9_ricochet 0`), and `off` to an empty table; `arc9.perf` defaults to `deck`; apply saves the original value of every touched ConVar before changing it and restore puts each back; crash safety: when the data file with saved originals exists at start (no clean ShutDown), the next start restores the saved values first and then applies the profile; a clean ShutDown deletes the file; applying twice does not overwrite the saved originals with profile values; a missing ConVar (ARC9 not installed) is skipped without error; the precache ConVars stay set after restore; the settings schema accepts an optional `description` and rejects a non-string one; a setting without `description` still validates; the SETTINGS screen model exposes the description when present (pure part).
 - **T-11.9 Operator skin and bot names**: the skin list holds stock models, valid Workshop models (`player_manager.AllValidModels`) and owned economy `models`; locked entries carry their price and are not selectable; the default is `cl_playermodel` when valid, otherwise the first stock model; the net message validator rejects a non-string, an unknown model and a model not owned; a valid choice is stored and applied in `PlayerSetModel`; in team modes the player colour is set from the team (`SetPlayerColor`), in FFA it is not forced; a player with no choice gets the default; a bot gets a valid model and the choice differs between sessions (seeded random stub); bot names come from the pool of about 100 names, are unique within the game, never match `Bot%d+`, the pool file has no duplicates and no empty entries, and when the pool is exhausted a deterministic fallback keeps names unique; a name is released when a bot leaves and can be reused.
 - **T-11.10 Match end and lobby flow**: (a) REGRESSION first: the postmatch results phase lasts `pw_postmatch_time` and does not advance to the lobby earlier (written and seen failing before the fix); after it, the next phase is VOTE or the lobby according to the aftermatch setting; (b) entering the post-match lobby hides or unspawns every player and bot body exactly as the first lobby does (same function, both paths tested); the operator panel stays available; (c) the START MATCH button label model returns a countdown string from the remaining seconds, clamps below zero and never shows the old "match starts from" text; the same formatter serves a pending map change; (d) map change: the server announces map, mode and end time; the clients' popup model holds the map's nice name and the mode, is visible until the end time and not after; the map changes only after the configured delay (`pw_mapchange_delay`, default about 5 s), not at once; a zero or negative delay is clamped to a minimum; announce and change use the same end time; (e) LEVEL UP popup clipping: the computed popup box contains the full text width at the maximum scale, at every scale step of the scale-in animation, and at 1280x720, 1280x800 and 1920x1080 (the box is computed from the measured text width plus padding, not from a fixed size).
+- **T-11.11 Player vitals and weapon HUD** (user-approved 2026-11-08, `09` revision): health fractions at zero/half/full, clamp/out-of-range and invalid maximum; exactly three bounded continuous 50-armor segments at 0/25/50/75/100/125/150, overflow and negative; nickname above armor above health; on-screen left vitals/right weapon at 1280x720, 1280x800 and 1920x1080 without XP/equipment overlap; only LIVE/alive/non-spectating local-player data, never stale player/weapon snapshots; live name/clip/reserve, switch/empty/zero, invalid weapon, melee/no primary ammo and clipless finite reserve; localized and long UTF-8 names fit without byte splitting; hide only corresponding native panels while their replacement is active and successfully drawing, restore vanilla on HUD/module/element off, missing or error, preserve crosshair/killfeed. Existing T-6.1, T-6.4, T-11.3 and T-11.5 suites remain mandatory and unchanged. Mapping: `hud_vitals.lua` cases "Health fraction: zero half full clamp out-of-range and invalid maximum are safe", "Armor: exactly three bounded continuous segments at 0 25 50 75 100 125 150 overflow and negative", "Layout: nickname above armor above health; left/right anchors clear XP and equipment", "Lifecycle: only LIVE alive valid non-spectating local players show vitals or weapon" and all three "Native panels:" cases; `hud_weapon.lua` cases "Weapon: live name clip reserve update switch empty clip and zero reserve without stale data", "Weapon: melee no primary ammo clipless reserve and invalid counts never invent ammo", "Weapon: player replacement death spectator and weapon switch never reuse another snapshot", "Weapon: adapter display name and engine PrintName fallback are localized" and "Names: long localized UTF-8 nicknames and weapon names fit without byte splitting". Manual visuals require Deck screenshots and then user confirmation; automated success never passes the user's checkpoint.
+
+- **T-11.12 Search and Destroy** (`02-modes.md` d.8; mandatory coverage, execution status in Phase 11):
+  `Round objective: planted overtime survives the base deadline`;
+  `Round objective: prepare follows swap and precedes every playable respawn`;
+  `Round objective: terminal verdict prevents another swap spawn or award`;
+  `SND: one bomb survives competing pickups and carrier death disconnect`;
+  `SND: held interactions cancel on invalid actor range release and round generation`;
+  `SND: exact plant defuse fuse and death boundaries resolve once`;
+  `SND: reconnect and replacement cannot grant a second life`;
+  `SND: snapshots disclose only approved carrier drop and spectator information`;
+  `SND bots: sole attacker carries plants and guards through shared input rules`;
+  `SND bots: sole defender holds use to defuse and death promptly reassigns`;
+  `SND bots: sanitizer preserves approved eligibility without leaking hidden enemies`.
+  Preserve every T-2.3/T-1.12/T-2.9/T-5.2/T-5.7/T-5.11/T-8.4 and grenade/streak lifecycle assertion.
+- **T-11.13 Hardpoint** (`02-modes.md` d.8; mandatory): empty/unequal contested occupancy zero; dead/observer/other-floor
+  exclusion; rotation wrap/exact-boundary precedence; no stall backfill/double finish; invalid layouts hidden;
+  revision releases sticky holds, including tiny teams; projected arrival inside the zone; late snapshots reject
+  stale visits/no occupant disclosure; bot holds/rotates through ordinary inputs. Preserve Domination/spawn/JIP cases.
+- **T-11.14 Infection** (`02-modes.md` d.8; mandatory): prepare roles before every playable spawn; fixed total 1/3
+  finishes once without extra spawn, ordinary first-to-wins unchanged; no-repeat seed where possible; once-only
+  conversion/world death; infected continue playing; pending respawn not mistaken for absence; exact endings;
+  personal outcomes; synchronous role transition clears each layer's owned state; role overrides/restrictions and
+  rollback outside addon; legal melee input; safe late snapshots. Do not claim unconfirmed rule values approved.
+
+- **T-11.17 Twelve additional perks**: all twelve declarations, original four unchanged; additive equipment counts;
+  ordinary fall baseline; movement/400 HP role composition without refresh healing or compounding; bounded flash
+  stacking/expiry; multiplicative stats and supported-adapter warnings; capped ordinary reserve and proven weapon
+  attribution; quiet stock footsteps/public hearing; Ghost reveal filtering for humans and bots with CUAV unchanged;
+  Retaliation eligibility; Continuity death-order/earning and next-life reset; disable/revoke/round cleanup.
+  Native first/repeated spawn must grant once; real RoundEnd clears flash timers/projectiles/impairment and only
+  owned DSP; retained disabled resupply grants nothing while pure math/provenance remain usable.
+  Case map below supplements every existing T-4.4/T-4.5/T-11.4/T-4.6/T-4.9/T-5.7/T-5.8/T-5.13/UI assertion.
+- **T-11.18 Support streaks K1–K4** (mandatory; final execution evidence in Phase 11): transactional activation and failed
+  placement preserve inventory; finite floor/hull/exit/cap validation; directional cone/LOS and generic feedback;
+  cache real shared resupply, charge/cooldown/cap boundaries; medical damage deadline/max-rate/clamp; sensor
+  vertical/LOS/pulse/expiry/source cleanup; owner/alliance/FFA/role eligibility; death persistence and exact cleanup
+  on disconnect/team/role/disable/round/match/map/shutdown; legal bot perception/reaction/player-threat priority
+  and ordinary-input native device destruction. Preserve T-4.6/T-6.6/T-5.7 unchanged. Initial suite map:
+  `streak_deployment.lua`, `streak_directional_scan.lua`, `streak_ammo_cache.lua`, `streak_medical_station.lua`,
+  `streak_ground_sensor.lua`, `bots_support_devices.lua`. Final 16-file owned case inventory is in Phase 11;
+  pure predicates never substitute for native placement, cleanup, combat or client markers/feedback.
 
 ## Agents and lanes
 
@@ -732,7 +776,7 @@ Fresh Steam account subscribes from the Workshop, starts solo with bots followin
 
 ## Phase 11 — Playtest follow-ups (2026-11-07)
 
-Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decisions approved by the user in chat. Decisions are in `design/05-loadout.md` d.11 (revision), `design/06-progression.md` d.2 (revision), `design/07-bots.md` d.13 (revision) and `design/09-hud.md` (revision); the details first taken by recommendation (the local manual checklist (not published) section 7, items 64-67) were confirmed by the user on 2026-11-07, with one change: dying while cooking drops the live grenade (item 66.3). Status values: `running` (an agent works on the branch), `queued` (start in this order as agent slots free up), `blocked`.
+Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decisions approved by the user in chat. Decisions are in `design/05-loadout.md` d.11 (revision), `design/06-progression.md` d.2 (revision), `design/07-bots.md` d.13 (revision) and `design/09-hud.md` (revision); the details first taken by recommendation (the local manual checklist (not published) section 7, items 64-67) were confirmed by the user on 2026-11-07, with one change: dying while cooking drops the live grenade (item 66.3). Older branch and merge references record pre-snapshot history. Current implementation and follow-up status for T-11.8 to T-11.10 is recorded below; inspect current code and task branches before starting work.
 
 | Task | Lane | Depends | Tests first | Source decision | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -743,9 +787,113 @@ Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decision
 | T-11.5 Scoreboard rework: match status top left under the radar, team bars with L-shaped outline, FFA leader | `ui` | T-11.2, T-11.3 (same HUD area; avoid merge conflicts) | Pure | `09` revision 3 | done (merged `44c7d69`) |
 | T-11.6 Bot combat movement: cover under fire and peeking, strafing, running between covers, melee at close range, optional Quick Slide support (public API only, off when absent) | `bots` | T-5.10 | Pure + In-game smoke | `07` d.13 revision (numbers confirmed 2026-11-07) | done (merged `fcedf95`) |
 | T-11.7 Stat-based default unlock levels (weapons 1..55, attachments 1..30), cached per map, registered `soft`, host switch; starting with ARC9 | `weapons` / `progression` | T-11.1 merged | Pure | `06` d.2 revision (formula weights confirmed 2026-11-07) | done (merged `ed225db`) |
-| T-11.8 ARC9 performance profile ("optimisation first": the Steam Deck is the target hardware, integrations default to performance, quality is opt-in). Setting `arc9.perf` = `deck` (default) or `off`. `deck` sets the client visual ConVars from `docs/perf-report.md` (`arc9_tpik_others 0`, `arc9_lod_distance 0.4`, `arc9_cheapscopes 1`, `arc9_fx_rtvm 0`, `arc9_muzzle_others 0`, `arc9_eject_fx 0`; check the exact ConVar names in the ARC9 install) and the server ConVars `arc9_bullet_physics 0` (hitscan) and `arc9_ricochet 0`. Penetration (`arc9_mod_penetration`): measure on the Deck (TDM, about 9 bots, 120 s with it on vs off, through the profiler); turn it off in the profile only if it adds more than 0.5 ms to the average server Lua time or raises p99/max noticeably, and write the numbers into `docs/perf-report.md`. The profile applies while the mode runs and is restored on ShutDown; crash-safe: the original values are saved in a data file and restored at the next start if no clean ShutDown happened. The precache ConVars stay set. The settings schema gets an optional `description` field shown on the SETTINGS screen (approved). Restart from scratch: branch `feat/arc9-perf-profile` from `main`, tests first | `weapons` (schema and SETTINGS screen part: `ui`/`core`) | T-3.6, T-11.1 | Pure + Deck measurement | "Optimisation first" principle (user, 2026-11-07) | done (branch `feat/arc9-perf-profile`, awaiting merge; penetration measured and kept on) |
-| T-11.9 Operator skin and bot names. Today no player model is set, so everyone is the base grey model. One global operator skin per player: the list holds stock models, Workshop models (`player_manager.AllValidModels`) and owned economy `models`; locked ones show their price; the default is `cl_playermodel` if valid; it is a client setting plus a picker with a preview; a validated net message sends it; the server checks valid and owned and applies it in `PlayerSetModel` with the team colour (`SetPlayerColor`) in team modes. Bots get a random valid model per session. Bots get human-like names from a pool of about 100 original names (no real people, no copyrighted characters), unique in the game, never "BotNN"; the pool lives in a data file. Restart from scratch: branch `feat/operators-bot-names` from `main`, tests first | `loadout` / `ui` (bot names and models: `bots`) | T-4.12, T-7.5 | Pure + In-game smoke | playtest 2026-11-07 | done (branch `feat/operators-bot-names`) |
-| T-11.10 Match end and lobby flow. (a) BUG: the postmatch results screen jumps to the lobby instantly; it must stay for `pw_postmatch_time`, then go to VOTE or the lobby per the aftermatch setting; a test reproduces the bug first. (b) In the post-match lobby unspawn or hide all player and bot bodies, identical to the first lobby; the lobby operator panel stays. (c) Replace the "match starts from ..." text with a countdown on the START MATCH button (green text, dark button background); the same countdown is used for a pending map change. (d) A map change is not instant: show a popup "MAP CHANGE" with the map's nice name and the mode for a configurable time (default about 5 s), then change the map; the server announces map, mode and end time to clients. (e) The LEVEL UP popup renders clipped, so the text does not fully fit; the code is `lua/privatewar/hud/popups.lua` and `modules/hud/sh_popups.lua` / `sh_xpbar.lua` with a scale-in animation; the Deck runs at 1280x720. The whole text must fit at every scale step and at 1280x720, 1280x800 and 1920x1080. Restart from scratch: branch `fix/match-flow-lobby` from `main`, tests first | `core` / `ui` | T-7.7, U-5 | Pure + In-game | playtest 2026-11-07 | done (branch `fix/match-flow-lobby`) |
+| T-11.8 ARC9 performance profile ("optimisation first": the Steam Deck is the target hardware, integrations default to performance, quality is opt-in). Setting `arc9.perf` = `deck` (default) or `off`. `deck` sets the client visual ConVars from `docs/perf-report.md` (`arc9_tpik_others 0`, `arc9_lod_distance 0.4`, `arc9_cheapscopes 1`, `arc9_fx_rtvm 0`, `arc9_muzzle_others 0`, `arc9_eject_fx 0`; check the exact ConVar names in the ARC9 install) and the server ConVars `arc9_bullet_physics 0` (hitscan) and `arc9_ricochet 0`. Penetration (`arc9_mod_penetration`): measure on the Deck (TDM, about 9 bots, 120 s with it on vs off, through the profiler); turn it off in the profile only if it adds more than 0.5 ms to the average server Lua time or raises p99/max noticeably, and write the numbers into `docs/perf-report.md`. The profile applies while the mode runs and is restored on ShutDown; crash-safe: the original values are saved in a data file and restored at the next start if no clean ShutDown happened. The precache ConVars stay set. The settings schema gets an optional `description` field shown on the SETTINGS screen (approved). Original branch: `feat/arc9-perf-profile` | `weapons` (schema and SETTINGS screen part: `ui`/`core`) | T-3.6, T-11.1 | Pure + Deck measurement | "Optimisation first" principle (user, 2026-11-07) | implemented in initial public snapshot; all mandatory cases exist; penetration measured and kept on |
+| T-11.9 Operator skin and bot names. Today no player model is set, so everyone is the base grey model. One global operator skin per player: the list holds stock models, Workshop models (`player_manager.AllValidModels`) and owned economy `models`; locked ones show their price; the default is `cl_playermodel` if valid; it is a client setting plus a picker with a preview; a validated net message sends it; the server checks valid and owned and applies it in `PlayerSetModel` with the team colour (`SetPlayerColor`) in team modes. Bots get a random valid model per session. Bots get human-like names from a pool of about 100 original names (no real people, no copyrighted characters), unique in the game, never "BotNN"; the pool lives in a data file. Original branch: `feat/operators-bot-names` | `loadout` / `ui` (bot names and models: `bots`) | T-4.12, T-7.5 | Pure + In-game smoke | playtest 2026-11-07 | implemented in initial public snapshot; independently verified correction included in current change set (`task/T-11.9-operators-names-fix`) |
+| T-11.10 Match end and lobby flow: preserve postmatch duration; shared initial/return lobby unspawn and operator panel; START MATCH/map-change countdown; announced map change with delay clamped to 1..60 s; popup expiry at deadline; measured LEVEL UP padding at every scale step and 1280x720, 1280x800, 1920x1080. Original branch: `fix/match-flow-lobby` | `core` / `ui` | T-7.7, U-5 | Pure + In-game; mandatory (a)–(e) unchanged above | playtest 2026-11-07 | corrective gaps integrated and review accepted at `3e2c1c9`; independent static PASS/full 1765/0/0. Historical targeted 134/0/0 and two route timeouts retained as history, superseded by complete independent run; 720p LEVEL UP and POSTMATCH/operator lobby reviewed; human checkpoint pending, not main-merged |
+| T-11.11 Player vitals and active weapon HUD: bottom-left nickname / three armor segments / health; bottom-right localized weapon name and clip / reserve; replace native health/ammo only while custom elements are active; preserve XP and grenade equipment. Branch `task/T-11.11-player-weapon-hud` | `ui` | T-6.1, T-11.3, T-11.4, T-11.5 | Pure + Deck visual + user checkpoint | user-approved `09` revision 2026-11-08 | DEFERRED by user until later; NOT PASSED. Historical automated 13/0/0 and full 1395/0/0 do not pass the visual checkpoint; 720p reviewed, 1080p capture blocked; no overnight HUD redesign |
+| T-11.12 Search and Destroy. Branch `feat/mode-snd`; owns shared round lifecycle and generic commander/objective seams | `modes` / `bots` / mode HUD | T-2.3, T-5.11; shared API freeze | Pure + input smoke + human checkpoint | user-approved `02` d.8 | implemented (`b9156a8`), review accepted/integrated at `3e2c1c9`; independent static PASS/full 1765/0/0. Historical owner 61 owned/shared plus 1395 baseline pass; real-input plant/defuse/travel and restricted spectator checks pass; historical branch full 1488/9/0 lacked Infection runtime; follower correction `9b295fd` integrated; human/P2P pending, not main-merged |
+| T-11.13 Hardpoint. Branch `feat/mode-hardpoint`; exclusive authored `gm_construct` map owner | `modes` / mode HUD | shared objective API freeze; serialized S&D map schema | Pure + input smoke + human checkpoint | user-approved `02` d.8 | implemented (`cc6c797`), review accepted/integrated at `3e2c1c9`; independent static PASS/full 1765/0/0. Historical owner scope 24/1/0 follower failure corrected by S&D; native smoke public-LIVE/nearby-zone fixture correction accepted with assertions retained; screenshot reviewed; human/P2P pending, not main-merged |
+| T-11.14 Infection, separate optional addon. Branch `feat/addon-infection`; owns role transition and bot invalidation outside commander | `modes` / role lifecycle / mode HUD | shared round/role API freeze | Pure + input smoke + human checkpoint | user-approved `02` d.8 | implemented with corrective observer fixture, MatchEnd bot reset and personal round-win postmatch presentation (`a3741f7` owner handoff); historical owner full 1526/0/0 and scoped 99/0/0; review accepted/integrated at `3e2c1c9`, independent static PASS/full 1765/0/0; postmatch visuals reviewed; human/P2P pending, not main-merged |
+| T-11.17 All twelve additional perks: Stockpile, Soft Landing, Flash Guard, Fleet Foot, Quick Draw, Sightline, Recoil Control, Scavenger, Quiet Steps, Ghost, Retaliation, Continuity | `loadout` / shared weapon, reveal and bot consumers; owned paths below | generic role policy; core disable/constructor cleanup; shared reserve/provenance/reveal API; serialized integration gates | GLuaTest first, thin/native wrappers, supported-adapter UI and human checkpoint | user-frozen `05-loadout.md` d.16; `04` d.6, `07` d.2 | all twelve implemented, original `8288c78` plus additive corrections through `b685795`; review accepted/integrated at `3e2c1c9`, independent static PASS/full 1765/0/0. Historical owner scope 100/0/0 = 72 own + 22 core + 6 legacy overrides; historical full 1568/10/0 mode failures superseded by combined green; human/P2P pending; original four unchanged; not main-merged |
+| T-11.18 Support streaks K1 Directional Scan, K2 Ammunition Cache, K3 Medical Station, K4 Ground Sensor | `loadout` / `bots`; owned paths below | transactional streak activation; generic role policy; shared reserve API from T-11.17; reveal policy; serialized gates | GLuaTest first, native placement/cleanup/input smoke, client markers and human checkpoint | user-approved K1–K4 2026-11-08; support-owner frozen contract | all four implemented through `3e2c1c9`, review accepted/integrated; owner selected 101/0/0 (96 own + 5 legacy UI), owner full 1765/0/0; independent coordinator static PASS/full 1765/0/0; native counterplay and 720p support UI reviewed; human/P2P pending, not main-merged |
+
+**Final overnight gate snapshot:** coordinator independently accepted scope, mandatory assertions and screenshots
+on exact runtime tree `3e2c1c9`, fast-forwarded to `integration/overnight-fast`. Independent `make check` PASS
+(all selftests, 483 files); full unfiltered `make test` **1765/0/0**, with a 480-second whole-run budget,
+no skips and no timeout. Earlier 1559/13/0, branch-local failures and short-budget timeouts are historical,
+superseded evidence, not current blockers. Fixture corrections use public LIVE setup and valid Infection entity
+stand-ins without weakening production rules or inherited assertions. No new claim is made that the already-correct
+postmatch reducer's historical RED was reproduced.
+
+Coordinator-read visuals: Hardpoint `0113`; Infection `0123` (ROUND WINS 2/1/1, shared second, 2ND OF 3,
+zero XP); LEVEL UP `0133` fits at 720p; support `0137` inventory, `0138` three labelled physical devices,
+`0139` generic SCAN ACTIVATED. These are review evidence, not user checkpoint passes. Human/P2P/controller,
+800p/1080p visuals, removal/startup, feel and performance acceptance remain pending; T-11.11 remains DEFERRED,
+NOT PASSED. Main is unchanged; push, PR creation and merge require their respective approvals. No local main
+merge, push, PR or Workshop publication was performed by this integration.
+
+**T-11.17 ownership and case map:** owns `lua/privatewar/perks/`, `modules/perks/`,
+shared reserve/provenance consumers in `modules/weapons_ammo/`, agreed stat/reveal/throwable/bot/UI seams,
+associated types/contracts and `lua/tests/privatewar/` suites below. Core lifecycle corrections remain core-owned;
+support deployment/receipts remain T-11.18-owned. The frozen twelve-perk balance is not reopened here.
+
+| Perk / seam | Mandatory suite / case mapping |
+| --- | --- |
+| All twelve; baseline four | `perk_candidates.lua`: declarations/groups/costs/unlocks and multiplicative composition |
+| Stockpile | `equipment_count_sources.lua`; candidate stockpile; preserve cooking/return/bot-use cases |
+| Soft Landing | `perk_player_effects.lua`: "Soft Landing: ordinary fall baseline is halved once with no physics or navigation mutation" |
+| Flash Guard | `perk_player_effects.lua`: "Flash Guard:", "Ordinary flash:" and "Flash lifecycle:" cases |
+| Fleet Foot | `perk_player_effects.lua`: both "Fleet Foot:" cases, including 400 HP/1.15 role composition and no refresh heal/compounding |
+| Quick Draw / Sightline | `perk_candidates.lua`: "Stats:" composition; `perk_support_ui.lua`: "Support:" adapter UI |
+| Recoil Control | stats composition; `perk_support_ui.lua`: "Recoil fairness:"; mounted ARC9 recoil/input agreement remains required |
+| Scavenger | all `ammo_resupply.lua`, `kill_weapon_provenance.lua`; `perk_rewards.lua`: both "Scavenger:" cases |
+| Quiet Steps | `perk_knowledge.lua`: both "Quiet steps:" cases; lifecycle disable/revoke and accurate support description |
+| Ghost | `perk_knowledge.lua`: both "Ghost:" disclosure/CUAV cases; lifecycle revoke |
+| Retaliation | knowledge eligibility and both reward event cases; ordinary Reveal filtering |
+| Continuity | `perk_lifecycle.lua`: both "Continuity:" death-order/earning cases; next-life and inventory regressions |
+| Native and disabled entry | `perk_engine_smoke.lua`, `perk_disable_edges.lua`; corrective native first/repeated spawn, RoundEnd flash/DSP and retained-disabled-resupply assertions from `8288c78..b685795` |
+
+T-11.17 human acceptance remains pending: host/P2P, supported ARC9 and HL2 warnings, remote prediction and
+footsteps/custom-sound limits, team/FFA concealment and retaliation, ordinary life/class/role/round/disable,
+fall feel, grenade cooking/death/last-item return and flash/DSP expiry. Owner UI captures do not pass these.
+
+**T-11.18 ownership:** `lua/privatewar/modules/support_devices/`, `modules/bots_devices/`,
+`modules/streaks/sh_deployment.lua`, the four `streaks/` definitions, `bot_behaviors/attack_device.lua`,
+associated types and the suites below. The final owner handoff and `docs/api/support-devices.md` are integrated.
+The source-retirement seam uses the separate fifth `PW.Reveal` source token, `PW.Streaks.RetireRevealSource`
+and `PW.Bot.RetireStimulusSource` with exact raw identity, immutable fallback and shared expiry; unrelated
+UAV/CUAV/sight/hearing/damage evidence remains intact. Cache consumers require public weapon `Kind == "gun"`,
+excluding positive-capacity launchers and non-PW grenades without forking shared reserve logic.
+
+| T-11.18 mandatory area | Final owned suite(s) / cases |
+| --- | --- |
+| K1 cone/range/LOS/cost; K2 receipts/cooldown/cap; K3 rate/damage deadline/MAX; K4 elevation/cadence | `streak_directional_scan.lua` (6), `streak_ammo_cache.lua` (6), `streak_medical_station.lua` (7), `streak_ground_sensor.lua` (4) |
+| Deployment floor/slope/hull/exit/caps and finite inputs | `streak_deployment.lua` (13), `streak_support_finite.lua` (2) |
+| Real reserve/disabled owner, physical overlap/models/100 HP, lifecycle/module identity, current sight | `streak_support_runtime.lua` (16) |
+| Legal device perception/reaction/player-threat priority and owned input release | `bots_support_devices.lua` (5), `bots_support_safety.lua` (7) |
+| Genuine usercmd stock weapon fire destroys recognized device; no unrecognized fire | `bots_support_native.lua` (1) |
+| Generic feedback and concealment for humans/bots | `streak_support_disclosure.lua` (3) |
+| Actual cache excludes publicly classified launcher/throwable | `streak_support_catalog.lua` (1) |
+| Simultaneous marker labels and pure 720p/800p/1080p padding | `streak_support_markers.lua` (3) |
+| Real allocation failure, cleanup and inventory refund | `streak_support_failure.lua` (1) |
+| Real source-only retirement preserves UAV/CUAV | `streak_support_sources.lua` (1) |
+| Raw identity, immutable fallback, sharing/expiry/late delivery, bounded sidecar, unrelated-owner cleanup and malformed tagged metadata | `streak_support_source_lifetime.lua` (20) |
+
+Final support owner selected **101/0/0 = 96 owned cases in 16 files + 5 existing perk UI compatibility cases**;
+owner full **1765/0/0**. The owner native full observed 36 stock bullets, 106 final attack commands and actual
+destruction; these counts describe the owner run, not the independent coordinator run. All recognition/input/
+no-unrecognized-fire/destruction assertions remain mandatory. Owner final restore checked LOBBY, zero devices
+and no visual fixture leak. Independent combined verdict is the snapshot above; human/P2P/controller/indoor/
+late-join and optional-adapter checks remain pending.
+
+### Queued documentation requests (not authorized for tonight's runtime implementation)
+
+| Task | Lane | Depends | Tests first | Source decision | Status |
+| --- | --- | --- | --- | --- | --- |
+| T-11.15 Class-list separation and hidden technical presets | `ui` / `loadout` | T-4.7, T-4.8, T-7.4; future class visibility/API contract | Pure + human checkpoint | user request 2026-11-08; `05` d.1, d.12–14; `docs/api/loadout.md` Classes and `docs/api/bots-blackboard.md` Bot loadouts | QUEUED, NOT IMPLEMENTED; no overnight implementation authorization |
+| T-11.16 Shared offline scheduled events | shared manager / `playlists` / `progression` | future schedule kind/lifecycle and consumer contracts; open calendar and XP questions | Pure + lifecycle/client agreement | user request 2026-11-08; accepted direction in `notes/26-scheduled-events.md`, not a frozen API | FUTURE QUEUED, NOT IMPLEMENTED; no overnight implementation authorization |
+
+**T-11.15 deliverable:** customization/class editor lists only player-created custom classes, never standard/code
+presets. Respawn selectors list visible custom classes first, followed by visible code-defined presets. Add an
+optional code-class hidden flag (`Hidden: boolean` suggested by kind conventions; exact contract is future work),
+default false for legacy visibility. Hidden definitions remain registered/resolvable for explicitly authorized
+bot/technical callers, but absent from every relevant human selection/customization picker. Human selection/save
+validation must not offer an alternate route to a hidden technical preset. Do not silently add hidden definitions
+to random bot class pools or change bot pool policy. Preserve approved class application/spawn timing, saved
+custom data and progression validation. This is future queue work, not scheduling/timer implementation.
+
+Mandatory planned GLuaTest cases (not written/run or passed by this queue entry): editor custom-only; respawn
+custom-first then visible presets; legacy code classes default visible; `Hidden = true` absent from every relevant
+human picker; hidden technical definition remains registered/resolvable and available to explicitly authorized
+bot/technical use; stable/nonmutating filtering and sorting; empty lists; selection/save authorization cannot
+bypass hiding. Retain all existing class tests. Human checkpoint: editor, respawn and controller-navigation lists.
+
+**T-11.16 deliverable:** the shared `schedules/` / `SCHEDULE` direction of `notes/26-scheduled-events.md`, consumed
+by playlists and progression, with deterministic UTC/offline evaluation and instance-owned reversible effects.
+Exact API/schema, simultaneous playlist availability versus featured-slot priorities, player/weapon XP scope,
+multiplier stacking, dates/anchor, running-match expiry, clock jumps and changelevel persistence remain open.
+Future tests cover pure boundaries, biweekly/year-wrap calendars, offline startup, idempotence, cleanup, ownership
+and host/client agreement as listed in that note. This row neither freezes these questions nor authorizes runtime.
 
 ### Known follow-ups (not scheduled; some need a user decision)
 
@@ -763,14 +911,14 @@ Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decision
 9. Done (`fix/client-include-errors`): "Couldn't include file" on the client at every map load. Five bot modules (`bots_brain`, `bots_nav` with its `binaryheap.lua`, `bots_objectives`, `bots_commander`, `bots_perception`) included `sh_` files from `shared.lua` without `AddCSLuaFile`. Fixed, and `scripts/check/rules.sh` rule 4 now fails a top-level include in a shared file that has no matching `AddCSLuaFile`.
 10. Vendor Fira Sans (OFL 1.1, GPL-compatible as a font) now that D4 is decided: the font files, `resource.AddFile` / `AddWorkshop`, the family names in `PW.UI.Style` (`design/10-frontend.md` d.4) and an entry in `THIRD_PARTY_NOTICES.md`. Not started.
 
-### Done (merged to `main`, checked against `git log` on 2026-11-07)
+### Done (historical pre-snapshot record, 2026-11-07)
 
 - Phase 4: T-4.3 (wildcards), T-4.4 (perks), T-4.6 (killstreaks), T-4.8 (gunsmith flow), T-4.9 (progression), T-4.10 (storage and deltas), T-4.11 (medals), T-4.12 (economy).
 - Phase 5: T-5.13 (bot loadouts).
 - Phase 6: T-6.4 (score popups and medals), T-6.5 (Domination points), T-6.6 (radar).
 - Phase 7: T-7.2 (settings screen), T-7.4 (classes and gunsmith screens), T-7.5 (store and progress screens), T-7.6 (death class picker, pause menu), T-7.7 (postmatch summary).
 - Phase 10: T-10.1 (licence GPL-3.0-or-later and third-party notices, branch `chore/license-gpl`), T-10.2 (packaging), T-10.3 (player docs), T-10.4 (load test, profiler, `docs/perf-report.md`).
-- Phase 11: T-11.1 (ARC9 finish), T-11.2 (streak squares), T-11.3 (XP bar and LEVEL UP), T-11.4 (grenades as inventory SWEPs), T-11.5 (score bars). Also done: T-11.6 (bot combat moves, `fcedf95`), T-11.7 (stat-based unlocks, `ed225db`), the ARC9 bot bash with model precache at map load (`58b51b9`) and the cooked frag drop on death (`3066b27`). Still running: T-11.8 (ARC9 perf profile), T-11.9 (operator skin and bot names), T-11.10 (match end and lobby flow).
+- Phase 11: T-11.1 (ARC9 finish), T-11.2 (streak squares), T-11.3 (XP bar and LEVEL UP), T-11.4 (grenades as inventory SWEPs), T-11.5 (score bars). Also done: T-11.6 (bot combat moves, `fcedf95`), T-11.7 (stat-based unlocks, `ed225db`), the ARC9 bot bash with model precache at map load (`58b51b9`) and the cooked frag drop on death (`3066b27`). T-11.8 (ARC9 perf profile) is implemented in the initial public snapshot. T-11.9 and T-11.10 also have initial implementations there; see their Phase 11 rows for the verified T-11.9 correction in the current change set and the required T-11.10 follow-up.
 - Fixes merged: bot respawn in FFA, `classes.json` digit-only slot keys, Deck client reload through `snap.sh`, dev profiler probes; also the lobby Esc leave dialog and gamepad d-pad for streaks and equipment.
 
 ### Blocked on the user

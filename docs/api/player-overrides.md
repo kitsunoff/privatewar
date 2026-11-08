@@ -1,0 +1,50 @@
+# Player overrides API
+
+Status: implemented after scoped GLuaTest RED; generic API frozen by the orchestrator.
+Generic optional module `player_overrides`; types `lua/privatewar/types/player_overrides.lua`.
+
+- Question `PW_PlayerOverrides(ply) -> PW.PlayerOverrideProfile?`: finite positive `maxHealth`,
+  `spawnHealth` (at most maxHealth), `walkSpeedMult`, `runSpeedMult`; omitted fields are ordinary.
+  Standard first-non-nil dispatch, active mode last. Validate the entire profile before mutation.
+- `PW.PlayerOverrides.Refresh(ply) -> boolean, string?`: apply relative to ordinary baseline, never
+  multiply already-modified speeds. A living refresh never heals or refills current health.
+- `PW.PlayerOverrides.Release(ply) -> boolean`: restore baseline maximum and walk/run; clamp living
+  current health down to restored maximum, never increase it. Dead release never revives. Returns
+  false when no override was held. Missing provider releases any held override.
+- `PW_PlayerSpawned(ply)` is a synchronous notification from `PW.MatchRules.Spawn`, **after** ordinary
+  engine spawn initialization/loadout, before that public spawn call returns. Capture ordinary
+  maximum/current health and walk/run once per new life before overrides; apply spawnHealth once.
+  A new life replaces the old baseline even without a prior Release; never restore old-life current HP.
+  No timer or one-tick 100-versus-400 HP window is allowed. External engine-spawn paths require a
+  separately agreed owner integration, not a competing PlayerSpawn hook.
+- Match end/abort releases all held overrides; next-round preparation commits roles before spawning.
+  No saved class/operator setting, jump or damage value is modified.
+- Model appearance stays owned by operators: `PW_PlayerModelOverride`, `PW.Operators.Refresh`
+  ([operators](operators.md)). No competing PlayerSetModel hook or private-store access.
+
+The Infection provider supplies max/spawn health 400, walk/run multipliers 1.15 for either actor type.
+Jump and stock `weapon_fists` damage remain unchanged. These are role rules, never bot-only bonuses.
+Tests: `player_overrides.lua`, `infection_presentation.lua`; no runtime/model availability pass is implied.
+
+## Ordinary perk movement and falls
+
+The cached `PW.Stat(ply, "move_speed", 1)` composes with the role's walk/run multipliers,
+relative to the same ordinary baseline. `PW_PlayerStatsChanged(ply)` refreshes this owner
+after perk recompute/removal; it never applies spawn health again or multiplies current speeds.
+With neither role nor movement modifier, release restores the ordinary baseline.
+Jump, crouch, slide and special ADS movement are not independently modified.
+
+Spawn ordering is synchronous: the owner's `PlayerSpawn` engine hook releases any prior-life
+override and marks ordinary base initialization in progress. Only the stat-change notification
+is deferred during that stage; public midlife `Refresh` keeps its existing behavior.
+`PW_PlayerSpawned` clears the stage, captures the completed ordinary baseline, and applies the
+final cached perk/role product once. Loadout notifications may occur inside base `PlayerLoadout`
+and may recompute more than once; they must not capture or scale the in-progress baseline.
+No timer, repeated loadout grant or gamemode-function wrapper is used. Tests include controlled
+native ordinary/perk lives and a further respawn while the old override is still owned.
+
+The owner also consumes `fall_damage` once in `GetFallDamage`. The question
+`PW_FallDamageBaseline(ply, speed) -> number?` can supply an ordinary numeric baseline;
+otherwise the gamemode's ordinary `GetFallDamage` method supplies it. With identity multiplier,
+the hook returns nil and leaves ordinary fall processing untouched. No extra damage event,
+physics mutation or navigation exception is introduced.

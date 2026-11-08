@@ -11,6 +11,40 @@
 -- only while the module is enabled (d.16).
 
 local lib = PW.Teams --[[@as PW.TeamsLib]]
+local module = MODULE
+local changing = false
+local reasons = { round_prepare = true, role_change = true, late_join = true, replacement = true }
+
+---@param value any
+---@param n integer
+---@return boolean
+local function destination(value, n)
+    return isnumber(value) and value >= 1 and value <= n and value == math.floor(value)
+end
+
+function lib.Transition(ply, to, reason)
+    local mode, match = PW.ActiveMode, PW.Match
+    local n = #lib.GetActive()
+    if changing or not module:IsValid() or mode == nil or not mode:IsValid()
+        or match == nil or match.GetPhase() ~= "LIVE" then return false, "inactive" end
+    if not IsValid(ply) or not ply:IsPlayer() or ply:GetNW2Bool("pw_spectating", false)
+        or not destination(ply:Team(), n) then return false, "not admitted" end
+    if not destination(to, n) or not isstring(reason) or not reasons[reason] then return false, "invalid request" end
+    local from = ply:Team()
+    changing = true
+    local ok, result, note = pcall(function()
+        if PW.Ask("PW_CanChangeTeam", ply, from, to, reason) ~= true then return false, "unauthorized" end
+        if PW.ActiveMode ~= mode or match.GetPhase() ~= "LIVE" then return false, "inactive" end
+        if from == to then return true end
+        PW.Notify("PW_PlayerTeamChanging", ply, from, to, reason)
+        ply:SetTeam(to)
+        PW.Notify("PW_PlayerTeamChanged", ply, from, to, reason)
+        return true
+    end)
+    changing = false
+    if not ok then error(result, 0) end
+    return result, note
+end
 
 ---Every player in join order (UserID), so the assignment is deterministic.
 ---@return Player[]
@@ -52,6 +86,12 @@ function lib._PlaceLate(ply, players)
     if n == 0 then return nil end
     -- a join-in-progress spectator (lobby module) stays out of the teams until the next match
     if ply:Team() == TEAM_SPECTATOR or ply:GetNW2Bool("pw_spectating", false) then return nil end
+    if PW.ActiveMode ~= nil and PW.ActiveMode.TeamPolicy == "managed" then
+        local selected = PW.Ask("PW_SelectLateTeam", ply)
+        if not destination(selected, n) then return nil end
+        ply:SetTeam(selected)
+        return selected
+    end
     ---@type integer[]
     local current = {}
     for _, other in ipairs(players) do
@@ -60,6 +100,13 @@ function lib._PlaceLate(ply, players)
     local team = lib._Smallest(lib._Counts(n, current), n) --[[@as integer]]
     ply:SetTeam(team)
     return team
+end
+
+function lib.PlaceLate(ply)
+    local match = PW.Match
+    if not module:IsValid() or not IsValid(ply) or not ply:IsPlayer()
+        or match == nil or match.GetPhase() ~= "LIVE" then return nil end
+    return lib._PlaceLate(ply, player.GetAll())
 end
 
 ---@param n integer

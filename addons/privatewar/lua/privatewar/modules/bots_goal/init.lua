@@ -401,6 +401,14 @@ function lib._Drop(bot)
     PW._BotGoal.states[bot] = nil
 end
 
+local function clearAll()
+    for bot in pairs(PW._BotGoal.states) do lib._Drop(bot) end
+end
+
+function MODULE:PW_PlayerTeamChanged() clearAll() end
+function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
+
 local botLib = (rawget(PW, "Bot") or {}) --[[@as PW.BotLib]]
 PW.Bot = botLib
 botLib.SetGoal = lib.SetGoal
