@@ -39,6 +39,7 @@ local function actor(id, isBot)
         pos = Vector(100, 200, 32), velocity = Vector(120, -60, 12), view = Angle(10, 120, 0),
         active = NULL, deaths = 0 }
     return { IsValid = function() return true end, IsPlayer = function() return true end,
+        IsWeapon = function() return false end,
         IsBot = function() return isBot end, UserID = function() return id end,
         SteamID64 = function() return "76561198000000" .. id end, Nick = function() return "actor" .. id end,
         Team = function() return d.team end, SetTeam = function(_, n) d.team = n end,
