@@ -1,5 +1,5 @@
 -- Controlled subsystem smoke: real scheduler, commander, objective behavior, nav follower and CUserCmd input.
--- Only the public board provider is injected; no foreign private stores, teleport, damage or fabricated contacts.
+-- Public phase/board providers are scoped fixtures; no foreign private stores, damage or fabricated contacts.
 ---@return Player, boolean
 local function acquireBot()
     -- Other groups kick their pool in afterAll; IsValid stays true until that queued kick completes.
@@ -34,10 +34,16 @@ return {
                 assert(isfunction(rawget(commander, "Sanitize")), "shared containment dependency absent")
                 assert(game.GetMap() == "gm_construct", "Hardpoint smoke requires authored gm_construct")
                 local mode = assert(PW.Modes.Get("hardpoint")) --[[@as PW.HardpointMode]]
+                local originalMode = PW.ActiveMode
+                testState.mode, testState.originalMode = mode, originalMode
+                -- Establish LIVE before creation/spawn: outside LIVE the normal spawn selector returns nil.
+                -- GLuaTest restores this public getter after the async case; the phase machine store is untouched.
+                stub(assert(PW.Match), "GetPhase").with(function() return "LIVE" end)
+                PW.ActiveMode = mode
                 local bot, owned = acquireBot()
                 testState.bot, testState.owned = bot, owned
-                local originalMode, originalTeam = PW.ActiveMode, bot:Team()
-                testState.mode, testState.originalMode, testState.originalTeam = mode, originalMode, originalTeam
+                local originalTeam = bot:Team()
+                testState.originalTeam = originalTeam
                 local originalSetting = mode.Setting
                 stub(mode, "Setting").with(function(self, key)
                     if key == "zonetime" then return 20 end
@@ -49,9 +55,18 @@ return {
                 local originalGet = api.Get
                 stub(api, "Get").with(function(ply) return ply == bot and board or originalGet(ply) end)
                 stub(hp, "Send").with(function() end)
-                PW.ActiveMode = mode
                 bot:SetTeam(1)
                 assert(PW.MatchRules).Spawn(bot) -- Initial setup only; asserted journeys use normal user commands.
+                local nav = navmesh.GetNearestNavArea(bot:GetPos(), false, 128, false, true)
+                print(string.format("[PW] HP_INPUT_SETUP phase %s alive %s observer %d held %s team %d pos %s nav %s",
+                    assert(PW.Match).GetPhase(), tostring(bot:Alive()), bot:GetObserverMode(),
+                    tostring(bot:GetNW2Bool(assert(PW.Jip).NetBool, false)), bot:Team(), tostring(bot:GetPos()),
+                    IsValid(nav) and tostring(nav:GetID()) or "none"))
+                expect(assert(PW.Match).GetPhase()).to.equal("LIVE")
+                expect(bot:Alive()).to.beTrue()
+                expect(bot:GetObserverMode()).to.equal(OBS_MODE_NONE)
+                expect(bot:GetNW2Bool(assert(PW.Jip).NetBool, false)).to.beFalse()
+                expect(bot:Team()).to.equal(1)
                 hp.Start(mode)
                 local runtime = assert(mode._Hardpoint)
                 local start = bot:GetPos()
