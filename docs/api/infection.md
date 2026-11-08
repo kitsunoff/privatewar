@@ -10,9 +10,10 @@ An absent addon leaves `PW.Infection`, `PW.InfectionRules`, `PW.InfectionAI` and
 The 2026-11-08 revision to `02-modes.md` d.8 replaces death-required native-melee conversion with immediate
 first-hit conversion. The native-hit smoke observed RED before implementation: the first real fist hit
 left the target a survivor. Pure touch and survivor-policy/escape cases also observed RED. The runtime
-now implements the revision, but installed-game GREEN and the full regression/visual gates are pending:
-the listen-host session became unavailable during validation. Historical gates cover the previous
-implementation only; there is no acceptance claim for the new runtime.
+now implements the revision. After the session was restored, the scoped installed-game gate passed
+98/0/0, including native first-hit conversion and the corrected death-credit policy. The expanded real
+survivor movement/fire smoke and the full regression/visual gates remain pending; the shared host became
+unavailable again before the latest supported-corridor fixture could run. There is no final acceptance claim.
 
 The existing generic `match_rules` `EntityTakeDamage` boundary asks
 `PW_CanTakeDamage(target, attacker, damage)`. A false answer cancels damage before a lethal hit can kill.
@@ -44,10 +45,9 @@ not become an approach. A dry weapon does not justify a forward melee charge. No
 snap view, enemy world-position lookup, private-board mutation or difficulty override is permitted.
 The existing infected pursuit and native input-release contracts remain mandatory.
 
-Review follow-up pending a fresh RED: the retained death fallback still attributes infection credit from
-attacker role alone. `Infection fallback death: an unproven infected attack cannot fabricate contact
-infection credit` now specifies that this fallback converts without claiming a proven contact. The new
-case has not run, and its matching correction must follow an observed RED before acceptance.
+`Infection fallback death: an unproven infected attack cannot fabricate contact infection credit`
+observed RED against the retained attacker-role-only credit path. The correction preserves any-death
+conversion but credits only accepted live native contact; the case subsequently passed in the 98/0/0 gate.
 
 ## Ownership and lifecycle
 
@@ -153,7 +153,9 @@ when a complete terminal snapshot arrives late. No per-frame Gather loop or hidd
   This explicitly supersedes the old two-applied-damage-hit premise, not legal-input/pursuit assertions.
   Initial placement and a stationary target are fixture setup only; the measured attacker receives no
   forced target, scripted attack, injected damage or teleport. The revised smoke observed RED before
-  implementation; its post-implementation GREEN remains pending.
+  implementation, then passed after implementation. The additional real-survivor case requires actual
+  survivor-owned displacement, attack while moving and native gun damage; its latest fixture selects a
+  supported local retreat corridor instead of a blocked roof edge. That expanded smoke is not yet GREEN.
 - Generic cases remain mandatory with the addon absent: `teams_transition.lua`, `player_overrides.lua`,
   `infection_role_transition.lua`, `role_policy.lua` and `bots_tactics_reset.lua`.
 
