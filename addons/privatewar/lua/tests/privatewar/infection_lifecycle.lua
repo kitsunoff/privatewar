@@ -187,7 +187,8 @@ end
 ---@param attacker Player
 ---@param victim Player
 ---@param amount number
-local function assertLiveTouch(f, attacker, victim, amount)
+---@param expect fun(value: any): any
+local function assertLiveTouch(f, attacker, victim, amount, expect)
     local lib, d = must(PW.Infection), f.data[victim]
     local s = must(lib.State)
     local life = s.lives[victim]
@@ -270,7 +271,7 @@ local suite = {
                     f.data[ply].resolved = loadout
                     return { "weapon_fists" }
                 end)
-                assertLiveTouch(f, f.players[1], f.players[2], 8)
+                assertLiveTouch(f, f.players[1], f.players[2], 8, expect)
                 expect(equipment and streaks).to.beTrue()
                 expect(must(PW.Stat)(victim, "move_speed", 1)).to.equal(1)
                 expect(must(PW.Loadout).GetClass(f.players[2])).to.deepEqual({ primary = "weapon_smg1" })
@@ -298,7 +299,7 @@ local suite = {
                 local victim, attacker = f.players[1], f.players[2]
                 f.data[victim].hp = 1
                 f.now = must(must(lib.State).current).deadline - 0.001
-                assertLiveTouch(f, attacker, victim, 1000)
+                assertLiveTouch(f, attacker, victim, 1000, expect)
                 expect(f.mode:RoundWinner(false)).to.equal(2)
                 f.mode:Think()
                 f.mode:Think()

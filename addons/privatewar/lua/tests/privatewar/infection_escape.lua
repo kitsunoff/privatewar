@@ -25,7 +25,8 @@ local function absent() return not file.Exists("privatewar/types/pw_infection.lu
 ---@field cleared integer
 
 ---@return PW.InfectionEscapeFixture
-local function fixture()
+---@param expect fun(value: any): any
+local function fixture(expect)
     local enemy = { IsValid = function() return true end,
         GetPos = function() error("escape must use the perceived snapshot, never live enemy coordinates") end }
         --[[@as Entity]]
@@ -86,7 +87,7 @@ return {
             name = "Infection survivor: close perceived infected selects escape not ordinary melee even with a gun",
             skip = absent,
             func = function()
-                local f = fixture()
+                local f = fixture(expect)
                 stub(must(PW.Infection), "Role").with(function() return "survivor" end)
                 expect(PW.Call(behavior(), "Rank", f.bot, f.ctx)).to.equal("survival")
                 update(f)
@@ -101,7 +102,7 @@ return {
             name = "Infection survivor: legal walking retreat retains aim target instead of blindly fleeing",
             skip = absent,
             func = function()
-                local f = fixture()
+                local f = fixture(expect)
                 stub(must(PW.Infection), "Role").with(function() return "survivor" end)
                 update(f)
                 expect(f.goal).to.exist()
@@ -121,7 +122,7 @@ return {
             name = "Infection survivor: dry or reloading weapon still escapes rather than closing for melee",
             skip = absent,
             func = function()
-                local f = fixture()
+                local f = fixture(expect)
                 stub(must(PW.Infection), "Role").with(function() return "survivor" end)
                 f.facts.clip, f.facts.reserve, f.facts.reloading = 0, 0, true
                 f.contact.pos = Vector(80, 0, 0)
@@ -136,7 +137,7 @@ return {
             name = "Infection survivor: blocked local navigation is bounded and never invents a forward melee charge",
             skip = absent,
             func = function()
-                local f = fixture()
+                local f = fixture(expect)
                 stub(must(PW.Infection), "Role").with(function() return "survivor" end)
                 f.blocked = true
                 update(f)
@@ -152,7 +153,7 @@ return {
             name = "Infection survivor: hidden contact and infected role cannot admit escape or read enemy world state",
             skip = absent,
             func = function()
-                local f, role = fixture(), "survivor"
+                local f, role = fixture(expect), "survivor"
                 stub(must(PW.Infection), "Role").with(function() return role end)
                 f.contact.visible = false
                 expect(PW.Call(behavior(), "Rank", f.bot, f.ctx)).to.beFalse()
@@ -166,7 +167,7 @@ return {
             name = "Infection survivor: Action end and suspension release target goal drive sprint and weapon",
             skip = absent,
             func = function()
-                local f = fixture()
+                local f = fixture(expect)
                 stub(must(PW.Infection), "Role").with(function() return "survivor" end)
                 update(f)
                 PW.Call(behavior(), "OnSuspend", f.bot, f.ctx)
