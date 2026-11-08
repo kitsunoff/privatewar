@@ -57,10 +57,21 @@ nix develop --command make package-selftest
 
 The self-test builds into a temporary directory, asserts that the exclusions hold, and plants forbidden files to prove that `verify.sh` rejects them. It takes about two seconds and runs as part of `make check`.
 
-## Publishing (manual)
+## Publishing from the Steam Deck
 
-1. Run `make package` and inspect `dist/`.
-2. Upload with the Workshop tooling from the Garry's Mod install (`gmpublish` or the in-game publisher). The icon and description are set at upload time.
-3. Record the Workshop ID by hand where the project needs it.
+The Private War gamemode Workshop item is <https://steamcommunity.com/sharedfiles/filedetails/?id=3836206472> (ID `3836206472`). Update this item instead of creating another one. Visibility is managed on the Workshop page.
+
+The separate ARC9 integration Workshop item is <https://steamcommunity.com/sharedfiles/filedetails/?id=3836210106> (ID `3836210106`). Use this ID with `--addon privatewar-arc9` when updating the integration.
+
+Run the following on the development machine, with the Deck configured as in `scripts/deck/common.sh` and Steam signed in on the Deck. The script locks the Deck, stages the current working tree (including uncommitted changes) with the same checks as `make package`, transfers the selected addon to a temporary directory, and uses the Deck's `gmad` and `gmpublish`. It does not deploy into the game's addons directory.
+
+```bash
+nix develop --command bash scripts/deck/publish.sh create --addon privatewar --icon /path/to/icon.jpg
+nix develop --command bash scripts/deck/publish.sh update --addon privatewar --id 3836206472 --changes 'Fix bot navigation'
+```
+
+`--addon` defaults to `privatewar`; use `privatewar-arc9` for the separate integration. Create requires a 512×512 baseline JPEG icon; update accepts an optional `--icon`. The script does not validate the image format. Update requires the existing numeric Workshop ID and a single-line ASCII change note. Save the ID printed by the first upload; do not use create to update an existing item. Review the staged content and change note before running either command: both immediately upload to Workshop. Set the description, screenshots and visibility on the Workshop page.
+
+The script uses the Linux `gmad` and `gmpublish` binaries if present; otherwise it attempts the Windows binaries with GMod's configured Proton and compatibility prefix. Steam must be signed in on the Deck. Failed uploads may leave an empty Workshop item; inspect Workshop before retrying create.
 
 The public source repository is exported separately: see `docs/publishing.md`.
