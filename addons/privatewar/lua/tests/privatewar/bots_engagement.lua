@@ -345,8 +345,16 @@ end
 return {
     groupName = "PW bots engagement",
     beforeAll = function(state)
+        local match, mode = must(PW.Match), must(PW.Modes.Get("ffa"))
+        state.phaseGetter, state.originalMode = match.GetPhase, PW.ActiveMode
+        state.liveFixture = true
+        -- This native FFA fixture must precede creation/spawn, not fight the deferred LOBBY body cleanup.
+        -- beforeAll has no GLuaTest stub; afterAll restores the public provider even after a case error.
+        rawset(match, "GetPhase", function() return "LIVE" end)
+        PW.ActiveMode = mode
         ---@type Player[]
         local bots = {}
+        state.bots = bots
         for _, name in ipairs({ "PW engage A", "PW engage B" }) do
             local bot = player.CreateNextBot(name) --[[@as Player?]]
             if bot ~= nil and IsValid(bot) then
@@ -355,12 +363,15 @@ return {
                 bots[#bots + 1] = bot
             end
         end
-        state.bots = bots
         hook.Add("PW_IsEnemy", smokeHook, function(x, y)
             if x ~= y and table.HasValue(bots, x) and table.HasValue(bots, y) then return true end
         end)
     end,
     afterAll = function(state)
+        if state.liveFixture then
+            rawset(must(PW.Match), "GetPhase", state.phaseGetter)
+            PW.ActiveMode = state.originalMode
+        end
         hook.Remove("PW_IsEnemy", smokeHook)
         hook.Remove("Tick", smokeHook)
         hook.Remove("EntityFireBullets", smokeHook)

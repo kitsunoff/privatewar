@@ -199,9 +199,17 @@ end
 return {
     groupName = "PW bots behaviors combat",
     beforeAll = function(state)
+        local match, mode = must(PW.Match), must(PW.Modes.Get("ffa"))
+        state.phaseGetter, state.originalMode = match.GetPhase, PW.ActiveMode
+        state.liveFixture = true
+        -- A live FFA body must exist before creation/spawn; LOBBY correctly strips and spectates its bodies.
+        -- beforeAll has no GLuaTest stub, so afterAll owns restoration on success and case failure alike.
+        rawset(match, "GetPhase", function() return "LIVE" end)
+        PW.ActiveMode = mode
         -- Two managed bots (the manager is paused during tests): FFA team, spawned, armed, hostile to each other.
         ---@type Player[]
         local bots = {}
+        state.bots = bots
         for _, name in ipairs({ "PW duel A", "PW duel B" }) do
             local bot = player.CreateNextBot(name) --[[@as Player?]]
             if bot ~= nil and IsValid(bot) then
@@ -210,12 +218,16 @@ return {
                 bots[#bots + 1] = bot
             end
         end
-        state.bots = bots
         hook.Add("PW_IsEnemy", smokeHook, function(a, b)
             if a ~= b and table.HasValue(bots, a) and table.HasValue(bots, b) then return true end
         end)
     end,
     afterAll = function(state)
+        if state.liveFixture then
+            rawset(must(PW.Match), "GetPhase", state.phaseGetter)
+            PW.ActiveMode = state.originalMode
+        end
+        timer.Remove(smokeHook)
         hook.Remove("PW_IsEnemy", smokeHook)
         hook.Remove("EntityFireBullets", smokeHook)
         ---@type Player[]
@@ -463,7 +475,7 @@ return {
                 local firedAt = {}
                 for _, bot in ipairs(bots) do
                     -- The first bot to shoot used to kill the other before its reaction and attack delay passed (a
-                    -- dead bot never fires in LOBBY): both are invulnerable for the duel, the shooting is unchanged.
+                    -- dead bot never fires): both are invulnerable for the duel, the shooting is unchanged.
                     if not bot:Alive() then bot:Spawn() end
                     bot:GodEnable()
                     bot:StripWeapons()
