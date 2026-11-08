@@ -194,14 +194,32 @@ end
 ---Makes the activation instance and ends it after Duration.
 ---@param ply Player
 ---@param def PW.Streak
-local function activate(ply, def)
-    local inst = PW.Instance(def, ply) --[[@as PW.StreakInstance]]
+---@param plan? table
+---@return boolean
+local function activate(ply, def, plan)
+    local source = def
+    if plan ~= nil then
+        -- The bridge installs data before construction without changing the registered definition.
+        source = setmetatable({ OnEquip = function(self, owner)
+            self.Activation, self._Definition, self.OnEquip = plan, def, def.OnEquip
+            PW.Call(self, "OnEquip", owner)
+        end }, { __index = def }) --[[@as PW.Streak]]
+    end
+    local inst = PW.Instance(source, ply) --[[@as PW.StreakInstance]]
+    if not inst:IsValid() then inst:Remove() return false end
     lib._Instances[inst] = true
     local duration = tonumber(def.Duration) or lib.DefaultDuration
     inst:Timer(math.max(0, duration), 1, function(self) finish(self --[[@as PW.StreakInstance]]) end)
+    return true
 end
 
-function lib.Use(ply, id)
+---@type table<Player, true>
+local activating = setmetatable({}, { __mode = "k" })
+
+---@param ply Player
+---@param id string
+---@return boolean
+local function use(ply, id)
     if PW.Ask("PW_CanUseLoadoutKind", ply, "streaks") == false then return false end
     local s = store()
     if s.phase() ~= "LIVE" or not s.alive(ply) then return false end
@@ -210,10 +228,27 @@ function lib.Use(ply, id)
     if st == nil or index == nil then return false end
     local def = s.lookup(id)
     if def == nil then return false end
+    local plan = nil
+    if def.Prepare ~= nil then
+        plan = PW.Call(def, "Prepare", ply)
+        if not istable(plan) then
+            if PW.Devices ~= nil then PW.Devices.Feedback(ply, "DEPLOYMENT BLOCKED - FIND CLEAR LEVEL GROUND") end
+            return false
+        end
+    end
+    if not activate(ply, def, plan) then return false end
     table.remove(st.inventory, index)
     s.publish(ply, lib.InventoryKey, lib._EncodeInventory(st.inventory))
-    activate(ply, def)
     return true
+end
+
+function lib.Use(ply, id)
+    if activating[ply] then return false end
+    activating[ply] = true
+    local ok, result = pcall(use, ply, id)
+    activating[ply] = nil
+    if not ok then print("[PW] streak activation failed: " .. tostring(result)) return false end
+    return result
 end
 
 function lib.Ready(bot)

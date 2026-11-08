@@ -43,6 +43,9 @@ lib.ProgressKey, lib.InventoryKey, lib.SetKey = "pw_streak_n", "pw_streak_inv", 
 if SERVER then AddCSLuaFile("privatewar/modules/streaks/sh_reveal.lua") end
 include("privatewar/modules/streaks/sh_reveal.lua")
 
+if SERVER then AddCSLuaFile("privatewar/modules/streaks/sh_deployment.lua") end
+include("privatewar/modules/streaks/sh_deployment.lua")
+
 function lib._Cost(def, earn)
     local kills = math.max(1, math.floor(tonumber(def.Kills) or 1))
     if earn ~= "score" then return kills end

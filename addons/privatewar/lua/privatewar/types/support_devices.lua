@@ -31,6 +31,27 @@
 ---@field instance PW.StreakInstance
 ---@field charges? integer
 ---@field receipts? table<Player, number>
+---@field pulse? number
+
+---@class PW.SupportDeviceEntity : Entity
+---@field GetDeviceKind fun(self: PW.SupportDeviceEntity): PW.SupportDeviceKind
+---@field SetDeviceKind fun(self: PW.SupportDeviceEntity, value: PW.SupportDeviceKind)
+---@field GetDeviceOwner fun(self: PW.SupportDeviceEntity): Player
+---@field SetDeviceOwner fun(self: PW.SupportDeviceEntity, value: Player)
+---@field GetDeviceEnds fun(self: PW.SupportDeviceEntity): number
+---@field SetDeviceEnds fun(self: PW.SupportDeviceEntity, value: number)
+
+---@class PW.DeviceMarker
+---@field x number
+---@field y number
+---@field text string
+---@field visible boolean
+
+---@class PW.SupportDeviceConfig
+---@field model string
+---@field name string
+---@field duration number
+---@field radius number
 
 ---@class PW.SupportEligibility
 ---@field owner any
@@ -65,12 +86,23 @@
 ---@field DamageAllowed fun(hostilePlayer: boolean, world: boolean): boolean
 
 ---@class PW.DevicesLib
+---@field Config table<string, PW.SupportDeviceConfig>
 ---@field Prepare fun(owner: Player, kind: PW.SupportDeviceKind): PW.DevicePlacement?, string?
 ---@field Create fun(inst: PW.StreakInstance, kind: PW.SupportDeviceKind, p: PW.DevicePlacement): PW.SupportDevice?
 ---@field Remove fun(record: PW.SupportDevice)
 ---@field List fun(): PW.SupportDevice[]
 ---@field RemoveOwner fun(owner: Player)
 ---@field Clear fun()
+---@field Enabled fun(kind: PW.SupportDeviceKind): boolean
+---@field Feedback fun(owner: Player, text: string)
+---@field Validate fun(owner: Player, kind: PW.SupportDeviceKind, position: Vector): boolean, string?
+---@field EntityRemoved fun(entity: Entity)
+---@field Damage fun(entity: Entity, damage: CTakeDamageInfo)
+---@field _Records PW.SupportDevice[]
+---@field _Damaged table<Player, number>
+---@field ClientTrack? fun(entity: PW.SupportDeviceEntity)
+---@field Markers? PW.DeviceMarker[]
+---@field Notice? string
 
 ---@class PW.BotDeviceContact
 ---@field device PW.SupportDevice
@@ -84,12 +116,19 @@
 ---@field Perceivable fun(eye: Vector, dir: Vector, pos: Vector, range: number, fov: number, los: boolean): boolean
 ---@field Recognized fun(firstSeen: number?, now: number, delay: number, visible: boolean): boolean
 ---@field AttackWanted fun(playerThreat: boolean, deviceVisible: boolean): boolean
+---@field Step fun(bot: Player)
+
+---@class PW.BotDeviceState
+---@field first table<Entity, number>
+---@field index integer
+---@field contact? PW.BotDeviceContact
 
 ---@class PW.Streak
 ---@field Prepare? fun(self: PW.Streak, owner: Player): table?
 
 ---@class PW.StreakInstance
 ---@field Activation? table server-only prepared data, installed before OnEquip
+---@field Device? PW.SupportDevice
 
 ---@class PW
 ---@field SupportStreaks? PW.SupportStreaksLib
