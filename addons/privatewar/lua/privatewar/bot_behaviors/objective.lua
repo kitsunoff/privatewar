@@ -45,13 +45,41 @@ local function resolve(ctx)
     return lib().Resolve(ctx, facts, st ~= nil and st.id or ctx.lastObjective)
 end
 
+---@param target PW.BotObjective
+---@param ctx PW.BotBrainCtx
+---@return boolean
+local function urgent(target, ctx)
+    local value = target.urgency
+    if not isnumber(value) or value ~= value or value <= 0 or value == math.huge then return false end
+    local tactics = PW.BotTactics
+    local contact = tactics ~= nil and tactics.Visible(ctx) or nil
+    -- Only legally recognized visible contacts interrupt the advance. No hidden entity positions are read.
+    return contact == nil or lib().Facts(ctx).pos:DistToSqr(contact.pos) > 400 * 400
+end
+
+---@param ctx PW.BotBrainCtx
+---@param target PW.BotObjective
+local function aimWhileAdvancing(ctx, target)
+    if not urgent(target, ctx) then return end
+    local tactics = PW.BotTactics
+    local contact = tactics ~= nil and tactics.Visible(ctx) or nil
+    if contact == nil then
+        if ctx.target ~= nil and not isvector(ctx.target) then ctx:SetTarget(nil) end
+        return
+    end
+    if tactics ~= nil then tactics.Run(ctx, false) end
+    -- SetTarget is the public intent/aim boundary; the normal aim controller still enforces reaction/flash/fire.
+    ctx:SetTarget(contact.ent)
+end
+
 ---@param _ Player
 ---@param ctx PW.BotBrainCtx
 ---@return PW.BotRank
 function BEHAVIOR:Rank(_, ctx)
     if PW.BotObjectives == nil then return false end
     local target = resolve(ctx)
-    return target ~= nil and "objective" or false
+    if target == nil then return false end
+    return urgent(target, ctx) and 31 or "objective"
 end
 
 ---@param _ Player
@@ -71,12 +99,20 @@ end
 function BEHAVIOR:OnStart(_, ctx)
     releaseUse(ctx)
     ctx:ClearGoal()
+    local target = resolve(ctx)
+    if target ~= nil and urgent(target, ctx) then
+        -- Do not inherit a suspended fight's direct strafe drive instead of following the new objective goal.
+        local intent = ctx:Intent()
+        intent.drive, intent.stance = nil, "stand"
+    end
 end
 
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnResume(_, ctx)
     local st = ctx.state
     if st ~= nil then st.next = 0 end
+    local target = resolve(ctx)
+    if target ~= nil and urgent(target, ctx) then ctx:Intent().drive = nil end
 end
 
 ---@param ctx PW.BotBrainCtx
@@ -201,5 +237,6 @@ function BEHAVIOR:Update(_, ctx)
     elseif status == "arrived" and guard[target.action] then
         watch(ctx, target, st.point)
     end
+    aimWhileAdvancing(ctx, target)
     return PW.BotBrain.Continue()
 end

@@ -123,5 +123,8 @@ function hp.Objectives(mode, side)
     local objective = { id = runtime.objectiveId, revision = runtime.objectiveRevision,
         pos = zone.pos, radius = math.min(48, zone.radius / 4), action = "hold", weight = 1,
         want = count, eligible = eligible, zone = zone }
+    local state = runtime.state
+    local pressured = state.control ~= side or state.contested or state.scores[side] < state.scores[3 - side]
+    objective.urgency = pressured and 1 or 0.5
     return { objective }
 end

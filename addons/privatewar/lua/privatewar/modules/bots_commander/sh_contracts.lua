@@ -45,6 +45,8 @@ local function clean(raw)
     local out = { id = raw.id, pos = Vector(raw.pos.x, raw.pos.y, raw.pos.z), radius = radius,
         action = raw.action, weight = math.Clamp(weight, 0, 1), want = math.Clamp(math.floor(want), 0, 128),
         revision = revision }
+    -- Optional pressure never rejects a legacy objective or grants enemy information.
+    if finite(raw.urgency) then out.urgency = math.Clamp(raw.urgency, 0, 1) end
     if raw.eligible ~= nil then
         out.eligible = {}
         for id, allowed in pairs(raw.eligible --[[@as table<any, any>]]) do

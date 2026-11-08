@@ -82,10 +82,12 @@ return {
             name = "Hardpoint pressure: urgent travel beats distant combat and retains the recognized aim target",
             func = function()
                 local state, env = environment(objective(1), 900)
+                must(env.board.intent).drive = Vector(0, 200, 0)
                 expect(think(state, env)).to.equal("objective")
                 expect(must(env.board.goal).priority).to.equal("objective")
                 expect(env.board.target).to.equal(must(env.board.contacts)[1].ent)
                 expect(must(env.board.intent).sprint == true).to.beFalse()
+                expect(must(env.board.intent).drive).to.beNil()
                 expect(state.stack[#state.stack].rank < 40).to.beTrue()
             end
         },
