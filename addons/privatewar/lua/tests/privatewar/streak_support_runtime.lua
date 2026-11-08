@@ -290,6 +290,7 @@ local cases = {
             local weapon = assert(owner:Give("weapon_pistol"))
             local ammo = weapon:GetPrimaryAmmoType()
             owner:SetAmmo(0, ammo)
+            fixture() -- Revalidate the real local scene after the native weapon/loadout hooks have run.
             local record = deploy(owner, "ammo_cache")
             local now = CurTime()
             PW.Modules._Disable("weapons_ammo", "support cache retained service test")
