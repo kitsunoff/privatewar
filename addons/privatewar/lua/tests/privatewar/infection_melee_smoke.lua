@@ -224,6 +224,7 @@ return {
                 local started, initial = CurTime(), seed:GetPos():Distance(survivor:GetPos())
                 local farthest, movement, attacks, hits, movingShots = initial, 0, 0, 0, 0
                 local escaped, melee = false, false
+                local nextSample = started
                 hook.Add("SetupMove", smoke, function(ply, move)
                     if ply ~= survivor then return end
                     local moving = math.abs(move:GetForwardSpeed()) + math.abs(move:GetSideSpeed()) > 1
@@ -240,6 +241,18 @@ return {
                 end)
                 hook.Add("Tick", smoke, function()
                     local current = must(PW.Bot).Get(survivor)
+                    if current ~= nil and CurTime() >= nextSample then
+                        nextSample = CurTime() + 1
+                        local intent = current.intent or { buttons = 0 }
+                        local seen = 0
+                        for _, c in ipairs(current.contacts or {}) do if c.visible then seen = seen + 1 end end
+                        print(string.format("[PW] Infection escape sample: t=%.1f dist=%.1f speed=%.1f"
+                            .. " action=%s seen=%d target=%s sprint=%s goal=%s", CurTime() - started,
+                            seed:GetPos():Distance(survivor:GetPos()), survivor:GetVelocity():Length2D(),
+                            current.behavior ~= nil and current.behavior.id or "none", seen,
+                            tostring(current.target ~= nil), tostring(intent.sprint),
+                            current.goal ~= nil and current.goal.status or "none"))
+                    end
                     if current ~= nil and current.behavior ~= nil
                         and current.behavior.id == "pw_infection_escape" then escaped = true end
                     farthest = math.max(farthest, seed:GetPos():Distance(survivor:GetPos()))
