@@ -676,7 +676,9 @@ level; one already showing gets a new entry after it. It lasts `MedalDuration` (
 `LevelUpScaleFrom` (1.6) down to 1 over `LevelUpPop` (0.3 s, ease out, `_LevelUpScale(age)`), with the sound
 `items/suitchargeok1.wav`. Layout (`PW.HUD._LevelUpLayout(facts, out)`, pure, no allocation): from the measured text
 sizes, the two lines are drawn unscaled at their on-screen positions (`LevelUpGap` 6 design units apart) and the model
-matrix scales around the block centre, which is moved so the box at `LevelUpScaleFrom` stays `LevelUpMargin` (16) from
+matrix scales around the block centre. The box includes `LevelUpPadding` (12 design units per side, HUD-scaled) and
+`LevelUpShadow` (1 pixel before animation) in addition to the measured text. Its centre is moved so the entire box at
+`LevelUpScaleFrom` stays `LevelUpMargin` (16 design units) from
 the screen edges. The surface clip rect applies before the model matrix, so text drawn around (0, 0) was clipped
 (T-11.10); clipping is also switched off while the popup draws.
 
@@ -991,7 +993,7 @@ Pure rules in `lobby_ui/sh_flow.lua` (shared), types in `lua/privatewar/types/lo
 | `PW.Lobby._StartButton(facts) -> { label, reason, seconds }?` | An announced map change: `MAP CHANGE N…`; else `PREMATCH`: `STARTING N…` (N = seconds left, rounded up, never below 0); else `nil` (the normal button) |
 | `PW.Lobby._ApplyFlow(start, facts?) -> start` | Applies the override to the start action: `label` and `title`, `locked` with the reason, `countdown = true` |
 | `PW.Lobby._MapTitle(map, name?) -> string` | The map data name when it differs from the file name, else the file name without a short prefix (`gm_`, `de_`) and underscores, upper case |
-| `PW.Lobby._MapChangePopup(facts) -> PW.LobbyPopup?` | `{ title = "MAP CHANGE", map, mode, seconds, line = "Loading in N…" }`; `nil` without an announced change |
+| `PW.Lobby._MapChangePopup(facts) -> PW.LobbyPopup?` | `{ title = "MAP CHANGE", map, mode, seconds, line = "Loading in N…" }`; visible only with an announced change and `now < changeAt`, nil at equality or later. The START countdown still clamps to zero |
 
 - `PW.Lobby.Input()` carries `flow` (`PW.LobbyFlowFacts`: phase, phase end, `CurTime()`, announced change time) and
   `PW.Lobby._Hub` applies `_ApplyFlow` to its start action, so the hub and the custom game screen show the same label.
@@ -1001,6 +1003,10 @@ Pure rules in `lobby_ui/sh_flow.lua` (shared), types in `lua/privatewar/types/lo
   centred card with the title, the map (`title` font), the mode name (from the modes registry) and the seconds left.
 - `pw_lobby_request` and `pw_playlist_request` are accepted in `PREMATCH` too, so a lobby that opens after a map change
   gets its state.
+- Initial and returning lobby bodies use the same explicit `PW.Jip` store cleanup: `TEAM_UNASSIGNED`, strip weapons
+  and ammo, then roaming observer mode, without calling `Spawn` again. Both the initial `PlayerSpawn` path and the
+  returning phase path defer until other listeners finish and verify that the server is still in `LOBBY`. Humans
+  and bots use the same path; the client-only operator panel and the ordinary LIVE admission policy are unchanged.
 
 ### Known limits
 
@@ -1252,6 +1258,17 @@ Client (`cl_postmatch.lua`): `Postmatch.Gather()` builds the data from the engin
 pause menu from the summary; `PW.UI.OpenPostmatch()` opens the root. Deaths count from the moment the match went LIVE
 (the engine counter is not reset between matches) and the currency is the wallet difference since LIVE; both baselines
 are taken at the `LIVE` phase.
+
+Additive presentation extensions (API 1): `PW_PostmatchGathered(data: PW.UIPostmatchData, ownId: integer)`
+is a client notification exactly once at the end of every Gather, including progression-disabled and
+summary-pending paths. Listeners return nothing and may replace presentation result/sections/subtitle or
+metric fields from authoritative received data; they do not award score, XP or currency. Missing/disabled
+listeners preserve ordinary presentation. `data.scoreLabel` is optional; nil keeps the `SCORE` column label.
+
+An extension receiving late authoritative data may notify `PW_PostmatchDataChanged()`. The client rebuilds
+only an enabled, currently open POSTMATCH root. It never opens a dismissed root, replaces another root,
+rebuilds outside POSTMATCH, or gathers every frame. Integration tests execute the actual client Gather
+and event handlers in an isolated engine boundary: `ui_postmatch_extension.lua`.
 
 ### Behaviour
 

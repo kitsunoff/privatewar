@@ -122,7 +122,7 @@ local function prepare(ply, opts)
     if all == nil then all = n == 0 or not first end
     local teamBonus = opts.teamBonus
     if teamBonus == nil then teamBonus = n > 0 end
-    local pool = lib._Pool(assert(PW.Map).GetSpawns(), ply:Team(), all)
+    local pool = lib._Pool(opts.spawns or assert(PW.Map).GetSpawns(), ply:Team(), all)
     local cands = lib._Sample(pool, opts.sample or lib.Budget.sample, math.random)
     for _, c in ipairs(cands) do c.jitter = math.random() * lib.Weights.jitter end
     local enemies, mates = opts.enemies, opts.mates
@@ -154,6 +154,8 @@ function MODULE:PW_SelectSpawn(ply)
     if not isentity(ply) or not IsValid(ply) or not (ply --[[@as Entity]]):IsPlayer() or not live() then
         return nil
     end
+    local mode = PW.ActiveMode
+    if mode ~= nil and isfunction(mode.PW_SelectSpawn) then return PW.Call(mode, "PW_SelectSpawn", ply) end
     return lib.Pick(ply --[[@as Player]])
 end
 

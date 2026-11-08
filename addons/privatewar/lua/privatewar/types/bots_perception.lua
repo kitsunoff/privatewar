@@ -1,4 +1,6 @@
 ---@meta
+---@class PW.BotPerceptionLib
+---@field _FlashCanSee fun(ply: Player, now: number): boolean
 -- Types of the bots_perception module (T-5.7; 07-bots.md d.7, docs/api/bots-blackboard.md "Stimuli"). Code:
 -- lua/privatewar/modules/bots_perception/ (shared.lua: pure rules; sh_state.lua: the per-bot state and the stimuli;
 -- init.lua: engine glue).

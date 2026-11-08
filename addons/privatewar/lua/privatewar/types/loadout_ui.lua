@@ -1,4 +1,6 @@
 ---@meta
+---@class PW.LoadoutUILib
+---@field PerkDescription fun(definition: table<string, any>, selectedWeaponClasses: string[]): string
 -- Types of the LOADOUT tab editors (T-7.4; 05-loadout.md d.2-d.5, d.12, d.13, d.15; 10-frontend.md d.1): the class
 -- list actions, the class editor and the gunsmith. Source: lua/privatewar/modules/loadout_ui/ (sh_names.lua,
 -- sh_editor.lua, sh_gunsmith.lua pure and shared; cl_init.lua client glue) and the screens

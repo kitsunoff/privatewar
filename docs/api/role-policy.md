@@ -11,7 +11,12 @@ Types: `lua/privatewar/types/role_policy.lua`. Regression tests: `role_policy.lu
   `wildcards`, `streaks`. Saved classes are never modified.
 - Server `PW.Perks.Revoke(ply)`: remove only that owner's instances and cached modifiers.
 - Server `PW.Equipment.Revoke(ply)`: end instances, cancel cooking without a throw, remove held grenade
-  weapons/ammo and previous-weapon state. Delayed grants and switch callbacks cannot cross generations.
+  weapons/ammo and previous-weapon state. Also forwards projectile cleanup to the throwables owner,
+  including when the held inventory is already empty. Delayed grants and switch callbacks cannot cross generations.
+- Server `PW.Throwables.Revoke(ply)`: remove only that owner's live projectiles without detonating them.
+  Fuses require the exact live generation, so revoked/removed projectiles and reused entity stand-ins cannot
+  trigger stale explosions. Match-wide cleanup invalidates those generations too.
+- The loadout owner releases forbidden cached wildcards on `PW_PlayerTeamChanged` and its own caches on match end.
 - Server `PW.Streaks.EndEffects(ply)`: end only the owner's active instances/effects; keep unused inventory.
 - Server `PW.Streaks.Revoke(ply)`: end effects and clear only this owner's progress, inventory and set.
 - `PW.Reveal(viewer, targets, duration, owner?)` retains at most 128 unexpired pulses for effect cleanup.
@@ -37,6 +42,11 @@ Types: `lua/privatewar/types/role_policy.lua`. Regression tests: `role_policy.lu
   `PW_RoundPreparing`, before child preparation. Waiting humans count at that boundary. `continuous`
   preserves ordinary quota. Absent policy defaults to rounds for managed team modes, continuous otherwise.
   New bots still go through the same admission question, so they cannot spawn playable before roles exist.
+- `PW.BotsManager.IsLeaving(ply) -> boolean`: owner-reported pending quota departure. Round rosters can
+  exclude a bot whose asynchronous kick has not removed the engine entity yet, without reading manager stores.
+- `PW_CanRunBotInput(bot) -> boolean?`: exactly false makes the sole input writer emit a neutral command,
+  even for a live bot with stale/scripted movement, attack, weapon selection or slide intent. Missing policy
+  leaves ordinary inputs unchanged. The writer also discards its old translation state at that boundary.
 
 See [teams](teams.md), [player overrides](player-overrides.md) and [operators](operators.md) for synchronous
 relationship resets, post-base new-life stats and temporary appearance.

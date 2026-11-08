@@ -116,6 +116,10 @@ end
 
 PW._BotsManager = PW._BotsManager or lib._NewStore()
 
+function lib.IsLeaving(ply)
+    return PW._BotsManager.kicking[ply] == true
+end
+
 ---Why the store must stay idle now (the Singleplayer refusal is logged once); nil when it may act.
 ---@param store PW.BotsStore
 ---@param anyPhase? boolean ignore the phase and the navmesh generation (kicking every bot)

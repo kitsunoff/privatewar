@@ -134,22 +134,26 @@ end
 -- Design units between the LEVEL UP title and the level line, and the least room kept to the screen edges.
 lib.LevelUpGap = 6
 lib.LevelUpMargin = 16
+-- Padding scales with the HUD; the draw helper's one-pixel shadow is measured before the animation matrix.
+lib.LevelUpPadding = 12
+lib.LevelUpShadow = 1
 
 function lib._LevelUpLayout(facts, out)
     local s, maxScale = facts.scale, lib.LevelUpScaleFrom
     local gap, margin = lib.LevelUpGap * s, lib.LevelUpMargin * s
     local blockW = math.max(facts.titleW, facts.labelW)
     local blockH = facts.titleH + gap + facts.labelH
-    local halfW, halfH = blockW / 2, blockH / 2
+    local inset = lib.LevelUpPadding * s + lib.LevelUpShadow
+    local halfW, halfH = blockW / 2 + inset, blockH / 2 + inset
     local cx = facts.width / 2
     -- The centre keeps the max-scale box on screen; the box can never be taller than the screen in practice.
     local cy = math.max(facts.anchorY, margin + halfH * maxScale)
     cy = math.min(cy, facts.height - margin - halfH * maxScale)
     out.cx, out.cy = cx, cy
-    out.titleY = cy - halfH
+    out.titleY = cy - blockH / 2
     out.labelY = out.titleY + facts.titleH + gap
     out.boxX, out.boxY = cx - halfW * maxScale, cy - halfH * maxScale
-    out.boxW, out.boxH = blockW * maxScale, blockH * maxScale
+    out.boxW, out.boxH = halfW * 2 * maxScale, halfH * 2 * maxScale
     return out
 end
 

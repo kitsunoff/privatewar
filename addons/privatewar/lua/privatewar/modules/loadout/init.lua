@@ -95,6 +95,15 @@ function MODULE:PW_LoadoutGiven(ply, loadout)
     if perks ~= nil and perks._Recompute ~= nil then perks._Recompute(ply) end
 end
 
+---@param ply Player
+function MODULE:PW_PlayerTeamChanged(ply)
+    if PW.Ask("PW_CanUseLoadoutKind", ply, "wildcards") == false then PW._Wildcards[ply] = nil end
+end
+
+function MODULE:PW_MatchEnd()
+    PW._Wildcards = setmetatable({}, { __mode = "k" })
+end
+
 function lib._OnPlayerLoadout(ply)
     local match = PW.Match
     if match == nil or match.GetPhase() ~= "LIVE" then return nil end

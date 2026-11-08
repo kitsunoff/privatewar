@@ -6,6 +6,8 @@
 
 local lib = PW.Perks --[[@as PW.PerksLib]]
 
+include("privatewar/modules/perks/sv_effects.lua")
+
 ---@param id string
 ---@return PW.Perk?
 local function defaultLookup(id)
@@ -47,6 +49,12 @@ PW._Perks = PW._Perks or lib._NewStore()
 ---@return PW.PerksStore
 local function store()
     return PW._Perks --[[@as PW.PerksStore]]
+end
+
+---@return boolean
+local function active()
+    local owner = PW.Modules ~= nil and PW.Modules.Get("perks") or nil
+    return owner ~= nil and owner:IsValid()
 end
 
 local weaponKeys = { "reload_time", "draw_time", "ads_time", "sprint_to_fire", "recoil", "spread" }
@@ -106,10 +114,12 @@ local function sendMods(s, ply, mods)
 end
 
 function lib._Recompute(ply)
+    if not active() then return lib._Clear(ply) end
     local s = store()
     local stats = lib._Multiply(sourceLists(s, ply))
     s.stats[ply] = stats
     sendMods(s, ply, lib._WeaponMods(stats, statKeys()))
+    lib._PublishEffects(ply, s.players[ply])
 end
 
 ---@param s PW.PerksStore
@@ -127,6 +137,7 @@ function lib._Clear(ply)
     s.stats[ply] = nil
     sendMods(s, ply, {})
     s.sent[ply] = nil
+    lib._PublishEffects(ply, nil)
 end
 
 function lib.Revoke(ply)
@@ -134,6 +145,7 @@ function lib.Revoke(ply)
 end
 
 function lib.Refresh(ply, loadout)
+    if not active() then return lib.Revoke(ply) end
     if PW.Ask("PW_CanUseLoadoutKind", ply, "perks") == false then return lib.Revoke(ply) end
     local s = store()
     endPerks(s, ply)
@@ -145,8 +157,11 @@ function lib.Refresh(ply, loadout)
     for _, id in ipairs(lib._PerkIds(order, slots, loadout)) do
         local def = s.lookup(id)
         if def ~= nil then
-            entry.ids[#entry.ids + 1] = id
-            entry.instances[#entry.instances + 1] = PW.Instance(def, ply)
+            local instance = PW.Instance(def, ply)
+            if instance:IsValid() then
+                entry.ids[#entry.ids + 1] = id
+                entry.instances[#entry.instances + 1] = instance
+            end
         end
     end
     s.players[ply] = entry
@@ -185,6 +200,8 @@ function lib._OnDamaged(victim, attacker, dmg)
 end
 
 function lib._OnDeath(ply)
+    local streaks = rawget(PW, "Streaks") --[[@as PW.StreaksLib?]]
+    if streaks ~= nil and streaks.SnapshotDeath ~= nil then streaks.SnapshotDeath(ply) end
     lib._Clear(ply)
 end
 

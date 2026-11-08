@@ -1,4 +1,8 @@
 ---@meta
+---@class PW.ThrowablesLib
+---@field Impairment fun(ply: Player, now?: number): number
+---@field ClearBlind fun(ply: Player)
+---@field ClearBlinds fun()
 -- Types of the throwables module (T-4.5; 05-loadout.md d.11: quick throw is a helper, PW.Throw). Source:
 -- lua/privatewar/modules/throwables/ (shared.lua: the pure throw, fuse and flash rules, the pw_grenade entity;
 -- init.lua: PW.Throw, PW.Throwables.Blind; cl_init.lua: the blinding white screen).
@@ -25,7 +29,15 @@
 
 ---Internal (server): live projectiles, removed without detonating at the end of a match.
 ---@class PW.ThrowablesStore
----@field live table<Entity, true>
+---@field live table<Entity, PW.ThrowableGeneration|true> true is supported only for retained pre-reload entries
+---@field blind? table<Player, PW.ThrowablesBlind> owned active flash state; absent in older stores
+
+---@class PW.ThrowablesBlind
+---@field untilTime number
+---@field dsp boolean this owner applied the active DSP effect
+
+---@class PW.ThrowableGeneration
+---@field owner Player
 
 ---Throwables module. Wire: server to client "pw_blind", one UInt(8): the blind strength times 255.
 ---@class PW.ThrowablesLib

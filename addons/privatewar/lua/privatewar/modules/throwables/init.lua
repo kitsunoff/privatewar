@@ -27,7 +27,9 @@ end
 ---@param ent Entity
 ---@param owner Player
 ---@param opts PW.ThrowOptions
-local function detonate(ent, owner, opts)
+---@param token PW.ThrowableGeneration
+local function detonate(ent, owner, opts, token)
+    if PW._Throwables.live[ent] ~= token then return end
     PW._Throwables.live[ent] = nil
     if not IsValid(ent) then return end
     if opts.detonate ~= nil then opts.detonate(ent, owner) end
@@ -61,26 +63,28 @@ local function throw(ply, entClass, options)
         phys:SetVelocity(vel)
         phys:AddAngleVelocity(Vector(0, 600, 0))
     end
-    PW._Throwables.live[ent] = true
-    timer.Simple(lib._Fuse(opts), function() detonate(ent, ply, opts) end)
+    local token = { owner = ply }
+    PW._Throwables.live[ent] = token
+    timer.Simple(lib._Fuse(opts), function() detonate(ent, ply, opts, token) end)
     return ent
 end
 
 PW.Throw = throw
 lib.Throw = throw
 
-function lib.Blind(ply, strength)
-    if not IsValid(ply) or strength < lib.Flash.minStrength then return false end
-    local seconds = lib._BlindTime(strength)
-    if not ply:IsBot() then
-        net.Start("pw_blind")
-        net.WriteUInt(lib._EncodeStrength(strength), 8)
-        net.Send(ply)
-        if strength >= 0.5 then ply:SetDSP(35, false) end
+function lib.Revoke(owner)
+    local live = PW._Throwables.live
+    for ent, token in pairs(live) do
+        local matches = istable(token) and token.owner == owner
+            or (token == true and IsValid(ent) and ent:GetOwner() == owner)
+        if matches then
+            live[ent] = nil
+            if IsValid(ent) then ent:Remove() end
+        end
     end
-    PW.Notify("PW_Blinded", ply, strength, seconds)
-    return true
 end
+
+include("privatewar/modules/throwables/sv_blind.lua")
 
 ---@param pos Vector
 ---@param ply Player
@@ -118,5 +122,11 @@ function lib._RemoveAll()
 end
 
 function MODULE:PW_MatchEnd()
+    lib.ClearBlinds()
+    lib._RemoveAll()
+end
+
+function MODULE:PW_RoundEnd()
+    lib.ClearBlinds()
     lib._RemoveAll()
 end

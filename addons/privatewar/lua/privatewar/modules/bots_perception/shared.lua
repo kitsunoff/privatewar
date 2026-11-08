@@ -20,6 +20,14 @@ MODULE.Name = "Bots perception"
 local lib = (rawget(PW, "BotPerception") or {}) --[[@as PW.BotPerceptionLib]]
 PW.BotPerception = lib
 
+---@param ply Player
+---@param now number
+---@return boolean
+function lib._FlashCanSee(ply, now)
+    local status = rawget(PW, "Throwables") --[[@as PW.ThrowablesLib?]]
+    return status == nil or status.Impairment == nil or status.Impairment(ply, now) <= 0.05
+end
+
 lib.Config = {
     fov = 110, -- total cone in degrees (awareViewAngle)
     sightRange = 4500, -- units

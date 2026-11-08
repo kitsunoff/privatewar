@@ -92,8 +92,10 @@ end)
 ---@param tint Color
 ---@param alpha number 0..1
 ---@param align integer TEXT_ALIGN_*
-local function drawText(text, font, x, y, tint, alpha, align)
-    draw.SimpleText(text, font, x + 1, y + 1, ColorAlpha(shadow, 200 * alpha), align, TEXT_ALIGN_TOP)
+---@param shadowOffset? number pixels before the model matrix
+local function drawText(text, font, x, y, tint, alpha, align, shadowOffset)
+    local offset = shadowOffset or 1
+    draw.SimpleText(text, font, x + offset, y + offset, ColorAlpha(shadow, 200 * alpha), align, TEXT_ALIGN_TOP)
     draw.SimpleText(text, font, x, y, ColorAlpha(tint, 255 * alpha), align, TEXT_ALIGN_TOP)
 end
 
@@ -138,8 +140,10 @@ local function drawLevelUp(medal, age)
     cam.PushModelMatrix(levelUpMatrix, true)
     render.PushFilterMag(TEXFILTER.ANISOTROPIC)
     render.PushFilterMin(TEXFILTER.ANISOTROPIC)
-    drawText(medal.name, titleFont, layout.cx, layout.titleY, colour("accent"), alpha, TEXT_ALIGN_CENTER)
-    drawText(medal.label, labelFont, layout.cx, layout.labelY, colour("text"), alpha, TEXT_ALIGN_CENTER)
+    drawText(medal.name, titleFont, layout.cx, layout.titleY, colour("accent"), alpha, TEXT_ALIGN_CENTER,
+        hud.LevelUpShadow)
+    drawText(medal.label, labelFont, layout.cx, layout.labelY, colour("text"), alpha, TEXT_ALIGN_CENTER,
+        hud.LevelUpShadow)
     render.PopFilterMin()
     render.PopFilterMag()
     cam.PopModelMatrix()

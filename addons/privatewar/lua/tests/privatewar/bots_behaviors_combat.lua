@@ -178,9 +178,13 @@ local function duelReport(bot, firedAt)
     if bot == nil or not IsValid(bot) then return "[PW] bots duel smoke: a bot is no longer valid" end
     local botBoard = PW._BotsManager.boards[bot]
     local behavior = botBoard ~= nil and botBoard.behavior or nil
-    return string.format("[PW] bots duel smoke: %s fired at %s s, alive %s, health %s, behaviour %s (%s)",
+    local weapon = bot:GetActiveWeapon()
+    return string.format("[PW] bots duel smoke: %s fired at %s s, alive %s, health %s, behaviour %s (%s)"
+        .. ", phase %s observer %d held %s team %d weapon %s pos %s",
         bot:Nick(), tostring(firedAt[bot]), tostring(bot:Alive()), tostring(bot:Health()),
-        tostring(behavior ~= nil and behavior.id or "none"), tostring(behavior ~= nil and behavior.reason or "-"))
+        tostring(behavior ~= nil and behavior.id or "none"), tostring(behavior ~= nil and behavior.reason or "-"),
+        must(PW.Match).GetPhase(), bot:GetObserverMode(), tostring(bot:GetNW2Bool(must(PW.Jip).NetBool, false)),
+        bot:Team(), IsValid(weapon) and weapon:GetClass() or "none", tostring(bot:GetPos()))
 end
 
 ---@param bot Player
@@ -195,9 +199,17 @@ end
 return {
     groupName = "PW bots behaviors combat",
     beforeAll = function(state)
+        local match, mode = must(PW.Match), must(PW.Modes.Get("ffa"))
+        state.phaseGetter, state.originalMode = match.GetPhase, PW.ActiveMode
+        state.liveFixture = true
+        -- A live FFA body must exist before creation/spawn; LOBBY correctly strips and spectates its bodies.
+        -- beforeAll has no GLuaTest stub, so afterAll owns restoration on success and case failure alike.
+        rawset(match, "GetPhase", function() return "LIVE" end)
+        PW.ActiveMode = mode
         -- Two managed bots (the manager is paused during tests): FFA team, spawned, armed, hostile to each other.
         ---@type Player[]
         local bots = {}
+        state.bots = bots
         for _, name in ipairs({ "PW duel A", "PW duel B" }) do
             local bot = player.CreateNextBot(name) --[[@as Player?]]
             if bot ~= nil and IsValid(bot) then
@@ -206,12 +218,16 @@ return {
                 bots[#bots + 1] = bot
             end
         end
-        state.bots = bots
         hook.Add("PW_IsEnemy", smokeHook, function(a, b)
             if a ~= b and table.HasValue(bots, a) and table.HasValue(bots, b) then return true end
         end)
     end,
     afterAll = function(state)
+        if state.liveFixture then
+            rawset(must(PW.Match), "GetPhase", state.phaseGetter)
+            PW.ActiveMode = state.originalMode
+        end
+        timer.Remove(smokeHook)
         hook.Remove("PW_IsEnemy", smokeHook)
         hook.Remove("EntityFireBullets", smokeHook)
         ---@type Player[]
@@ -459,7 +475,7 @@ return {
                 local firedAt = {}
                 for _, bot in ipairs(bots) do
                     -- The first bot to shoot used to kill the other before its reaction and attack delay passed (a
-                    -- dead bot never fires in LOBBY): both are invulnerable for the duel, the shooting is unchanged.
+                    -- dead bot never fires): both are invulnerable for the duel, the shooting is unchanged.
                     if not bot:Alive() then bot:Spawn() end
                     bot:GodEnable()
                     bot:StripWeapons()
@@ -469,6 +485,7 @@ return {
                 end
                 place(bots[1], must(a), must(b))
                 place(bots[2], must(b), must(a))
+                for _, bot in ipairs(bots) do print(duelReport(bot, firedAt)) end
                 local started = CurTime()
                 ---@param ent Player
                 hook.Add("EntityFireBullets", smokeHook, function(ent)

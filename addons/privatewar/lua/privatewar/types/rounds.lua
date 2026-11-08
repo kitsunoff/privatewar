@@ -28,6 +28,8 @@
 
 ---The pure functions of the stored round_base mode (tests and children read them from the table).
 ---@class PW.RoundBase
+---@field Start fun(self: table)
+---@field Cleanup fun(self: table)
 ---@field Abstract boolean
 ---@field Teams integer
 ---@field Name string

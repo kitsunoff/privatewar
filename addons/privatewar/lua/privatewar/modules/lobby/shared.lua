@@ -5,7 +5,7 @@
 -- Setting lobby.joininprogress (scope server, bool, default on): a human joining during LIVE plays (the teams module
 -- places the player in the smaller team, the bots manager kicks a bot) or, when off, spectates until the next match.
 -- The spectating state is the NW2 bool PW.Jip.NetBool of the player; the HUD element `spectating` shows the notice.
--- The module also unspawns every player when a match returns to the lobby (_Unspawns, init.lua _OnLobby).
+-- Initial spawns and returns to the lobby share explicit body cleanup (init.lua _OnSpawn and _OnLobby).
 
 MODULE.Name = "Lobby"
 
@@ -32,10 +32,8 @@ function lib._ReleasesOn(phase)
     return releasing[phase] == true
 end
 
--- Post-match lobby (08-lobby.md d.3: players are not spawned during LOBBY). The first lobby gets this from the base
--- gamemode: a player without a team spawns as a spectator. Coming back from a match, every player (bots included)
--- is put back into that state: no team, spawned again, so the base gamemode makes a spectator without a model or
--- weapons.
+-- Initial and returning lobby entry (08-lobby.md d.3: no player bodies during LOBBY). PlayerSpawn also applies the
+-- same cleanup to humans and bots joining after the phase notification. Repeated LOBBY notifications are no-ops.
 function lib._Unspawns(phase, oldPhase)
-    return phase == "LOBBY" and oldPhase ~= nil and oldPhase ~= "LOBBY"
+    return phase == "LOBBY" and oldPhase ~= "LOBBY"
 end

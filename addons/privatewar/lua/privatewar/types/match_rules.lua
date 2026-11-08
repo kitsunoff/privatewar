@@ -1,11 +1,12 @@
 ---@meta
+---@alias PW.CanTakeDamageHook fun(victim: Player, attacker: Entity, damage: CTakeDamageInfo): boolean?
 -- Types of the match_rules module (T-2.2; 02-modes.md d.5, d.7; 00-core.md d.3, d.5). Source:
 -- lua/privatewar/modules/match_rules/ (shared.lua: API, pure rules and reading; init.lua: server glue) and the
 -- modes tdm and ffa (lua/privatewar/modes/).
 
 ---One entry of the standings: a team index (team modes) or a player (FFA), and its score toward the limit.
 ---@class PW.Standing
----@field id any team index (integer) in a team mode, the Player in FFA (any value in pure tests)
+---@field id any team index in team modes; Player or saved positive UserID in personal results (any in pure tests)
 ---@field score integer
 
 ---Result of a match, the value a mode gives to PW.Match.Finish (and PW_MatchEnd receives).

@@ -18,6 +18,8 @@ local function actor()
     return { IsValid = function() return true end, IsPlayer = function() return true end,
         IsBot = function() return false end, Alive = function() return true end,
         EntIndex = function() return 1 end, GetPos = function() return Vector() end,
+        EyePos = function() return Vector() end, GetAimVector = function() return Vector(1, 0, 0) end,
+        GetVelocity = function() return Vector() end, EyeAngles = function() return Angle() end,
         GetWeapon = function() return grenade end, HasWeapon = function() return false end,
         Give = function() d.given = d.given + 1 end,
         StripWeapon = function(_, class) d.stripped[class] = true end,
@@ -31,6 +33,7 @@ return {
         state.perks, state.equipment, state.streaks = PW._Perks, PW._Equipment, PW._Streaks
         state.mode, state.jip, state.instances = PW.ActiveMode, PW._Jip, must(PW.Streaks)._Instances
         state.reveal = PW._Reveal
+        state.throwables = PW._Throwables
         state.manager = PW._BotsManager
         state.ended = 0
         PW.ActiveMode = nil
@@ -46,9 +49,85 @@ return {
         PW._Perks, PW._Equipment, PW._Streaks = state.perks, state.equipment, state.streaks
         PW.ActiveMode, PW._Jip, must(PW.Streaks)._Instances = state.mode, state.jip, state.instances
         PW._Reveal = state.reveal
+        PW._Throwables = state.throwables
         PW._BotsManager = state.manager
+        if state.wildcards ~= nil then PW._Wildcards = state.wildcards end
     end,
     cases = {
+        {
+            name = "Revocation: equipment owner forwards projectile cleanup even when held equipment was already spent",
+            func = function()
+                local lib, ply = must(PW.Equipment), actor()
+                ---@type Player[]
+                local revoked = {}
+                PW._Equipment = must(lib._NewStore)({ publish = function() end })
+                stub(must(PW.Throwables), "Revoke").with(function(owner) revoked[#revoked + 1] = owner end)
+                must(lib.Revoke)(ply)
+                expect(revoked).to.deepEqual({ ply })
+            end
+        },
+        {
+            name = "Role restriction: loadout owner releases forbidden cached wildcards on a team transition",
+            func = function(state)
+                local lib, ply = must(PW.Loadout), actor()
+                state.wildcards = PW._Wildcards
+                PW._Wildcards = {}
+                must(lib._EquipWildcards)(ply, { wildcard = "role_fixture" }, function() return {} end)
+                expect(PW._Wildcards[ply]).to.exist()
+                hook.Add("PW_CanUseLoadoutKind", listener, function(_, kind)
+                    if kind == "wildcards" then return false end
+                end)
+                PW.Notify("PW_PlayerTeamChanged", ply, 1, 2, "role_change")
+                expect(PW._Wildcards[ply]).to.beNil()
+            end
+        },
+        {
+            name = "Revocation: projectile owner removes only its grenades and an old fuse cannot detonate after reset",
+            func = function()
+                local lib, ply, other = must(PW.Throwables), actor(), actor()
+                local valid, exploded = true, 0
+                local ent = { IsValid = function() return valid end, SetPos = function() end,
+                    SetAngles = function() end, SetOwner = function() end, Spawn = function() end,
+                    GetOwner = function() return ply end, GetPhysicsObject = function() return NULL end,
+                    Remove = function() valid = false end } --[[@as Entity]]
+                local unrelated = { IsValid = function() return true end,
+                    GetOwner = function() return other end, Remove = function() error("wrong owner") end }
+                ---@type fun()?
+                local fuse
+                PW._Throwables = { live = { [unrelated] = true } }
+                stub(ents, "Create").with(function() return ent end)
+                stub(util, "TraceLine").with(function() return { Hit = false } end)
+                stub(_G.timer, "Simple").with(function(_, callback) fuse = callback end)
+                expect(must(lib.Throw)(ply, "prop_physics", { fuse = 1,
+                    detonate = function() exploded = exploded + 1 end })).to.equal(ent)
+                must(lib.Revoke)(ply)
+                expect(valid).to.beFalse()
+                expect(must(PW._Throwables).live[unrelated]).to.beTrue()
+                valid = true -- even an adversarial stand-in cannot make the old generation live again
+                local oldFuse = must(fuse)
+                oldFuse()
+                expect(exploded).to.equal(0)
+                expect(must(PW._Throwables).live[ent]).to.beNil()
+                expect(must(lib.Throw)(ply, "prop_physics", { fuse = 1,
+                    detonate = function() exploded = exploded + 1 end })).to.equal(ent)
+                local generation = must(PW._Throwables).live[ent]
+                oldFuse() -- reusing the same stand-in must not detonate or remove a new live generation
+                expect(exploded).to.equal(0)
+                expect(must(PW._Throwables).live[ent]).to.equal(generation)
+                must(fuse)()
+                expect(exploded).to.equal(1)
+            end
+        },
+        {
+            name = "Quota admission: only the manager owner reports pending departures before next-round rosters",
+            func = function()
+                local lib, ply = must(PW.BotsManager), actor()
+                PW._BotsManager = must(lib._NewStore)()
+                expect(must(lib.IsLeaving)(ply)).to.beFalse()
+                PW._BotsManager.kicking[ply] = true
+                expect(must(lib.IsLeaving)(ply)).to.beTrue()
+            end
+        },
         {
             name = "Revocation: ending one owner removes its jam and radar pulse but replays another owner's pulse",
             func = function()

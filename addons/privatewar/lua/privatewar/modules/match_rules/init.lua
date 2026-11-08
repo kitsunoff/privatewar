@@ -151,6 +151,11 @@ PW.HookFor(MODULE, "DoPlayerDeath", function(_, victim, attacker, dmg)
     PW.Notify("PW_PlayerKilled", victim, attacker, dmg)
 end)
 
+PW.HookFor(MODULE, "EntityTakeDamage", function(_, target, dmg)
+    if not live() or not target:IsPlayer() then return end
+    if PW.Ask("PW_CanTakeDamage", target, dmg:GetAttacker(), dmg) == false then return true end
+end)
+
 ---The death think of one dead player in LIVE: sets the respawn time on the first call, respawns once it is due.
 ---@param ply Player
 local function deathThink(ply)

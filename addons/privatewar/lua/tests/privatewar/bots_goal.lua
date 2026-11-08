@@ -95,7 +95,13 @@ end
 return {
     groupName = "PW bots goal",
     beforeAll = function(state)
-        -- In LOBBY a new teamless player is a fixed spectator (GM.TeamBased): give it the FFA team and spawn it.
+        local match, mode = must(PW.Match), must(PW.Modes.Get("ffa"))
+        state.phaseGetter, state.originalMode = match.GetPhase, PW.ActiveMode
+        state.liveFixture = true
+        -- Spectating offsets the engine origin from the floor and can leave no same-height target at 790 units.
+        -- Establish the ordinary live FFA spawn before creating the bot, without touching the phase store.
+        rawset(match, "GetPhase", function() return "LIVE" end)
+        PW.ActiveMode = mode
         local bot = player.CreateNextBot("PW goal test") --[[@as Player?]]
         state.bot = bot
         if bot ~= nil and IsValid(bot) then
@@ -104,6 +110,11 @@ return {
         end
     end,
     afterAll = function(state)
+        if state.liveFixture then
+            rawset(must(PW.Match), "GetPhase", state.phaseGetter)
+            PW.ActiveMode = state.originalMode
+        end
+        timer.Remove("PW.BotGoalSmoke")
         local bot = state.bot --[[@as Player?]]
         if bot ~= nil and IsValid(bot) then
             lib()._Drop(bot)
@@ -371,6 +382,13 @@ return {
                 local board = testBoard(stub, bot)
                 timer.Simple(0.5, function()
                     local start = bot:GetPos()
+                    local weapon = bot:GetActiveWeapon()
+                    print(string.format("[PW] goal fixture phase %s alive %s observer %d held %s"
+                        .. " team %d weapon %s pos %s",
+                        must(PW.Match).GetPhase(), tostring(bot:Alive()), bot:GetObserverMode(),
+                        tostring(bot:GetNW2Bool(must(PW.Jip).NetBool, false)), bot:Team(),
+                        IsValid(weapon) and weapon:GetClass() or "none", tostring(start)))
+                    print("[PW] goal fixture before selection: " .. smokeReport(bot, board))
                     local target = must(areaAt(start, 790))
                     local started = CurTime()
                     lib().SetGoal(bot, target, 64, "critical")

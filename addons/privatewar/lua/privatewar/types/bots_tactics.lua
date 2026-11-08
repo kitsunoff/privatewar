@@ -161,12 +161,14 @@
 ---@field Bash fun(ctx: PW.BotBrainCtx): boolean
 ---Server: the facts of a bot now (the glue fills board.tactics with it).
 ---@field Refresh? fun(bot: Player, board: PW.BotBoard)
+---Internal server cover-queue boundary, shared by the tactics tick and deterministic regression tests.
+---@field _QueueCover? fun(bot: Player, board: PW.BotBoard, facts: PW.BotCombatFacts)
 
 ---Internal (server): state of the module.
 ---@class PW.BotTacticsStore
 ---@field hurt table<Player, { at: number, attacker: Entity }> weak keys
 ---@field registered table<Player, string> scheduler id per bot (weak keys)
----@field pending table<Player, boolean> a cover search is queued (weak keys)
+---@field pending table<Player, table|boolean> unique queued-job tokens; boolean only in an older retained store
 
 ---@class PW
 ---@field BotTactics? PW.BotTacticsLib

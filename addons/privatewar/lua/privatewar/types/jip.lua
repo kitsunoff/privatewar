@@ -24,7 +24,8 @@
 ---@field unpark fun(ply: Player) leaves observer mode
 ---@field mark fun(ply: Player, spectating: boolean) publishes the flag the HUD notice reads
 ---@field players fun(): Player[] every connected player, bots included (player.GetAll)
----@field unspawn fun(ply: Player) the first lobby's state: TEAM_UNASSIGNED, then Spawn (the base gamemode spectator)
+---Shared initial/return lobby state: TEAM_UNASSIGNED, strip weapons/ammo, roaming spectator; no recursive Spawn.
+---@field unspawn fun(ply: Player)
 
 ---Options of a store; every field has an engine default.
 ---@class PW.JipStoreOptions
@@ -54,13 +55,14 @@
 ---@field _NewStore? fun(opts?: PW.JipStoreOptions): PW.JipStore
 ---Internal (server): PlayerInitialSpawn: decides and, for "spectate", remembers the player.
 ---@field _OnJoin? fun(store: PW.JipStore, ply: Player): PW.JipDecision
----Internal (server): PlayerSpawn: parks a remembered spectator (after the other listeners); true when it did.
+---Internal (server): PlayerSpawn: defers lobby unspawn with a phase guard;
+---parks remembered spectators and returns true for them.
 ---@field _OnSpawn? fun(store: PW.JipStore, ply: Player): boolean
 ---Internal (server): PW_CanRespawn: false for a spectator.
 ---@field _CanRespawn? fun(store: PW.JipStore, ply: Player): boolean
 ---Internal (server): the phase changed; LOBBY and PREMATCH release every spectator.
 ---@field _OnPhase? fun(store: PW.JipStore, phase: PW.PhaseName)
----Internal (server): the phase changed; LOBBY from a match unspawns every player one tick later (store.defer).
+---Internal (server): LOBBY from a match defers shared unspawn for every player; rechecks LOBBY before applying.
 ---Returns the number of players it will unspawn.
 ---@field _OnLobby? fun(store: PW.JipStore, phase: PW.PhaseName, oldPhase?: PW.PhaseName): integer
 

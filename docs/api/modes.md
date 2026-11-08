@@ -318,7 +318,7 @@ The loop (the state machine is pure data: `MODE._NewState`, `MODE._Step`; `Think
 - The loader checks `KIND.Required` on the file's own table before `Base` resolution (see "Core changes needed",
   item 2): a child mode must repeat `Name` and `Teams` today.
 
-### Objective round lifecycle extension (frozen, implementation pending)
+### Objective round lifecycle extension (frozen, implemented)
 
 Orchestrator-approved extension (2026-11-08); tests precede implementation. Existing callers remain compatible.
 Approved gameplay values are recorded in `design/02-modes.md` d.8; no `PW.API` bump.
@@ -333,7 +333,7 @@ Approved gameplay values are recorded in `design/02-modes.md` d.8; no `PW.API` b
 | `PW_RoundPrepared(round, swapped)` | Notification after successful child preparation, before any playable spawn; each layer resets only its owned state here. Never emitted after preparation failure/abort. |
 | `PW.MatchRules.Spawn(ply: Player)` | Server wrapper: one engine `ply:Spawn()`, then synchronous `PW_PlayerSpawned(ply)` after engine/base/loadout initialization returns. Route controlled initial, round and delayed human/bot respawns through it; no duplicate gives. |
 
-Proposed order, preserving existing public notification timing:
+Order, preserving existing public notification timing:
 
 1. Initial: teams assigned in `PW_PhaseChange` → base `Start` builds the existing `starting` state →
    `PW_RoundPreparing` → `PrepareRound(1, false)` → `PW_RoundPrepared` → `PW_MatchStart` initial spawns →
@@ -354,14 +354,25 @@ steps stay alive only with explicit deferral; removal of deferral draws immediat
 preparation runs once before initial spawn and after each later swap/before respawn; terminal repeated steps
 credit no additional win or action; fixed totals 1/3 ignore early first-to-wins, count draws, finish once and
 create no fourth/second round; tied fixed-total standings draw; absent/zero total keeps first-to-wins behavior.
-These are a red scaffold, not test-pass evidence; the existing T-2.3 cases are retained unchanged.
+The original 23 shared lifecycle/objective cases were observed RED before runtime (22 failures, one legacy
+compatibility pass), then passed with all 1395 baseline cases. Existing T-2.3 cases are retained unchanged.
+This shared-seam evidence is not a completed-mode or human-checkpoint claim.
 
 Initial failure protection is owned by `core/sv_match.lua` after `Start`: inspect the actual pending abort/phase
 request, not only `IsValid` (active mode errors queue abort without disabling it). No initial match-start/spawn
 notification is emitted after failed/aborted preparation. The spawn wrapper does not guarantee an external
 addon's direct `ply:Spawn()` path; a post-base fallback for such calls needs separate explicit ownership.
 
-### S&D map shape (frozen, authoring pending)
+`FinalizeRounds` may return only a dense, best-first standings array with unique identities and finite integer
+scores. Team identities are positive finite integers; personal identities are Player entities, not SteamID
+strings. Saved positive integer UserIDs remain valid personal identities: the existing `_ResultFields` publisher
+already accepts a numeric winner independently of its `teams` flag. Player/numeric aliases are normalized to
+UserID for duplicate and membership checks, not to calculate standings. A connection-validity requirement is
+not added: a departed participant may remain through its saved identity. A non-draw winner must be a member at the unique top;
+a draw has no winner and represents a shared top or empty standings. This validates the existing shape; it does
+not calculate or replace a child's standings, award rewards or reinterpret its result.
+
+### S&D map shape (frozen, authored)
 
 `MAP.Modes.snd = { sites = PW.SNDSite[], bomb = Vector,
 spawns = table<integer, PW.SpawnPoint[]> }`. Each proposed `PW.SNDSite` is
@@ -372,6 +383,54 @@ All vectors/dimensions must be finite; radii positive, vertical bounds nonnegati
 or positions are chosen here. Cross-map `ValidateMapData` is structural only; current-map ground/hull/nav/LOS
 validation is a separate activation check. Do not edit the shared map until the orchestrator serializes it.
 This shape introduces no automatic map fallback; invalid out-of-world/unreachable bomb drops recover at `bomb`.
+
+### Search and Destroy implementation boundary
+
+The concrete `snd` child uses `round_base` and the approved preset in `design/02-modes.md` d.8. Its module
+`snd` separates shared plain-data rules (`Validate`, `NewRound`, `Step`, `Death`, `Disconnect`, `Admit`,
+`Snapshot`, `Objectives`, `HudText`) from world/input/replication wrappers. Types are in `types/snd.lua`.
+`Step` returns the round verdict and explicit planted-timeout deferral; it never awards rewards or damages players.
+
+The server roster binds a stable participant identity to the current connection UserID and a once-only life ticket.
+JIP/reconnect/replacement cannot reuse that ticket; the next round rebuilds the roster before playable spawning.
+The mode uses generic admission/quota and reversible equipment/effect APIs from [role policy](role-policy.md),
+without accessing foreign private stores. Unused earned streak inventory is retained.
+
+Every round uses the authored side-indexed spawn pool through the ordinary scoring/hull picker. The optional
+`PW.SpawnPickOpts.spawns` replaces only the source pool; `first = true, all = false` retains side selection after
+swaps. The spawns listener honors a mode's explicit `PW_SelectSpawn` before its generic default. Current-map
+activation separately checks ground, standing hulls, site sight lines and mutual directed nav routes.
+
+`PW_CanTakeDamage(victim, attacker, damage) -> boolean?` is a server question at the match-rules damage boundary
+during LIVE; exactly false vetoes player damage, nil preserves ordinary behavior. S&D vetoes intermission and
+non-roster life damage. Round end removes owned throwable projectiles and ends active equipment/streak effects;
+ordinary non-round modes keep their existing lifecycle.
+
+Recipient-specific `pw_snd_state` snapshots carry a bounded fixed shape with round generation and serial,
+phase, deadline/fuse, site, optional attacker-only carrier/drop position and local held-action progress. There is
+no client request, table serialization or hidden enemy payload. Planted bomb position/fuse are public to both
+teams; defenders get no hidden carrier/drop objective coordinates. The physical bomb uses ordinary entity sight.
+The client rejects stale generation/serial values; draw-independent labels are shared, draw-ready data is cached
+outside HUDPaint. Implementation/gate evidence does not pass visual, spectator/P2P or human mode checkpoints.
+
+### Restricted spectator policy (frozen, tests first)
+
+Server question `PW_SpectatorPolicy(ply) -> PW.SpectatorPolicy?`, with
+`{ restricted = true, eligible = { [currentUserID] = true } }`. Nil preserves ordinary roaming parking. Any
+malformed non-nil policy fails closed to a fixed neutral view with no followed entity; an empty allow-set does
+the same. Only positive integer UserIDs whose value is exactly true are admitted, bounded to 128 entries.
+
+The lobby owner applies the policy synchronously before choosing a roaming camera in `enginePark`, through
+public `PW.Jip.RefreshSpectator(ply) -> handled`. It changes only camera state, not teams, bodies, admission,
+weapons or classes. A living valid eligible target is followed in-eye; an authorized current target is retained,
+otherwise the lowest eligible live UserID is selected. No caller/client target argument is accepted. Unexpected
+fields such as a forged `target` do not bypass the allow-set. Pure choice: `PW.Jip.SpectatorChoice`.
+
+Death, disconnect, team-changing/changed and round-preparing/prepared events refresh restrictions through the
+same owner; the visibility boundary rejects unauthorized observer targets before using them. The S&D provider
+derives eligibility only from its current own-team roster, current connection identities and living bodies,
+excluding enemies, dead/disconnected members and unknown JIP/replacement identities. No foreign private store
+or timer-based overwrite of a roaming camera is used. This completes an approved privacy rule, not a new mode.
 
 ## Domination
 

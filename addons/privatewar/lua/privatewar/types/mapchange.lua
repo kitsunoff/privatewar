@@ -77,7 +77,7 @@
 ---the 10 s fallback).
 ---@field IsChanging fun(): boolean
 ---Announces a change to `map` for `mode` (NW2: map, mode id, end time) and begins it pw_mapchange_delay seconds
----later (_Tick); with no delay it begins at once. Returns true (or _Begin's result without a delay).
+---later (_Tick), clamped to 1..60 seconds even for a non-positive delay. Returns true after scheduling.
 ---@field Schedule fun(mode: table, map: string): boolean
 ---Internal: drops an announced change that has not begun and clears the announcement; false when none waits.
 ---@field _Cancel fun(reason: string): boolean

@@ -34,6 +34,7 @@ end
 
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 function lib.IntentFor(bot)
     local scripted = PW._BotInput.scripted[bot]
@@ -57,6 +58,11 @@ function lib._CommandFor(bot, now)
     if state == nil then
         state = lib.NewState()
         store.states[bot] = state
+    end
+    if PW.Ask("PW_CanRunBotInput", bot) == false then
+        state = lib.NewState()
+        store.states[bot] = state
+        return lib.Translate(nil, nil, state, { now = now, eye = bot:EyeAngles() })
     end
     local wep = bot:GetActiveWeapon()
     local active = IsValid(wep) and wep:GetClass() or nil

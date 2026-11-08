@@ -20,6 +20,10 @@ local tickPeriod = 0.1
 local syncEvery = 1
 local bodyHeights = { chest = 40, feet = 8 }
 local mask = MASK_OPAQUE_AND_NPCS
+---@type PW.BotSnapshotSet
+local noSight = {}
+---@type PW.BotSighting[]
+local noFresh = {}
 
 local function randomFn()
     return math.random()
@@ -39,6 +43,7 @@ end
 
 function MODULE:PW_PlayerTeamChanged() clearAll() end
 function MODULE:PW_RoundPrepared() clearAll() end
+function MODULE:PW_MatchEnd() clearAll() end
 
 function botLib.AddStimulus(botOrTeam, kind, data)
     return lib.Dispatch(botOrTeam, kind, data)
@@ -112,6 +117,7 @@ end
 ---@return integer candidates
 ---@return integer traces
 local function gatherSeen(ply, params)
+    if not lib._FlashCanSee(ply, CurTime()) then return noSight, 0, 0 end
     local eye, forward = ply:EyePos(), ply:EyeAngles():Forward()
     ---@type PW.BotCandidate[]
     local list = {}
@@ -174,6 +180,10 @@ local function tickBot(ply, board, now)
         local params = paramsOf(board)
         local seen, candidates, traces = gatherSeen(ply, params)
         local fresh = lib.Think(state, { params = params, seen = seen, valid = IsValid, random = randomFn }, now)
+        if not lib._FlashCanSee(ply, now) then
+            for _, contact in ipairs(state.contacts) do contact.visible = false end
+            fresh = noFresh
+        end
         for _, sighting in ipairs(fresh) do
             lib.Share({ state = state, team = state.team, pos = ply:GetPos() }, mates(), sighting, now)
         end
@@ -262,6 +272,7 @@ end)
 
 PW.HookFor(MODULE, "PlayerFootstep", function(_, plyArg)
     local ply = plyArg --[[@as Player]]
+    if PW.Perks ~= nil and not PW.Perks.FootstepsAudible(ply) then return end
     if not ply:IsSprinting() or ply:GetVelocity():Length2DSqr() <= 150 * 150 then return end
     broadcast("footstep", ply:GetPos(), ply)
 end)

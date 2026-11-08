@@ -29,6 +29,22 @@ local function boardOf(bot)
     return botLib.Get ~= nil and botLib.Get(bot) or nil
 end
 
+-- These events invalidate relationships for every managed bot, even when the changed actor is human.
+-- A queued callback retains its old token and cannot consume or overwrite a newer request.
+local function resetOwned()
+    store.hurt, store.pending = setmetatable({}, weak), setmetatable({}, weak)
+    for _, bot in ipairs(player.GetBots()) do
+        local board = boardOf(bot)
+        if board ~= nil then board.tactics = nil end
+    end
+end
+
+function MODULE:PW_PlayerTeamChanging() resetOwned() end
+function MODULE:PW_PlayerTeamChanged() resetOwned() end
+function MODULE:PW_RoundPreparing() resetOwned() end
+function MODULE:PW_RoundPrepared() resetOwned() end
+function MODULE:PW_MatchEnd() resetOwned() end
+
 ---@param bot Player
 ---@param f PW.BotCombatFacts
 local function weaponFacts(bot, f)
@@ -170,7 +186,7 @@ end
 ---@param bot Player
 ---@param board PW.BotBoard
 ---@param f PW.BotCombatFacts
-local function maybeSearch(bot, board, f)
+function lib._QueueCover(bot, board, f)
     local scheduler = rawget(PW, "BotScheduler") --[[@as PW.BotSchedulerLib?]]
     if scheduler == nil or store.pending[bot] then return end
     ---@type PW.BotContact?
@@ -185,14 +201,16 @@ local function maybeSearch(bot, board, f)
     local cover = f.cover
     local moved = cover ~= nil and cover.threatPos:Distance(threat.pos) > cfg.coverThreatSlack / 2
     if cover ~= nil and CurTime() - cover.at < coverEvery and not moved then return end
-    store.pending[bot] = true
+    local token = {}
+    store.pending[bot] = token
     local threatPos = threat.pos
     scheduler.Enqueue(function()
+        if store.pending[bot] ~= token then return end
         store.pending[bot] = nil
         if not IsValid(bot) or not bot:Alive() then return end
         local current = boardOf(bot)
         local facts = current ~= nil and current.tactics or nil
-        if facts ~= nil then facts.cover = searchCover(bot:GetPos(), threatPos) end
+        if current == board and facts == f then f.cover = searchCover(bot:GetPos(), threatPos) end
     end)
 end
 
@@ -205,7 +223,7 @@ local function tickBot(bot, board)
         return
     end
     lib.Refresh(bot, board)
-    maybeSearch(bot, board, board.tactics --[[@as PW.BotCombatFacts]])
+    lib._QueueCover(bot, board, board.tactics --[[@as PW.BotCombatFacts]])
 end
 
 ---@param bot Player

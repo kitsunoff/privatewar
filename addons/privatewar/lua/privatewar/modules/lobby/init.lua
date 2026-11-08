@@ -6,8 +6,8 @@
 --     module would otherwise have placed the player, the base gamemode would have spawned one).
 --   PW_CanRespawn: false for a spectator, so a round or respawn rule never brings the player in.
 --   PW_PhaseChange: entering LOBBY or PREMATCH releases every spectator; the match start spawns everybody.
---     Entering LOBBY from a match unspawns every player (bots too) one tick later, after the other PW_PhaseChange
---     listeners: no team, then Spawn, so the base gamemode spawns a spectator as in the first lobby (08-lobby.md d.3).
+--     Initial and returning LOBBY entry clean up every body (bots too) after the other listeners. PlayerSpawn uses
+--     that same cleanup for later arrivals: no team, weapons or ammo, roaming observer, never another Spawn call.
 -- Engine calls are fields of the store, so the tests drive everything with fakes.
 
 local lib = PW.Jip --[[@as PW.JipLib]]
@@ -41,8 +41,11 @@ local function enginePark(ply)
     ply:SetTeam(TEAM_SPECTATOR)
     ply:StripWeapons()
     ply:SetNoTarget(true)
+    if assert(lib.RefreshSpectator)(ply) then return end
     ply:Spectate(OBS_MODE_ROAMING)
 end
+
+include("privatewar/modules/lobby/sv_spectator.lua")
 
 ---@param ply Player
 local function engineUnpark(ply)
@@ -52,12 +55,14 @@ local function engineUnpark(ply)
     ply:SetTeam(TEAM_UNASSIGNED)
 end
 
----The first lobby's state: no team, so the base gamemode's PlayerSpawn makes a spectator (no model, no weapons).
+---Common initial/returning lobby body state, independent of the base PlayerSpawn and without recursive spawning.
 ---@param ply Player
 local function engineUnspawn(ply)
     if not IsValid(ply) then return end
     ply:SetTeam(TEAM_UNASSIGNED)
-    ply:Spawn()
+    ply:StripWeapons()
+    ply:RemoveAllAmmo()
+    ply:Spectate(OBS_MODE_ROAMING)
 end
 
 ---@param ply Player
@@ -85,7 +90,8 @@ end
 PW._Jip = PW._Jip or lib._NewStore()
 -- A store made by older code (pw_reload keeps it) gets the fields added since.
 PW._Jip.players = PW._Jip.players or player.GetAll
-PW._Jip.unspawn = PW._Jip.unspawn or engineUnspawn
+-- Replace the old engine default on pw_reload too: it called Spawn, which would now re-enter lobby cleanup.
+PW._Jip.unspawn = engineUnspawn
 
 function lib._OnJoin(store, ply)
     local decision = lib._Decide({ phase = store.phase(), enabled = store.enabled(), human = store.isHuman(ply) })
@@ -107,6 +113,11 @@ function lib.Admit(ply)
 end
 
 function lib._OnSpawn(store, ply)
+    if store.phase() == "LOBBY" then
+        store.defer(function()
+            if store.phase() == "LOBBY" then store.unspawn(ply) end
+        end)
+    end
     if store.spectators[ply] == nil then return false end
     store.defer(function()
         if store.spectators[ply] ~= nil then store.park(ply) end
@@ -131,6 +142,7 @@ function lib._OnLobby(store, phase, oldPhase)
     if not lib._Unspawns(phase, oldPhase) then return 0 end
     local list = store.players()
     store.defer(function()
+        if store.phase() ~= "LOBBY" then return end
         for _, ply in ipairs(list) do store.unspawn(ply) end
     end)
     return #list

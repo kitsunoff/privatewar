@@ -73,6 +73,7 @@ return {
     end,
     afterEach = function(state)
         hook.Remove("PW_CanRunBotBehavior", listener)
+        hook.Remove("PW_CanRunBotInput", listener)
         for _, ply in ipairs(state.bots --[[@as Player[] ]]) do must(must(PW.BotInput).SetScripted)(ply, nil) end
         for ply in pairs(PW._BotGoal.states) do must(PW.BotGoal)._Drop(ply) end
         PW._BotGoal.states = state.goals
@@ -80,6 +81,41 @@ return {
         must(PW.BotPerception).States, PW.ActiveMode = state.perception, state.mode
     end,
     cases = {
+        {
+            name = "Match end: every owned bot layer releases role state before an ordinary next mode",
+            func = function(state)
+                local ply, board = seedBot(state, 9015)
+                state.bots = { ply }
+                PW.Notify("PW_MatchEnd", {})
+                expect(state.ended).to.equal(1)
+                expect(board.target).to.beNil()
+                expect(board.behavior).to.beNil()
+                expect(board.contacts).to.deepEqual({})
+                expect(board.memory).to.deepEqual({})
+                expect(board.goal).to.beNil()
+                expect(PW._BotBrain.states[ply].evals).to.deepEqual({})
+                expect(PW._BotBrain.states[ply].cooldowns).to.deepEqual({})
+                local intent = must(must(PW.BotInput).IntentFor)(ply)
+                expect(intent == nil or intent.buttons == 0).to.beTrue()
+            end
+        },
+        {
+            name = "Input gate: denied alive bot writes a neutral usercmd even with a stale scripted attack and sprint",
+            func = function(state)
+                local ply = bot(9016)
+                local board = { bot = ply, intent = { buttons = IN_ATTACK, drive = Vector(400, 0, 0),
+                    sprint = true, weapon = "weapon_smg1" } } --[[@as PW.BotBoard]]
+                PW._BotsManager.boards[ply] = board
+                state.bots = { ply }
+                must(PW.BotInput).SetScripted(ply, board.intent)
+                hook.Add("PW_CanRunBotInput", listener, function() return false end)
+                local command = must(must(PW.BotInput)._CommandFor)(ply, 1)
+                expect(command).to.exist()
+                expect({ must(command).buttons, must(command).forward, must(command).side }).to.deepEqual({ 0, 0, 0 })
+                expect(must(command).weapon).to.beNil()
+                hook.Remove("PW_CanRunBotInput", listener)
+            end
+        },
         {
             name = "Objective invalidation: matching running or suspended visit ends once and releases owned use",
             func = function()
