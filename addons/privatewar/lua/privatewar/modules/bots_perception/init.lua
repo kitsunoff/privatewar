@@ -181,7 +181,7 @@ local function tickBot(ply, board, now)
         local seen, candidates, traces = gatherSeen(ply, params)
         local fresh = lib.Think(state, { params = params, seen = seen, valid = IsValid, random = randomFn }, now)
         if not lib._FlashCanSee(ply, now) then
-            for _, contact in ipairs(state.contacts) do contact.visible = false end
+            lib.HideSight(state)
             fresh = noFresh
         end
         for _, sighting in ipairs(fresh) do

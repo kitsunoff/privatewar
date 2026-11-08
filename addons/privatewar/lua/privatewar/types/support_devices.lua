@@ -1,5 +1,5 @@
 ---@meta
--- Support runtime contracts: docs/api/support-devices.md. Source-scoped reveal retirement remains a shared dependency.
+-- Support runtime contracts: docs/api/support-devices.md. Source retirement consumes the public reveal owner API.
 
 ---@alias PW.SupportDeviceKind "ammo_cache"|"medical_station"|"ground_sensor"
 

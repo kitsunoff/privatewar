@@ -12,9 +12,9 @@ jamming, `cl_init.lua` keys and radar data). Kind: `kinds/streaks.lua`. Streaks:
 ## Kind `streaks`
 
 The approved K1–K4 addition is frozen separately in [support devices](support-devices.md).
-That tests-first contract covers transactional `Prepare`/`instance.Activation`, owned-device cleanup,
-the four support entries and perceived bot device counterplay. It does not change existing earning,
-retained-unused-inventory, round relationship cleanup or reveal-source ownership semantics.
+That contract covers transactional `Prepare`/`instance.Activation`, owned-device cleanup,
+the four support entries and perceived bot device counterplay. Existing earning, retained-unused inventory
+and ordinary round/relationship cleanup remain unchanged. The additive reveal-source API is documented below.
 
 One file per streak in `lua/privatewar/streaks/`, class table `STREAK`. Never auto-subscribed: using a streak
 makes a `PW.Instance` of it. Enable ConVar `pw_streak_<id>_enabled`. The registry is `PW.Registries.streaks`.
@@ -28,6 +28,7 @@ makes a `PW.Instance` of it. Enable ConVar `pw_streak_<id>_enabled`. The registr
 | `Duration` | number | no | Seconds until the module ends the instance; default `PW.Streaks.DefaultDuration` (10) |
 | `OnUnequip(owner)` | function | no | Runs when the instance ends |
 | `BotShouldUse(bot)` | function | no | Whether a bot should use the streak now; absent means always |
+| `Prepare(owner)` | function | no | Return server-only activation data before construction; nil/false/error refuses without consuming inventory |
 
 ## Slots
 
@@ -59,13 +60,14 @@ Server:
 
 | Function | Contract |
 | --- | --- |
-| `Use(ply, id) -> boolean` | Takes the streak `id` out of the inventory and activates it. `false` outside LIVE, for a dead player, or when the id is not in the inventory. Used by the key message and by bots |
+| `Use(ply, id) -> boolean` | Validates preparation and construction before consuming one inventory entry. `false` preserves inventory, including failed partial construction. Requires LIVE, a living player and a held id; used by the key message and bots |
 | `Ready(bot) -> string?` | The first inventory id whose `BotShouldUse` agrees (or that has none); `nil` when none |
 | `Give(ply, id) -> boolean` | Adds a streak to the inventory (tests, modes); `false` for an unknown id |
 | `StreakDamage(fn, ...)` | Runs `fn(...)` with a depth counter: score events inside it are streak kills and do not count unless `streaks.chain` is set. Errors are printed, not thrown |
 | `Jam(owner, duration)` | A Counter-UAV: hides the owner's side from hostile reveals and sends the jam notice to hostile players |
 | `Enemies(owner) -> Player[]` | The living enemies of the owner (`PW.IsEnemy`) |
 | `Viewer(owner) -> integer\|Player` | The reveal viewer of the owner: the team index when the team is active, else the owner |
+| `RetireRevealSource(token)` | Server-only exact opaque source retirement; removes only its human radar pulses and derived bot radar evidence, not other sources or jamming |
 | `Progress(ply) -> integer` | The counter |
 | `Inventory(ply) -> string[]` | The held streak ids (oldest first) |
 | `Set(ply) -> PW.StreakSetEntry[]` | The streak set `{ id, cost }`, sorted by cost |
@@ -78,12 +80,26 @@ Client: `Progress(ply)`, `Inventory(ply)` and `Set(ply)` read the NW2 values bel
 
 The HUD radar draws `Blips()` and `Jammed()`: see `ui.md`, "Radar (element `radar`, T-6.6)".
 
-## `PW.Reveal(viewer, targets, duration) -> integer`
+## `PW.Reveal(viewer, targets, duration, realSourceOwner?, sourceToken?) -> integer`
 
 Server. The only path that sends enemy positions (`DESIGN.md` net rule). `viewer` is a player or a team index; the
 positions of the visible `targets` go to the human players of the viewer's side, and the viewer's bots get a `radar`
 stimulus (`PW.Bot.AddStimulus`). A target hidden by an active Counter-UAV of the target's side is filtered out. At most
 127 blips per message. Returns the number revealed.
+
+`PW_CanReveal(viewer, target, realSourceOwner)` runs before target positions, human packets and bot stimuli.
+The optional fifth argument is a server-only opaque table/instance/record; it never replaces the real source
+owner for concealment, relationships or Counter-UAV, and is never serialized. Four-argument calls and the wire
+stay compatible; legacy pulses retain independent observed snapshots until their normal expiry.
+
+`PW.Streaks.RetireRevealSource(token)` uses raw identity, including for tokens with an equality metamethod.
+Nil/unknown/repeated retirement is a no-op. Only a changed active contribution triggers human reset/replay;
+other UAV/scan pulses and Counter-UAV retain their original absolute deadlines. Replay uses copied positions
+observed at disclosure, never fresh hidden target positions. Known retired tokens reject late delivery.
+Bot delivery uses `PW.Bot.RetireStimulusSource` and source lifetime metadata; independent sight, hearing,
+damage, genuine shared knowledge and other active radar contributors survive (see [bot stimuli](bots-blackboard.md#stimuli)).
+The pulse store is capped at 128, expired records are pruned and source bookkeeping uses weak token keys.
+This is an additive API 1 extension, not a new position wire or a change to aim/reaction/search rules.
 
 ## Net messages
 
@@ -145,6 +161,14 @@ Pure functions on `PW.HUD`: `_StreakSquares(view, out) -> count`, `_StreakAnchor
 | `uav` | 3 / 300 | 30 s | Reveals the living enemies to the owner's side at activation and every 3 s; blips live 3.5 s |
 | `counter_uav` | 4 / 400 | 25 s | The owner's side is hidden from hostile reveals; hostile players get a jam notice |
 | `airstrike` | 5 / 500 | 4 s | The owner's aim point and direction fix a line. After a 2 s delay, 5 bombs 200 units apart explode, one every 0.3 s; each is `util.BlastDamage` of 220 within radius 300, attributed to the owner inside `StreakDamage` (it can hurt the owner) |
+| `directional_scan` | 2 / 200 | 1.5 s blips | One owner-facing 90-degree total cone, range 1800 and current LOS |
+| `ammo_cache` | 4 / 400 | 45 s | Allied ordinary reserve receipts within 160 and LOS; one magazine, three-magazine reserve cap, five-second cooldown, ten shared receipts |
+| `medical_station` | 5 / 500 | 30 s | Allied healing within 180 and LOS, five HP/s after five damage-free seconds; MAX overlap |
+| `ground_sensor` | 4 / 400 | 30 s | Range 600, elevation at most 128, current LOS; pulses every two seconds, 2.1-second source-owned blips |
+
+All four support entries have `Unlock = 1`, remain outside Pick X and award no support score/XP/money.
+The three physical devices have 100 HP; deployment, resource limits and lifecycle rules are in
+[support devices](support-devices.md).
 
 Bot rule: a bot uses UAV and Counter-UAV whenever it has them (`BotShouldUse` is always true). It uses an airstrike
 only when its aim point is at least 500 units away and an enemy stands within 450 (1.5 x radius) of that point.

@@ -2,8 +2,8 @@
 
 Status: frozen implementation contract for the approved K1–K4 slice (2026-11-08).
 The four content entries, transactional deployment, physical devices, support effects, HUD and native-input
-bot counterplay are implemented. Source-scoped sensor reveal retirement remains an unmet shared dependency;
-this document does not claim final acceptance or a green full-suite gate.
+bot counterplay and source-scoped human/bot radar retirement are implemented.
+This document does not claim final acceptance or a green full-suite gate.
 Existing [streaks](streaks.md), [role policy](role-policy.md) and [bots](bots-blackboard.md)
 contracts remain authoritative outside the additions below. No aircraft or lethal content is included.
 
@@ -18,11 +18,14 @@ All four entries have `Unlock = 1`; streak slots remain outside Pick X.
 | `medical_station` | Medical Station | 5 / 500 | 30 s | Radius 180, LOS, 5 HP/s after 5 s without damage; overlapping stations use maximum rate, not sum |
 | `ground_sensor` | Ground Sensor | 4 / 400 | 30 s | Radius 600, vertical difference at most 128, current LOS, pulse every 2 s, blip 2.1 s |
 
-Scans and sensors use `PW.Streaks.Viewer` and `PW.Reveal(viewer, targets, seconds, owner)`.
+Scans and sensors use `PW.Streaks.Viewer` and `PW.Reveal(viewer, targets, seconds, owner, sourceToken?)`.
 The shared reveal owner applies Counter-UAV and every target-concealment policy before **both**
 human packets and bot stimuli. Support content never implements an alternate position wire.
 Scan feedback is always generic (`SCAN ACTIVATED`); neither hidden nor empty results disclose counts.
 Sensor expiry/destruction removes its outstanding source-owned blips as well as stopping pulses.
+Each sensor uses its record as the opaque fifth source token and calls the public
+`PW.Streaks.RetireRevealSource(record)` on every retirement path. Same-owner UAV/CUAV and independent bot
+observations survive; support devices never access foreign reveal/perception stores.
 
 Physical devices have 100 HP and visible, valid stock models, with collision matching the visible footprint.
 They have a readable owner/kind/remaining-time marker. No foreign assets are copied.
@@ -153,6 +156,7 @@ Keep all mandatory T-4.6, T-6.6 and T-5.7 cases unchanged. Initial tests are in
 source-retirement regressions are in `streak_support_*.lua`; native counterplay and input safety are in
 `bots_support_native.lua` and `bots_support_safety.lua`. Pure cases supplement, not replace, engine placement,
 cleanup, input-combat and client-visible marker/feedback checks. No final passes, performance numbers or
-screenshots are claimed here. The real sensor-removal regression must remain enabled until source-only human
-and bot reveal cleanup preserves unrelated same-owner UAV/CUAV; owner-wide effect clearing is not compatible.
+screenshots are claimed here. Real sensor-removal and public bot-owner regressions cover source-only human/bot
+cleanup preserving unrelated same-owner UAV/CUAV, source expiry, immutable fallback, sharing and ordinary flash
+visibility. Owner-wide effect clearing is not a compatible substitute; these assertions remain mandatory.
 Human/P2P, controller, multilevel/indoor, optional-adapter and late-join checks remain manual until observed.

@@ -213,7 +213,7 @@ function lib.RetireRevealSource(token)
     local changed, now = false, s.clock()
     local pulses = s.pulses or {}
     for i = #pulses, 1, -1 do
-        if pulses[i].sourceToken == token then
+        if rawequal(pulses[i].sourceToken, token) then
             changed = changed or pulses[i].ends > now
             table.remove(pulses, i)
         end

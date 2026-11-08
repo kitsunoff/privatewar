@@ -40,6 +40,13 @@ function lib.Clear(state)
     state.recognisedTo = nil
 end
 
+function lib.HideSight(state)
+    for _, contact in pairs(state.memory) do
+        contact.visible = false
+        if contact.observed ~= nil then contact.observed.visible = false end
+    end
+end
+
 ---Puts a stimulus into the memory of a state; false when it lacks the entity or the position.
 ---@param state PW.BotPerceptionState
 ---@param kind string
@@ -264,7 +271,7 @@ local function retireRadar(contact, token)
     local radar, removed = contact.radar, 0
     if radar == nil then return 0 end
     for i = #radar, 1, -1 do
-        if radar[i].sourceToken == token then table.remove(radar, i) removed = removed + 1 end
+        if rawequal(radar[i].sourceToken, token) then table.remove(radar, i) removed = removed + 1 end
     end
     return removed
 end
@@ -275,7 +282,7 @@ end
 local function retirePending(pending, token)
     local removed = 0
     for i = #pending, 1, -1 do
-        if pending[i].radar and pending[i].sourceToken == token then
+        if pending[i].radar and rawequal(pending[i].sourceToken, token) then
             table.remove(pending, i)
             removed = removed + 1
         end
@@ -316,10 +323,7 @@ end
 function lib.Think(state, ctx, now)
     rollDelay(state, ctx, now)
     lib.QueuePush(state.queue, now, ctx.seen or {})
-    for _, contact in pairs(state.memory) do
-        contact.visible = false
-        if contact.observed ~= nil then contact.observed.visible = false end
-    end
+    lib.HideSight(state)
     deliverPending(state, now)
     ---@type PW.BotSighting[]
     local fresh = {}

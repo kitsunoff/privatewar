@@ -184,6 +184,17 @@ local function observation(ent, c, old)
     return entry
 end
 
+---@param ent any
+---@param c table
+---@param old PW.BotContact?
+---@return PW.BotContact
+local function snapshot(ent, c, old)
+    local entry = observation(ent, c, old)
+    entry.pos, entry.vel = Vector(entry.pos.x, entry.pos.y, entry.pos.z), Vector(entry.vel.x, entry.vel.y, entry.vel.z)
+    if entry.dir ~= nil then entry.dir = Vector(entry.dir.x, entry.dir.y, entry.dir.z) end
+    return entry
+end
+
 ---@param memory table<any, PW.BotContact>
 ---@param ent any
 ---@param view PW.BotContact
@@ -215,13 +226,12 @@ end
 local function rememberRadar(memory, ent, c)
     local old = memory[ent]
     local view = old ~= nil and old.radar ~= nil and old or observation(ent, c, old)
-    if view.radar == nil then view.radar, view.observed = {}, old end
+    if view.radar == nil then view.radar, view.observed = {}, old ~= nil and snapshot(ent, old, nil) or nil end
     local radar = assert(view.radar)
-    local entry = observation(ent, c, old)
-    entry.pos, entry.vel = Vector(entry.pos.x, entry.pos.y, entry.pos.z), Vector(entry.vel.x, entry.vel.y, entry.vel.z)
+    local entry = snapshot(ent, c, old)
     local replaced = false
     for i, previous in ipairs(radar) do
-        if previous.sourceToken == c.sourceToken then
+        if rawequal(previous.sourceToken, c.sourceToken) then
             if previous.time <= entry.time then radar[i] = entry end
             replaced = true
             break
@@ -243,7 +253,7 @@ function lib.Remember(memory, ent, c)
     if c.source == "radar" then return rememberRadar(memory, ent, c) end
     local old = memory[ent]
     if old ~= nil and old.radar ~= nil then
-        if old.observed == nil or old.observed.time <= c.time then old.observed = observation(ent, c, old.observed) end
+        if old.observed == nil or old.observed.time <= c.time then old.observed = snapshot(ent, c, old.observed) end
         return radarView(memory, ent, old, c.now or c.time, lib.Config.memorySeconds) or observation(ent, c, nil)
     end
     if old ~= nil and old.time > c.time then return old end

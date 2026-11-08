@@ -376,7 +376,7 @@ reveals enemies to a team's bots exactly as the radar shows them to humans.
 | --- | --- | --- |
 | `botOrTeam` | `Player` (a bot) or integer (a team index) | Who gets the stimulus |
 | `kind` | string | The kind of stimulus, see the list below |
-| `data` | table | `{ ent, pos, vel?, time?, dir? }` (below) |
+| `data` | table | `{ ent, pos, vel?, time?, dir?, sourceToken?, expiresAt? }`; the last two fields are optional server-only radar provenance |
 
 - Perception (`bots_perception`, T-5.7) receives it and adds it to the contact memory of the target bot or of every
   bot of the team (`PW.BotContact.source` = the kind).
@@ -397,6 +397,18 @@ Decided in code (T-5.7, `bots_perception`):
   (`PW.IsEnemy`) is dropped. A sound position is moved by an error of up to a tenth of the distance.
 - `PW.Bot.AddStimulus` returns the number of bots that took the stimulus (`0` for bad input; it never errors). A table
   in place of `kind` is the stimulus itself with its kind in the field `kind`.
+- For `"radar"`, optional `sourceToken` is an opaque table identity and `expiresAt` is an absolute `CurTime()`
+  deadline. `PW.Bot.RetireStimulusSource(token) -> integer` removes only matching radar evidence and pending
+  radar sharing; returns the removed contribution/message count. Nil/unknown/repeated calls do not clear unrelated
+  data. Retired known tokens reject late delivery. Ordinary callers without these fields keep existing behavior.
+- Radar overlays retain bounded, copied observations: removal/expiry falls back to another active radar source or
+  independent sight/hearing/damage/genuine team-shared evidence for the same entity. Genuine later sight survives.
+  Fallback never reads hidden live positions. Public board memory and contacts are updated synchronously on retirement.
+  Optional contact `sourceToken`/`expiresAt` describe the selected radar contribution, not permission to fire.
+- Sharing a radar-derived contact preserves its source and expiry through delayed delivery; it cannot become
+  permanent unretirable `"shared"` knowledge. Ordinary sight sharing remains unchanged. Radar sidecars stay capped
+  at 128 contributions per contact and decay with the existing contact lifetime; weak source tombstones do not
+  strongly retain tokens/entities forever. Provenance fields are perception-owned, not writable by consumers.
 - Hearing ranges, in units: gunfire 2500, suppressed 500, sprint footsteps 450, explosion 3500. A kind not listed is
   never heard. Sprint footsteps need a horizontal speed above 150.
 - Other numbers: field of view 110 degrees, sight range 4500, memory 12 s (fixed by `07 d.7`; `contact_memory` of a
