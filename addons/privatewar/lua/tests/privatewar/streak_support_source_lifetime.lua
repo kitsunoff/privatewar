@@ -255,6 +255,86 @@ return {
             end
         },
         {
+            name = "Source lifetime: fallback copies independent observations before radar can overlay them",
+            func = function()
+                local owner, target, state = scene()
+                local heard = Vector(10, 0, 0)
+                assert(PW.Bot).AddStimulus(owner, "gunfire", { ent = target, pos = heard })
+                now = 101
+                local token = {}
+                assert(PW.Reveal)(owner, { target }, 5, owner, token)
+                heard.x = 999
+                assert(assert(PW.Streaks).RetireRevealSource)(token)
+                expect(assert(state.memory[target]).pos.x).to.equal(10)
+            end
+        },
+        {
+            name = "Source lifetime: ordinary flash visibility suppression survives retirement of an overlaid radar",
+            func = function()
+                local owner, target, state = scene()
+                local token, p = {}, assert(PW.BotPerception)
+                assert(PW.Reveal)(owner, { target }, 5, owner, token)
+                now = 101
+                local params = p.ParamsFor(nil)
+                params.reaction_mean, params.reaction_floor, params.reaction_jitter = 0, 0, 0
+                p.Think(state, { params = params, seen = {
+                    [target] = { pos = Vector(42, 0, 0), vel = Vector() } } }, now)
+                assert(p.HideSight)(state)
+                assert(assert(PW.Streaks).RetireRevealSource)(token)
+                expect(assert(state.memory[target]).source).to.equal("sight")
+                expect(assert(state.memory[target]).visible).to.beFalse()
+            end
+        },
+        {
+            name = "Source lifetime: synchronous retirement updates public board contacts as well as memory",
+            func = function()
+                local owner, target, state = scene()
+                local token, bots = {}, assert(PW.Bot)
+                assert(PW.Reveal)(owner, { target }, 5, owner, token)
+                step(state)
+                local board = { contacts = state.contacts, memory = state.memory }
+                local original = assert(bots.Get)
+                stub(bots, "Get").with(function(who) if who == owner then return board end return original(who) end)
+                expect(#board.contacts).to.equal(1)
+                assert(assert(PW.Streaks).RetireRevealSource)(token)
+                expect(#board.contacts).to.equal(0)
+                expect(board.memory[target]).to.beNil()
+            end
+        },
+        {
+            name = "Source lifetime: legacy four-argument pulses retain independent observed bot snapshots",
+            func = function()
+                local owner, target, state = scene()
+                assert(PW.Reveal)(owner, { target }, 10, owner)
+                now, position = 101, Vector(200, 0, 0)
+                assert(PW.Reveal)(owner, { target }, 1, owner)
+                expect(assert(state.memory[target]).pos.x).to.equal(200)
+                now = 102
+                step(state)
+                expect(assert(state.memory[target]).pos.x).to.equal(100)
+                now = 110
+                step(state)
+                expect(state.memory[target]).to.beNil()
+            end
+        },
+        {
+            name = "Source lifetime: per-contact radar evidence stays capped while current contributors survive",
+            func = function()
+                local owner, target, state = scene()
+                local first = {}
+                assert(PW.Bot).AddStimulus(owner, "radar", { ent = target, pos = Vector(),
+                    sourceToken = first, expiresAt = 110 })
+                for i = 1, 129 do
+                    now = 100 + i * 0.001
+                    assert(PW.Bot).AddStimulus(owner, "radar", { ent = target, pos = Vector(i, 0, 0),
+                        sourceToken = {}, expiresAt = 110 })
+                end
+                expect(#assert(assert(state.memory[target]).radar)).to.equal(128)
+                assert(assert(PW.Bot).RetireStimulusSource)(first)
+                expect(assert(state.memory[target]).pos.x).to.equal(129)
+            end
+        },
+        {
             name = "Source lifetime: legacy and tokenized reveal use identical unchanged human wire",
             func = function()
                 local owner, target = scene()

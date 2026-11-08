@@ -163,6 +163,7 @@
 ---@field Think fun(state: PW.BotPerceptionState, ctx: PW.BotThinkCtx, now: number): PW.BotSighting[]
 ---@field RetireSource fun(sourceToken: table?, now: number): integer exact radar contributions, not ordinary memory
 ---@field RefreshContacts fun(state: PW.BotPerceptionState) rebuild the public list after synchronous retirement
+---@field HideSight fun(state: PW.BotPerceptionState) suppress visibility including independent radar-overlay baselines
 ---@field _KnownRadarSources table<table, boolean> weak tokens, never an unbounded strong entity registry
 ---@field _RetiredRadarSources table<table, boolean> weak tombstones reject late delivery while a token is retained
 
