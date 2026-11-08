@@ -52,7 +52,7 @@ return {
     end,
     afterEach = function()
         hook.Remove("Tick", key)
-        hook.Remove("StartCommand", key)
+        hook.Remove("SetupMove", key)
         hook.Remove("EntityFireBullets", key)
         devices().Clear()
         PW._Streaks = previous
@@ -93,7 +93,7 @@ return {
                 stub(bots, "Get").with(function(who) if who == bot then return board end return original(who) end)
                 local shots, commands, recognized, premature = 0, 0, false, false
                 local started, sampled = CurTime(), 0
-                hook.Add("StartCommand", key, function(who, cmd)
+                hook.Add("SetupMove", key, function(who, _, cmd)
                     if who == bot and bit.band(cmd:GetButtons(), IN_ATTACK) ~= 0 then commands = commands + 1 end
                 end)
                 hook.Add("EntityFireBullets", key, function(who)

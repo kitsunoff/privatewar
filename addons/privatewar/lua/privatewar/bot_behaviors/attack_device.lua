@@ -62,7 +62,7 @@ end
 
 ---@param bot Player
 ---@param ctx PW.BotBrainCtx
-local function release(bot, ctx)
+local function release(_, bot, ctx)
     if PW.BotDevices ~= nil then PW.BotDevices.ReleaseInput(bot) end
     local intent = ctx:Intent()
     intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD)))

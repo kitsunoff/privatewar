@@ -54,7 +54,13 @@ end
 ---@return PW.SupportDevice
 local function deploy(owner, kind)
     assert(streaks().Give)(owner, kind)
-    assert(assert(streaks().Use)(owner, kind), "deployment refused: " .. kind)
+    local accepted = assert(streaks().Use)(owner, kind)
+    if not accepted then
+        local _, reason = devices().Prepare(owner, kind)
+        print("[PW] support deployment refusal: " .. kind .. " reason=" .. tostring(reason)
+            .. " enabled=" .. tostring(devices().Enabled(kind)) .. " alive=" .. tostring(owner:Alive()))
+    end
+    assert(accepted, "deployment refused: " .. kind)
     for _, record in ipairs(devices().List()) do
         if record.owner == owner and record.kind == kind then return record end
     end

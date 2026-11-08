@@ -97,7 +97,7 @@ function MODULE:DamageDevice(entity, damage)
     local attacker = damage:GetAttacker()
     for _, record in ipairs(lib._Records) do
         if record.entity == entity then
-            local world = IsValid(attacker) and attacker:IsWorld()
+            local world = isentity(attacker) and attacker:IsWorld()
             local hostile = IsValid(attacker) and attacker:IsPlayer()
                 and PW.IsEnemy(attacker --[[@as Player]], record.owner)
             if not assert(PW.SupportStreaks).DamageAllowed(hostile, world) then return end

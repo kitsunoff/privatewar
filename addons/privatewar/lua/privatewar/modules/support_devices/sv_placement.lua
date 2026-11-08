@@ -66,6 +66,7 @@ function lib.Prepare(owner, kind)
     local point = owner:GetPos() + direction * 80
     local floor = util.TraceLine({ start = point + Vector(0, 0, 48), endpos = point - Vector(0, 0, 96),
         filter = owner, mask = MASK_PLAYERSOLID })
-    if not lib.Validate(owner, kind, floor.HitPos) then return nil, "placement" end
+    local valid, reason = lib.Validate(owner, kind, floor.HitPos)
+    if not valid then return nil, reason end
     return { position = floor.HitPos, angles = Angle() }
 end
