@@ -11,6 +11,7 @@
 ---Spawn points by team index. Teams are 1..N as in PW.Teams; 0 (PW.Map.AnyTeam) holds points of no team: FFA and
 ---deathmatch spawns, usable by every team.
 ---@alias PW.MapSpawns table<integer, PW.MapSpawn[]>
+---@alias PW.Points PW.MapSpawn[]
 
 ---An entry of the maps kind: lua/privatewar/maps/<id>.lua, data only (03-mapdata.md d.2). The id is the map name
 ---normalised by PW.Map.Id. No field is required: map data is optional (d.1).
@@ -56,6 +57,29 @@
 ---@field samples PW.MapSpawn[] the sampled fallback spawn points, any team
 ---@field eligible integer areas that passed the filters
 ---@field costMs number time of the sampling pass, milliseconds
+---@field supplements? PW.MapSpawn[] validated quality fallback; nil/empty means unavailable
+
+---@class PW.SpawnFallbackRules
+---@field minSpawns integer minimum detected count (legacy fallback below this)
+---@field diameter number maximum detected diameter, HU
+---@field farDistance number minimum distance from every detected point, HU
+---@field minCandidates integer minimum distinct validated far points
+---@field separation number minimum separation between supplements, HU
+---@field maxDetected integer maximum detected points checked
+---@field maxAreas integer maximum graph nodes
+---@field maxEdges integer maximum directed graph edges
+---@field maxCandidates integer maximum candidates checked
+---@field budgetMs number maximum cold validation time
+
+---@class PW.NavSpawnCandidate
+---@field point PW.MapSpawn
+---@field area integer projected nav area id
+---@alias PW.NavChoices PW.NavSpawnCandidate[]
+
+---@class PW.SpawnChecks
+---@field component table<integer, true> mutual component containing every detected anchor
+---@field clear PW.NavClear
+---@field rules PW.SpawnFallbackRules
 
 ---The hull clearance predicate of the sampler: whether a player fits at pos.
 ---@alias PW.NavClear fun(pos: Vector): boolean
@@ -99,8 +123,10 @@
 ---Server: spawn points of the current map by team index. Layers (03-mapdata.md d.3): the map file's Spawns when it
 ---has at least one valid point; otherwise the auto-detected spawn entities, and when those have fewer than
 ---_NavRules.minSpawns points in total the navmesh samples are added to the any-team (0) points (team points are
----kept). Empty when no layer has points. Do not modify the result.
----@field GetSpawns? fun(): PW.MapSpawns
+---kept). With >=8 compact detected points, cold-validated quality supplements may instead join team 0. firstTeam
+---suppresses only those new supplements when that team has detected points, preserving its original first pool.
+---Empty when no layer has points. Do not modify the result.
+---@field GetSpawns? fun(firstTeam?: integer): PW.MapSpawns
 ---Server: the auto-detected spawn points of the current map, cached once per map at InitPostEntity (collected on
 ---first use if the cache is empty). Do not modify the result.
 ---@field GetDetectedSpawns? fun(): PW.MapSpawns
@@ -117,8 +143,15 @@
 ---@field _CleanSpawns fun(raw: any): PW.MapSpawns, integer
 ---Internal, pure: the layered spawns: the cleaned map file spawns when they have a point; otherwise detected, with
 ---navSamples appended to team 0 when detected has fewer than minSpawns points (a new table; detected is not
----changed). Without navSamples or minSpawns: detected as it is.
----@field _Layer fun(file: any, detected: PW.MapSpawns, nav?: PW.MapSpawn[], minSpawns?: integer): PW.MapSpawns
+---changed). Otherwise appends validated supplements unless firstTeam has its own detected zone. With neither
+---legacy nor validated supplemental points: detected as it is. All legacy four-argument calls retain their result.
+---@field _Layer fun(f: any, d: PW.MapSpawns, n?: PW.Points, m?: integer, s?: PW.Points, t?: integer): PW.MapSpawns
+---@field _FallbackRules PW.SpawnFallbackRules cold quality-fallback bounds, not a map suitability guarantee
+---@field _SpawnClustered fun(detected: PW.MapSpawns, rules: PW.SpawnFallbackRules): boolean
+---@field _MutualNav fun(g: table<integer, integer[]>, a: integer[], r: PW.SpawnFallbackRules): table<integer, true>?
+---@field _SpawnSupplements fun(d: PW.MapSpawns, c: PW.NavChoices, v: PW.SpawnChecks): PW.Points
+---@field _LoadSupplements? fun(areas: CNavArea[], samples: PW.MapSpawn[]): PW.MapSpawn[] cold, cached by _LoadNav
+---@field _SupplementClear? fun(pos: Vector): boolean +8 standing hull and nearby brush support
 ---Server: the navmesh fallback spawn points of the current map (any team, about 200), sampled once after the map
 ---loaded; empty without a navmesh or before it was read. Do not modify the result.
 ---@field GetNavSamples? fun(): PW.MapSpawn[]

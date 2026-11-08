@@ -10,6 +10,7 @@
 -- The engine hook goes through PW.HookFor, so it runs only while the module is enabled (01-extensibility.md d.16).
 
 local lib = PW.Map --[[@as PW.MapLib]]
+include("privatewar/modules/mapdata/sv_spawn_quality.lua")
 
 ---The TeamNum keyvalue of a spawn entity (kept by the engine in the entity's datadesc), nil if not a number.
 ---@param ent Entity
@@ -46,6 +47,7 @@ end
 function lib._Refresh(reason)
     local detected = lib._Detect()
     PW._Map.detected = detected
+    if PW._Map.nav ~= nil then PW._Map.nav.supplements = nil end
     PW._Map.reason = reason
     return detected
 end
@@ -55,11 +57,13 @@ function lib.GetDetectedSpawns()
     return PW._Map.detected or lib._Refresh("on demand")
 end
 
+---@param firstTeam? integer preserve a real team's detected first-spawn zone on the new quality-fallback path
 ---@return PW.MapSpawns
-function lib.GetSpawns()
+function lib.GetSpawns(firstTeam)
     local entry = lib.Get()
+    local nav = PW._Map.nav
     return lib._Layer(entry ~= nil and entry.Spawns or nil, lib.GetDetectedSpawns(), lib.GetNavSamples(),
-        lib._NavRules.minSpawns)
+        lib._NavRules.minSpawns, nav ~= nil and nav.supplements or nil, firstTeam)
 end
 
 local navTriesMax = 5
@@ -111,11 +115,12 @@ function lib._LoadNav(opts)
     local data = {}
     for i, area in ipairs(areas) do data[i] = lib._ReadNavArea(area) end
     local samples, eligible = lib._NavSample(data, lib._NavRules, lib._HullClear)
+    local supplements = lib._LoadSupplements(areas, samples)
     local nav = { loaded = true, areas = areas, samples = samples, eligible = eligible,
-        costMs = (SysTime() - started) * 1000 }
+        costMs = (SysTime() - started) * 1000, supplements = supplements }
     PW._Map.nav = nav
-    log(string.format("map %s: navmesh %d areas, %d eligible, %d spawn samples, %.1f ms", game.GetMap(), #areas,
-        eligible, #samples, nav.costMs))
+    log(string.format("map %s: navmesh %d areas, %d eligible, %d spawn samples, %d quality supplements, %.1f ms",
+        game.GetMap(), #areas, eligible, #samples, #supplements, nav.costMs))
     return nav
 end
 
