@@ -27,7 +27,7 @@ function lib.ClearBlinds()
 end
 
 function lib.Blind(ply, strength)
-    if not IsValid(ply) then return false end
+    if not MODULE:IsValid() or not IsValid(ply) then return false end
     local resolved = PW.Stat ~= nil and PW.Stat(ply, "flash_strength", strength) or strength
     if resolved ~= resolved or resolved < lib.Flash.minStrength then return false end
     resolved = lib._DecodeStrength(lib._EncodeStrength(math.Clamp(resolved, 0, 1)))
@@ -51,7 +51,7 @@ function lib.Blind(ply, strength)
 end
 
 PW.HookFor(MODULE, "PostPlayerDeath", function(_, ply) lib.ClearBlind(ply) end)
-PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply) blinded[ply] = nil end)
+PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply) lib.ClearBlind(ply) end)
 hook.Add("PW_EntityDisabled", "PW.Throwables.Cleanup", function(kind, id)
     if kind == "modules" and id == "throwables" then lib.ClearBlinds() end
 end)

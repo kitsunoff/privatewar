@@ -51,6 +51,12 @@ local function store()
     return PW._Perks --[[@as PW.PerksStore]]
 end
 
+---@return boolean
+local function active()
+    local owner = PW.Modules ~= nil and PW.Modules.Get("perks") or nil
+    return owner ~= nil and owner:IsValid()
+end
+
 local weaponKeys = { "reload_time", "draw_time", "ads_time", "sprint_to_fire", "recoil", "spread" }
 
 ---@return string[]
@@ -108,6 +114,7 @@ local function sendMods(s, ply, mods)
 end
 
 function lib._Recompute(ply)
+    if not active() then return lib._Clear(ply) end
     local s = store()
     local stats = lib._Multiply(sourceLists(s, ply))
     s.stats[ply] = stats
@@ -138,6 +145,7 @@ function lib.Revoke(ply)
 end
 
 function lib.Refresh(ply, loadout)
+    if not active() then return lib.Revoke(ply) end
     if PW.Ask("PW_CanUseLoadoutKind", ply, "perks") == false then return lib.Revoke(ply) end
     local s = store()
     endPerks(s, ply)
@@ -149,8 +157,11 @@ function lib.Refresh(ply, loadout)
     for _, id in ipairs(lib._PerkIds(order, slots, loadout)) do
         local def = s.lookup(id)
         if def ~= nil then
-            entry.ids[#entry.ids + 1] = id
-            entry.instances[#entry.instances + 1] = PW.Instance(def, ply)
+            local instance = PW.Instance(def, ply)
+            if instance:IsValid() then
+                entry.ids[#entry.ids + 1] = id
+                entry.instances[#entry.instances + 1] = instance
+            end
         end
     end
     s.players[ply] = entry
