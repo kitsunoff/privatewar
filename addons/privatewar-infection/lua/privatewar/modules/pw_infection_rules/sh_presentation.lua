@@ -84,10 +84,13 @@ function lib.Results(rows, ownId)
     ---@type table<integer, boolean>
     local seen = {}
     for _, row in ipairs(rows) do
-        if not integer(row.id, 4294967295) or seen[row.id] or not isstring(row.name)
-            or not integer(row.wins, 255) or not integer(row.infections or 0, 65535) then return nil end
+        if not integer(row.id, 4294967295) or row.id < 1 or seen[row.id] or not isstring(row.name) or #row.name > 256
+            or not integer(row.wins, 255) or not integer(row.infections or 0, 65535)
+            or not integer(row.kills or 0, 65535) or not integer(row.deaths or 0, 65535)
+            or (row.bot ~= nil and not isbool(row.bot)) then return nil end
         seen[row.id] = true
-        clean[#clean + 1] = { id = row.id, name = row.name, wins = row.wins, infections = row.infections or 0 }
+        clean[#clean + 1] = { id = row.id, name = row.name, wins = row.wins, infections = row.infections or 0,
+            bot = row.bot == true, kills = row.kills or 0, deaths = row.deaths or 0 }
     end
     table.sort(clean, function(a, b)
         if a.wins ~= b.wins then return a.wins > b.wins end

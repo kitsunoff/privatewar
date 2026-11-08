@@ -1,6 +1,7 @@
 local lib = PW.Infection --[[@as PW.InfectionLib]]
 include("privatewar/modules/pw_infection_rules/sv_round.lua")
 include("privatewar/modules/pw_infection_rules/sv_snapshot.lua")
+include("privatewar/modules/pw_infection_rules/sv_results.lua")
 
 local dependencies = { pw_infection_rules = true, teams = true, loadout = true, operators = true,
     player_overrides = true, match_rules = true, lobby = true }
@@ -11,17 +12,24 @@ local dependencies = { pw_infection_rules = true, teams = true, loadout = true, 
 ---@param definition table
 hook.Add("PW_EntityDisabled", "PW.Infection.DisableCleanup", function(kind, id, definition)
     local s = lib.State
-    if s == nil then return end
-    local ownMode = kind == "modes" and definition == s.mode
+    local ownModule = kind == "modules" and id == "pw_infection_rules" and PW.Modules.Get(id) == definition
+    if s == nil and not ownModule then return end
+    local ownMode = s ~= nil and kind == "modes" and definition == s.mode
     local dependency = kind == "modules" and dependencies[id] and PW.Modules.Get(id) == definition
     if not ownMode and not dependency then return end
     local ok, err = pcall(lib.Clear)
     if not ok then print("[PW] infection disable cleanup: " .. tostring(err)) end
+    SetGlobal2Bool("pw_infection_results", false)
+    local reset, why = pcall(lib.ResetResults)
+    if not reset then print("[PW] infection terminal cleanup: " .. tostring(why)) end
 end)
 
 ---@param phase PW.PhaseName
 function MODULE:PW_PhaseChange(phase)
-    if phase == "LOBBY" or phase == "PREMATCH" then SetGlobal2Bool("pw_infection_results", false) end
+    if phase == "LOBBY" or phase == "PREMATCH" then
+        SetGlobal2Bool("pw_infection_results", false)
+        lib.ResetResults()
+    end
 end
 
 PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
@@ -32,6 +40,7 @@ PW.HookFor(MODULE, "PlayerInitialSpawn", function(_, ply)
     local generation = lib.State
     timer.Simple(1, function()
         if IsValid(ply) and lib.Active() and lib.State == generation then lib.Publish() end
+        if IsValid(ply) and assert(PW.Match).GetPhase() == "POSTMATCH" then lib.SendResults(ply) end
     end)
 end)
 

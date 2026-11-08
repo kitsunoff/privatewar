@@ -68,9 +68,11 @@ function lib.Start(mode)
         return false
     end
     lib.State = { mode = mode, completed = {}, actors = {}, identities = setmetatable({}, { __mode = "k" }),
-        lives = setmetatable({}, { __mode = "k" }), history = {}, userIds = {}, infections = {}, round = 0,
+        lives = setmetatable({}, { __mode = "k" }), history = {}, userIds = {}, metadata = {}, deathBaselines = {},
+        infections = {}, round = 0,
         playing = false, credited = false, zombie = true }
     SetGlobal2Bool("pw_infection_results", false)
+    lib.ResetResults()
     return true
 end
 
@@ -90,6 +92,7 @@ function lib.Prepare(round)
             local id = lib.Identity(ply)
             actors[id], s.history[id], s.identities[ply] = ply, ply, id
             s.userIds[id] = ply:UserID()
+            lib.CaptureResultMetadata(ply)
             roster[#roster + 1] = { id = id, bot = ply:IsBot(), life = (s.lives[ply] or 0) + 1 }
         end
     end
@@ -158,6 +161,7 @@ function lib.Disconnect(ply)
     if s == nil or s.current == nil then return end
     local id = s.identities[ply]
     if id == nil or s.actors[id] ~= ply then return end
+    lib.CaptureResultMetadata(ply)
     rules.Disconnect(s.current, id, CurTime())
     if s.current.winner ~= nil then s.playing = false end
     lib.Publish()
@@ -180,6 +184,7 @@ end
 function lib.Result()
     local s = assert(lib.State)
     local summary = rules.Summary(s.completed)
+    lib.PublishResults(summary)
     ---@type PW.Standing[]
     local standings = {}
     for _, row in ipairs(summary.standings) do

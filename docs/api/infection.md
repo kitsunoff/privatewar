@@ -68,10 +68,24 @@ UserID. At result publication the addon maps identities back to current actors o
 for departed participants; it never calls a method on a departed invalid player.
 
 `PW.InfectionPresentation.Results(rows, ownId)` is the addon-owned pure final presenter. It copies and
-allowlists public row identity/name, wins and informational infections, ranks by wins alone, and assigns
-shared places to ties. Infection count never decides a tie. The ordinary postmatch UI still needs an
-approved generic data-extension seam before this presenter can replace its kill-based FFA ordering;
-the addon does not wrap that UI or award artificial score/XP to work around the missing integration.
+allowlists public row identity/name, wins, public final K/D and informational infections, ranks by wins
+alone, and assigns shared places to ties. Infection count never decides a tie. The addon consumes
+`PW_PostmatchGathered` to replace only its result, sections and `ROUND WINS` metric label. It does not
+wrap UI functions or award artificial score/XP. Ordinary modes keep their existing ordering and labels.
+
+`pw_infection_results` is a separate server-to-client terminal-only channel. It retains copied public
+metadata for departed participants, not stale player entities. A reconnect's association to its historical
+row is supplied by the server; an unadmitted late viewer has association 0. SteamIDs remain server-only.
+The same revision and complete row set are used for both initial and late delivery. Packets carry at most
+64 rows, each name at most 256 bytes (long names use a safe fallback without UTF-8 slicing); total metadata
+is bounded to 4096 rows. Header: revision 32 bits, active bool, recipient association 32 bits, total and
+offset 13 bits each, chunk length 7 bits. Rows: UserID 32 bits, string name, bot bool, wins 8 bits,
+infections/kills/deaths 16 bits each. Only a complete contiguous same-generation assembly becomes visible;
+stale, duplicate, gapped or inconsistent chunks cannot mix revisions or resurrect cleared results.
+
+The final cache survives normal mode Cleanup for POSTMATCH/late join, and is cleared on the next lobby,
+prematch/new match or rules-owner disable. `PW_PostmatchDataChanged` rebuilds an already open summary
+when a complete terminal snapshot arrives late. No per-frame Gather loop or hidden live information is added.
 
 ## Tests and limitations
 
@@ -80,6 +94,9 @@ the addon does not wrap that UI or award artificial score/XP to work around the 
 - `infection_runtime.lua`: preset, fists adapter, roster validation, codec/tombstone and legal contacts.
 - `infection_lifecycle.lua`: installed common-loop integration, spawn ordering, admission, role stats,
   model fallback, intermission, disabled/missing owners and cleanup.
+- `infection_results.lua`: bounded terminal codec/assembly, departed identities and reconnect binding,
+  authoritative personal ordering and optional owner admission into the generic Gather extension.
+- `ui_postmatch_extension.lua`: actual client Gather paths and event-driven late-root rebuild.
 - `infection_melee_smoke.lua`: real-engine legal-sight pursuit, movement and two native fist hits through
   the ordinary writer. Initial placement and a stationary durable target are fixture setup only; the
   measured actor receives no forced target, scripted attack, injected damage or teleport.
@@ -88,5 +105,6 @@ the addon does not wrap that UI or award artificial score/XP to work around the 
 
 Source presence, not successful API registration, determines optional-addon test absence. A mounted
 broken implementation fails. No automated suite substitutes for the human HUD, gameplay or P2P checkpoint.
-The full game gate currently has one generic bot MatchEnd reset failure. POSTMATCH integration and the
-removal-between-startups matrix are not yet verified. LIVE HUD inspection does not pass a human checkpoint.
+The removal-between-startups matrix remains unverified without a separate authorized restart. Prior
+source-absent baseline evidence is distinct from a disabled-addon test. Agent image inspection does not
+pass a human checkpoint.

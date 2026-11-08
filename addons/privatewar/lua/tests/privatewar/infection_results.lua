@@ -26,12 +26,71 @@ return {
     groupName = "PW Infection terminal snapshot integration",
     beforeEach = function(state)
         state.terminal = PW.Infection ~= nil and PW.Infection.Terminal or nil
+        if PW.Infection ~= nil then
+            state.infection, state.cache = PW.Infection.State, PW.Infection.ResultCache
+        end
+        state.flag = GetGlobal2Bool("pw_infection_results", false)
     end,
     afterEach = function(state)
         hook.Remove("PW_PostmatchGathered", listener)
-        if PW.Infection ~= nil then PW.Infection.Terminal = state.terminal end
+        if PW.Infection ~= nil then
+            PW.Infection.Terminal, PW.Infection.State, PW.Infection.ResultCache = state.terminal,
+                state.infection, state.cache
+        end
+        SetGlobal2Bool("pw_infection_results", state.flag)
     end,
     cases = {
+        {
+            name = "Infection server results: departed identity survives cleanup"
+                .. " and reconnect receives its own binding",
+            skip = absent,
+            func = function()
+                local lib, rules = must(PW.Infection), must(PW.InfectionRules)
+                local hostId, botId = "human:76561198000000001", "bot:8"
+                local departed = { IsValid = function() return false end,
+                    UserID = function() error("departed player method") end } --[[@as Player]]
+                local appearance = { model = "", colour = Vector() }
+                local actor = { IsValid = function() return true end, IsPlayer = function() return true end,
+                    IsBot = function() return true end, Team = function() return 1 end,
+                    SetModel = function(_, path) appearance.model = path end,
+                    SetPlayerColor = function(_, colour) appearance.colour = colour end,
+                    UserID = function() return 8 end, Nick = function() return "Bot" end,
+                    Deaths = function() return 0 end } --[[@as Player]]
+                local reconnect = { IsBot = function() return false end, UserID = function() return 700 end,
+                    SteamID64 = function() return "76561198000000001" end } --[[@as Player]]
+                local round = must(rules.NewRound({ { id = hostId, bot = false, life = 1 },
+                    { id = botId, bot = true, life = 1 } }, hostId, 120))
+                rules.Death(round, botId, 1, 1)
+                lib.State = { mode = must(PW.Modes.Get("pw_infection")) --[[@as PW.RoundBase]],
+                    current = round, completed = { round }, actors = {}, identities = { [actor] = botId },
+                    history = { [hostId] = departed, [botId] = actor }, userIds = { [hostId] = 7, [botId] = 8 },
+                    lives = {}, infections = {}, metadata = { [hostId] = { id = 7, name = "Departed",
+                        wins = 0, infections = 0, kills = 0, deaths = 1, bot = false } }, deathBaselines = {},
+                    round = 1, playing = false, credited = true, zombie = true }
+                stub(player, "GetHumans").with(function() return {} end)
+                local result = lib.Result()
+                expect(result.winner).to.equal(7)
+                local cached = must(lib.ResultCache)
+                expect(#cached.rows).to.equal(2)
+                expect(cached.identities[hostId]).to.equal(7)
+                lib.Clear() -- final cache must not depend on a live mode roster
+                expect(lib.State).to.beNil()
+                ---@type PW.InfectionResultChunk[]
+                local received = {}
+                stub(net, "Start").with(function() end)
+                stub(net, "Send").with(function(ply) expect(ply).to.equal(reconnect) end)
+                stub(must(PW.InfectionPresentation), "EncodeResults").with(function(_, packet)
+                    received[#received + 1] = packet
+                    return true
+                end)
+                lib.SendResults(reconnect)
+                expect(#received).to.equal(1)
+                expect(received[1].ownId).to.equal(7)
+                expect(received[1].rows[1].name).to.equal("Departed")
+                expect(received[1].rows[1].wins).to.equal(1)
+                expect(rawget(received[1], "identities")).to.beNil()
+            end
+        },
         {
             name = "Infection results: only complete same-generation chunks publish;"
                 .. " stale gaps duplicate ids fail closed",

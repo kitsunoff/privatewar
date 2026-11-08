@@ -1253,6 +1253,17 @@ pause menu from the summary; `PW.UI.OpenPostmatch()` opens the root. Deaths coun
 (the engine counter is not reset between matches) and the currency is the wallet difference since LIVE; both baselines
 are taken at the `LIVE` phase.
 
+Additive presentation extensions (API 1): `PW_PostmatchGathered(data: PW.UIPostmatchData, ownId: integer)`
+is a client notification exactly once at the end of every Gather, including progression-disabled and
+summary-pending paths. Listeners return nothing and may replace presentation result/sections/subtitle or
+metric fields from authoritative received data; they do not award score, XP or currency. Missing/disabled
+listeners preserve ordinary presentation. `data.scoreLabel` is optional; nil keeps the `SCORE` column label.
+
+An extension receiving late authoritative data may notify `PW_PostmatchDataChanged()`. The client rebuilds
+only an enabled, currently open POSTMATCH root. It never opens a dismissed root, replaces another root,
+rebuilds outside POSTMATCH, or gathers every frame. Integration tests execute the actual client Gather
+and event handlers in an isolated engine boundary: `ui_postmatch_extension.lua`.
+
 ### Behaviour
 
 - The root (kind `postmatch`, one tab SUMMARY) opens at the `POSTMATCH` phase (replacing a pause menu or class picker)

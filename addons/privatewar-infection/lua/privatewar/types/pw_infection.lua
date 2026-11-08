@@ -145,8 +145,8 @@
 ---@field lives table<Player, integer> per-entity new-life generation, weak keys
 ---@field history table<string, Player> last entity of each participant for final standings
 ---@field userIds table<string, integer> safe result identity for departed participants
----@field metadata? table<string, PW.InfectionResultRow> copied public identity/stat metadata for departed rows
----@field deathBaselines? table<string, integer>
+---@field metadata table<string, PW.InfectionResultRow> copied public identity/stat metadata for departed rows
+---@field deathBaselines table<string, integer>
 ---@field infections table<string, integer> informational counters, never score events
 ---@field previous? string previous seed identity
 ---@field round integer
@@ -177,6 +177,7 @@
 ---@field ResetResults fun()
 ---@field PublishResults fun(summary: PW.InfectionSummary)
 ---@field SendResults fun(ply: Player)
+---@field CaptureResultMetadata fun(ply: Player)
 ---@field Identity fun(ply: Player): string
 ---@field Role fun(ply: Player): PW.InfectionRole?
 ---@field Active fun(): boolean
