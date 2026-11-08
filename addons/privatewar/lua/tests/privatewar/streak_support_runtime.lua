@@ -4,6 +4,8 @@ local key = "PW.SupportRuntimeTest"
 local actors = {}
 ---@type PW.StreaksStore?
 local previous
+---@type PW.SupportDevice[]
+local retired = {}
 
 ---@return PW.DevicesLib
 local function devices() return assert(PW.Devices) end
@@ -61,11 +63,22 @@ end
 
 ---@param record PW.SupportDevice
 local function removed(record)
-    assert(not IsValid(record.entity), "owned entity survived cleanup")
+    assert(not IsValid(record.entity) or record.entity:IsMarkedForDeletion(), "owned entity was not retired")
     assert(not record.instance:IsValid(), "activation survived cleanup")
     assert(assert(streaks()._Instances)[record.instance] == nil, "streak owner retained ended activation")
     for name in pairs(record.instance._Timers) do assert(not timer.Exists(name), "instance timer survived cleanup") end
     for _, live in ipairs(devices().List()) do assert(live ~= record, "device registry retained removed resource") end
+    retired[#retired + 1] = record
+end
+
+---@param complete fun()
+local function finish(complete)
+    timer.Simple(0.05, function()
+        for _, record in ipairs(retired) do
+            assert(not IsValid(record.entity), "owned entity survived engine deletion")
+        end
+        complete()
+    end)
 end
 
 ---@param now number
@@ -77,6 +90,7 @@ end
 local cases = {
     {
         name = "Devices engine: all three visible stock models have physical collision and one hundred health",
+        async = true,
         func = function()
             local owner = fixture()
             for _, kind in ipairs({ "ammo_cache", "medical_station", "ground_sensor" }) do
@@ -89,10 +103,12 @@ local cases = {
                 devices().Remove(record)
                 removed(record)
             end
+            finish(done)
         end
     },
     {
         name = "Devices engine: occupied footprint and duplicate kind refuse without spending inventory",
+        async = true,
         func = function()
             local owner, plan = fixture()
             local obstacle = ents.Create("prop_physics")
@@ -104,6 +120,7 @@ local cases = {
             obstacle:Remove()
             expect(accepted).to.beFalse()
             expect(streaks().Inventory(owner)).to.deepEqual({ "ammo_cache" })
+            finish(done)
             expect(assert(streaks().Use)(owner, "ammo_cache")).to.beTrue()
             assert(streaks().Give)(owner, "ammo_cache")
             expect(assert(streaks().Use)(owner, "ammo_cache")).to.beFalse()
@@ -112,14 +129,17 @@ local cases = {
     },
     {
         name = "Devices engine: absolute expiry removes entity activation and every instance timer",
+        async = true,
         func = function()
             local record = deploy(fixture(), "ground_sensor")
             maintain(record.ends)
             removed(record)
+            finish(done)
         end
     },
     {
         name = "Devices engine: death retains allegiance; relationship and disconnect notifications clean resources",
+        async = true,
         func = function()
             local owner = fixture()
             local record = deploy(owner, "ground_sensor")
@@ -133,10 +153,12 @@ local cases = {
             record = deploy(owner, "ground_sensor")
             hook.Run("PlayerDisconnected", owner)
             removed(record)
+            finish(done)
         end
     },
     {
         name = "Devices engine: round match map and exact-definition disable cleanup retain unused ordinary inventory",
+        async = true,
         func = function()
             local owner = fixture()
             local record = deploy(owner, "ammo_cache")
@@ -144,6 +166,7 @@ local cases = {
             PW.Call(assert(PW.Modules.GetStored("streaks")), "PW_RoundPreparing")
             removed(record)
             expect(streaks().Inventory(owner)).to.deepEqual({ "medical_station" })
+            finish(done)
             record = deploy(owner, "ground_sensor")
             PW.Notify("PW_EntityDisabled", "streaks", "ground_sensor", record.instance._Definition, "test cleanup")
             removed(record)
@@ -158,6 +181,7 @@ local cases = {
     },
     {
         name = "Devices engine: friendly damage is ignored and world destruction awards no support score",
+        async = true,
         func = function()
             local owner = fixture()
             local record = deploy(owner, "ground_sensor")
@@ -168,6 +192,7 @@ local cases = {
             record.entity:TakeDamage(200, game.GetWorld(), game.GetWorld())
             removed(record)
             expect(awards).to.equal(0)
+            finish(done)
         end
     },
     {
@@ -253,6 +278,7 @@ return {
     groupName = "PW support engine resources",
     beforeEach = function()
         previous = PW._Streaks
+        retired = {}
         devices().Clear()
         PW._Streaks = assert(streaks()._NewStore)({
             lookup = function(id) return assert(PW.Registries.streaks).Get(id) --[[@as PW.Streak?]] end,

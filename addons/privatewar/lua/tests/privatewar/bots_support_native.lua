@@ -92,7 +92,7 @@ return {
                 local original = assert(bots.Get)
                 stub(bots, "Get").with(function(who) if who == bot then return board end return original(who) end)
                 local shots, commands, recognized, premature = 0, 0, false, false
-                local started = CurTime()
+                local started, sampled = CurTime(), 0
                 hook.Add("StartCommand", key, function(who, cmd)
                     if who == bot and bit.band(cmd:GetButtons(), IN_ATTACK) ~= 0 then commands = commands + 1 end
                 end)
@@ -104,6 +104,16 @@ return {
                 end)
                 hook.Add("Tick", key, function()
                     if assert(PW.BotDevices).Contact(bot) ~= nil then recognized = true end
+                    if IsValid(record.entity) and CurTime() >= sampled then
+                        sampled = CurTime() + 2
+                        local eye, point = bot:EyePos(), record.entity:WorldSpaceCenter()
+                        local tr = util.TraceLine({ start = eye, endpos = point, filter = bot, mask = MASK_VISIBLE })
+                        local fov = assert(PW.BotDevices).Perceivable(eye, bot:GetAimVector(), point, 1800, 110, true)
+                        print(string.format("[PW] support probe: phase=%s enemy=%s fov=%s los=%s distance=%.1f",
+                            tostring(PW.BotScheduler.GetPhase("devices:" .. bot:UserID())),
+                            tostring(PW.IsEnemy(bot, owner)), tostring(fov),
+                            tostring(tr.Entity == record.entity or tr.Fraction >= 0.99), eye:Distance(point)))
+                    end
                     if IsValid(record.entity) and CurTime() - started < 23 then return end
                     hook.Remove("Tick", key)
                     print(string.format("[PW] support native: sight=%s bullets=%d commands=%d destroyed=%s behavior=%s",

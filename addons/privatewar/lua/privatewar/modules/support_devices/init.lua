@@ -55,7 +55,14 @@ function lib.Remove(record)
     for i, held in ipairs(lib._Records) do
         if held == record then
             table.remove(lib._Records, i)
-            if IsValid(record.entity) then record.entity:Remove() end
+            if IsValid(record.entity) then
+                -- Remove is deferred by the engine; retirement must stop collision in this same transaction.
+                record.entity:SetNotSolid(true)
+                record.entity:SetSolid(SOLID_NONE)
+                record.entity:PhysicsDestroy()
+                record.entity:SetNoDraw(true)
+                record.entity:Remove()
+            end
             record.instance.Device = nil
             local streaks = PW.Streaks
             if streaks ~= nil and streaks._Instances ~= nil then streaks._Instances[record.instance] = nil end
