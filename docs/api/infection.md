@@ -5,20 +5,21 @@ The declarations ship with the addon in `lua/privatewar/types/pw_infection.lua`.
 An absent addon leaves `PW.Infection`, `PW.InfectionRules`, `PW.InfectionAI` and
 `PW.InfectionPresentation` absent. Do not require them from ordinary content.
 
-## Approved playtest revision — runtime implemented, acceptance pending
+## Approved playtest revision — first native hit and survivor distance
 
 The 2026-11-08 revision to `02-modes.md` d.8 replaces death-required native-melee conversion with immediate
 first-hit conversion. The native-hit smoke observed RED before implementation: the first real fist hit
 left the target a survivor. Pure touch and survivor-policy/escape cases also observed RED. The runtime
-now implements the revision. After the session was restored, the scoped installed-game gate passed
-98/0/0, including native first-hit conversion and the corrected death-credit policy. The expanded real
-survivor movement/fire smoke and the full regression/visual gates remain pending; the shared host became
-unavailable again before the latest supported-corridor fixture could run. There is no final acceptance claim.
+now implements the revision. The scoped installed-game gate passes 99/0/0, including native first-hit
+conversion, the corrected death-credit policy and real survivor retreat with native gunfire while moving.
+Fresh-client before/after role views were inspected; a native hit changed the human to 400 HP, fists and
+the zombie player model with zero death/spawn, position/velocity delta or control change. The normal full
+regression and independent review gates remain required. Agent inspection does not pass a human checkpoint.
 
 The existing generic `match_rules` `EntityTakeDamage` boundary asks
 `PW_CanTakeDamage(target, attacker, damage)`. A false answer cancels damage before a lethal hit can kill.
-No new generic damage hook or foreign function wrapper is currently required. The intended mode veto
-must establish the actual owned native `weapon_fists` inflictor, attacker/current life, positive finite
+No new generic damage hook or foreign function wrapper is required. The mode veto
+establishes the actual owned native `weapon_fists` inflictor, attacker/current life, positive finite
 hit damage and an admitted living enemy before changing roles. Merely holding fists is not provenance.
 The current [upstream stock fists](https://github.com/Facepunch/garrysmod/blob/master/garrysmod/lua/weapons/weapon_fists.lua)
 supply a weapon inflictor and use default `DMG_GENERIC`; requiring `DMG_CLUB` would reject real punches.
@@ -56,6 +57,7 @@ conversion but credits only accepted live native contact; the case subsequently 
 | Mode | `pw_infection` | Child of `round_base`, role policies and terminal personal-result transform |
 | Module | `pw_infection_rules` | Pure rules, server roster and revisioned private-to-recipient snapshots |
 | Behavior | `pw_infection_pursuit` | Infected legal-contact pursuit through normal goal/aim/input APIs |
+| Behavior | `pw_infection_escape` | Survivor bounded local retreat and legal independent aim/fire |
 | Adapter | `pw_infection_fists` | Native fists release-between-shots input rule; never changes damage |
 | HUD | `pw_infection_status` | Own role, counts, timer, personal wins and informational infections |
 
@@ -134,16 +136,16 @@ when a complete terminal snapshot arrives late. No per-frame Gather loop or hidd
 ## Tests and limitations
 
 - `mode_infection.lua`: optional source boundary, seed, conversion, exact outcomes and personal standings.
-- New prepared `Touch` cases distinguish live contact conversion from retained world/suicide death policy;
+- `Touch` cases distinguish live contact conversion from retained world/suicide death policy;
   they cover same-life deduplication, invalid participants, strict deadline and initial-seed-only wins.
 - `infection_presentation.lua`: generic operator override and allowlisted snapshot decisions.
 - `infection_runtime.lua`: preset, fists adapter, roster validation, codec/tombstone and legal contacts.
 - `infection_lifecycle.lua`: installed common-loop integration, spawn ordering, admission, role stats,
   model fallback, intermission, disabled/missing owners and cleanup.
-  Prepared first-hit cases use the actual generic damage-owner callback for nonlethal bot and lethal human
+  First-hit cases use the actual generic damage-owner callback for nonlethal bot and lethal human
   hits, provenance rejection, live-state preservation, public revocation/cached stats, role admission and
   once-only terminal results. The prior death/respawn fixtures remain for the unchanged fallback policy.
-- `infection_escape.lua`: prepared registered-Action contracts for survivor retreat, retained legal aim,
+- `infection_escape.lua`: registered-Action contracts for survivor retreat, retained legal aim,
   dry/reloading weapons, bounded blocked-navigation handling, perceived-only admission and owned cleanup.
 - `infection_results.lua`: bounded terminal codec/assembly, departed identities and reconnect binding,
   authoritative personal ordering and optional owner admission into the generic Gather extension.
@@ -153,9 +155,12 @@ when a complete terminal snapshot arrives late. No per-frame Gather loop or hidd
   This explicitly supersedes the old two-applied-damage-hit premise, not legal-input/pursuit assertions.
   Initial placement and a stationary target are fixture setup only; the measured attacker receives no
   forced target, scripted attack, injected damage or teleport. The revised smoke observed RED before
-  implementation, then passed after implementation. The additional real-survivor case requires actual
-  survivor-owned displacement, attack while moving and native gun damage; its latest fixture selects a
-  supported local retreat corridor instead of a blocked roof edge. That expanded smoke is not yet GREEN.
+  implementation, then passed after implementation. The additional real-survivor case passes actual
+  survivor-owned displacement, attack while moving and native gun damage; its fixture selects a supported
+  local retreat corridor instead of a blocked roof edge. Opponent knockback cannot satisfy its movement
+  assertion. The measured actor has no forced contact, target, attack, aim override or scripted movement.
+  Both native cases restore their state and use public coroutine frame boundaries to wait for every exact
+  owned bot identity to disconnect, including when an assertion fails, before the next case may allocate.
 - Generic cases remain mandatory with the addon absent: `teams_transition.lua`, `player_overrides.lua`,
   `infection_role_transition.lua`, `role_policy.lua` and `bots_tactics_reset.lua`.
 

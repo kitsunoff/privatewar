@@ -40,11 +40,12 @@ The root GPL-3.0-or-later license applies; no third-party code or assets are bun
 
 ## Verification status
 
-The first-hit/survivor-distance runtime above has been implemented after a newly observed native-hit RED,
-and passed the scoped installed-game gate (98/0/0), including first-hit conversion and death-credit rejection.
-The expanded real-survivor movement/fire smoke, full regression gate and fresh-client visual verification
-are still pending: the shared game session became unavailable again. No final acceptance is claimed.
-Do not treat the previous death-conversion/two-hit smoke results as acceptance of this revision.
+The first-hit/survivor-distance revision was implemented after newly observed RED and passes the scoped
+installed-game gate (99/0/0), including first-hit conversion, death-credit rejection and actual survivor
+retreat with native gunfire while moving. Fresh-client before/after role views were inspected by the agent;
+the same contact preserved life, position, momentum and control while applying 400 HP, fists and the zombie
+player model. The normal full regression and independent review gates remain required before acceptance.
+Historical death-conversion/two-hit results are not used as acceptance evidence for this revision.
 
 Previously installed lifecycle and native-fists checks covered both roles and rollback. The POSTMATCH screen
 uses authoritative personal round wins, shared placements and a `ROUND WINS` score column, including
