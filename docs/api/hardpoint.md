@@ -50,6 +50,36 @@ The additional mode scope is authorized separately; this draft does not modify `
 Declarations: `addons/privatewar/lua/privatewar/types/hardpoint.lua`.
 `PW.Hardpoint` is optional, supplied by module `hardpoint`.
 
+### Playtest guidance and pressure extension
+
+The screen waypoint uses only the accepted current-zone snapshot, never a future zone or hidden actor data.
+`ProjectWaypoint(right, up, forward, fov, width, height, out)` is pure camera-space projection with reusable output.
+Onscreen bearings project normally; offscreen and behind bearings intersect a central HUD-safe rectangle and carry
+a directional arrow angle. Exact-behind has a finite turn cue. Invalid coordinates hide and reset the output.
+`Guidance(snapshot, phase, mode, playerVisible, ownTeam, distance, out)` returns the current zone id, relative control
+palette token, `capture` / `defend` / `contested` label key and nearest-metre distance (Source units times 0.0254).
+It hides outside active LIVE Hardpoint or for a dead, observing or nonparticipating viewer. The client confirms the
+published HP score prefix in addition to the active snapshot, so a stale snapshot cannot appear in another mode.
+HUD strings, fonts and polygons are prepared outside paint; the waypoint does not use depth/occlusion traces.
+Existing score clocks and the optional world marker remain. Client visual acceptance is separate from pure math.
+
+The coordinator-frozen generic objective extension is `PW.BotObjective.urgency?: number`, finite and clamped 0..1.
+Absent, mistyped or nonfinite urgency means the exact legacy behavior; malformed urgency never discards an otherwise
+valid objective. The sanitized field passes through commander orders and local resolution without enemy metadata.
+HP emits 1 for an empty, enemy-controlled or contested point, or while behind; a friendly leading hold emits 0.5.
+Only the current visit is eligible. Opt-in objective rank 31 beats ordinary combat/chase rank 30, never survival 40.
+A recognized visible threat at or within 400 units yields to ordinary combat, including during the cached rank
+interval. Distant recognized contacts remain legal aim targets during objective movement through `ctx:SetTarget`;
+the normal aim/fire/reaction/flash policy still decides whether a shot is allowed. No enemy contacts are invented.
+Urgent travel releases a suspended direct strafe drive, avoids sprinting while aiming at a recognized enemy, and
+does not chase distant enemies out of the active point. Non-opt-in DOM/KC/S&D selection remains unchanged.
+
+Test-first native scope before implementation: 1 passed / 12 failed / 0 skipped across the initial 13 guidance and
+pressure cases. A separate cached-near-threat regression was observed RED (7/1/0) before the safety correction.
+The team smoke adds three teammates through ordinary LIVE engine spawns and the public board-provider seam;
+at least two must hold both visits for 2 seconds, move through actual CUserCmd and travel more than 64 units.
+It is team movement evidence, not opposing-team combat, all-zone fairness or a human playtest checkpoint.
+
 | Surface | Contract |
 | --- | --- |
 | `Inside`, `Presence`, `ScoreDelta` | Pure finite cylinder/eligible actor reduction; score once per team tick, never per occupant. Presence has control/contest only, not a public member list. |

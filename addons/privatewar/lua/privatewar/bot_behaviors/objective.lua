@@ -216,6 +216,10 @@ function BEHAVIOR:Update(_, ctx)
     releaseUse(ctx)
     local target = resolve(ctx)
     if target == nil then return PW.BotBrain.Done("objective gone") end
+    -- Rank is cached for 0.5s. A recognized enemy can approach inside that interval without a new-sight nudge.
+    if (target.urgency or 0) > 0 and not urgent(target, ctx) then
+        return PW.BotBrain.Done("recognized near threat")
+    end
     if interact[target.action] then
         if ctx.state ~= nil then ctx.state.id, ctx.state.revision = target.id, target.revision end
         return use(ctx, target)
