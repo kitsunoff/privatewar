@@ -80,6 +80,15 @@ The team smoke adds three teammates through ordinary LIVE engine spawns and the 
 at least two must hold both visits for 2 seconds, move through actual CUserCmd and travel more than 64 units.
 It is team movement evidence, not opposing-team combat, all-zone fairness or a human playtest checkpoint.
 
+Current playtest-fix evidence: the focused native suite passes **49 / 0 / 0** across 6 groups, including 7 screen
+geometry/policy cases, 8 pressure cases, the original smoke, the new team smoke and legacy DOM/KC/S&D contracts.
+Original smoke holds 11.1 / 2.0 seconds with 977 movement commands and 2381 units of displacement; the team smoke
+records multiple participants completing both visits through ordinary input. Static checks pass, including all
+gate/package/export selftests. This is not full acceptance: the subsequent unfiltered 480-second attempt produces
+no final summary after core bot-allocation failures and host reliable-buffer overflow/disconnect at `PW.Instance`.
+No engine-hang cause or Hardpoint causation is inferred. Fresh-client wall/offscreen/behind visual inspection and
+a completed full native suite remain pending; pure geometry tests are not a substitute for the client inspection.
+
 | Surface | Contract |
 | --- | --- |
 | `Inside`, `Presence`, `ScoreDelta` | Pure finite cylinder/eligible actor reduction; score once per team tick, never per occupant. Presence has control/contest only, not a public member list. |
