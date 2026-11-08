@@ -11,6 +11,11 @@ jamming, `cl_init.lua` keys and radar data). Kind: `kinds/streaks.lua`. Streaks:
 
 ## Kind `streaks`
 
+The approved K1–K4 addition is frozen separately in [support devices](support-devices.md).
+That tests-first contract covers transactional `Prepare`/`instance.Activation`, owned-device cleanup,
+the four support entries and perceived bot device counterplay. It does not change existing earning,
+retained-unused-inventory, round relationship cleanup or reveal-source ownership semantics.
+
 One file per streak in `lua/privatewar/streaks/`, class table `STREAK`. Never auto-subscribed: using a streak
 makes a `PW.Instance` of it. Enable ConVar `pw_streak_<id>_enabled`. The registry is `PW.Registries.streaks`.
 
