@@ -27,16 +27,39 @@ local function clearPair(a, b, min, max)
     return not trace.Hit
 end
 
+---Fixture geometry only: choose an open, supported retreat lane instead of a roof edge with no legal exit.
+---@param a Vector
+---@param b Vector
+---@return boolean
+local function escapeLane(a, b)
+    local away = b - a
+    away.z = 0
+    away:Normalize()
+    local finish = b + away * 384
+    local up = Vector(0, 0, 2)
+    if util.TraceHull({ start = b + up, endpos = finish + up, mask = MASK_SOLID_BRUSHONLY,
+        mins = Vector(-16, -16, 0), maxs = Vector(16, 16, 64) }).Hit then return false end
+    for step = 1, 4 do
+        local point = b + away * (step * 96)
+        if navmesh.GetNavArea(point + Vector(0, 0, 16), 96) == nil then return false end
+        local ground = util.TraceLine({ start = point + Vector(0, 0, 16),
+            endpos = point - Vector(0, 0, 32), mask = MASK_SOLID_BRUSHONLY })
+        if not ground.Hit or ground.HitNormal.z < 0.7 then return false end
+    end
+    return true
+end
+
 ---@return Vector?, Vector?
 ---@param min? number
 ---@param max? number
-local function spots(min, max)
+---@param retreat? boolean
+local function spots(min, max, retreat)
     local areas = navmesh.GetAllNavAreas() --[[@as CNavArea[] ]]
     for i, area in ipairs(areas) do
         local a = area:GetCenter() + Vector(0, 0, 2)
         for j = i + 1, #areas do
             local b = areas[j]:GetCenter() + Vector(0, 0, 2)
-            if clearPair(a, b, min, max) then return a, b end
+            if clearPair(a, b, min, max) and (not retreat or escapeLane(a, b)) then return a, b end
         end
     end
     return nil, nil
@@ -197,7 +220,7 @@ return {
             timeout = 30,
             func = function(state)
                 expect(game.GetMap()).to.equal("gm_construct")
-                local a, b = spots(220, 300)
+                local a, b = spots(220, 300, true)
                 expect(a).to.exist()
                 expect(b).to.exist()
                 local bots = state.bots --[[@as Player[] ]]
@@ -222,7 +245,10 @@ return {
                 must(PW.BotInput).SetScripted(seed, { buttons = 0, view = seed:EyeAngles() })
                 PW._BotsManager.boards[survivor] = board(survivor)
                 local started, initial = CurTime(), seed:GetPos():Distance(survivor:GetPos())
+                local origin = survivor:GetPos()
+                local away = (origin - seed:GetPos()):GetNormalized()
                 local farthest, movement, attacks, hits, movingShots = initial, 0, 0, 0, 0
+                local retreat = 0
                 local escaped, melee = false, false
                 local nextSample = started
                 hook.Add("SetupMove", smoke, function(ply, move)
@@ -256,17 +282,19 @@ return {
                     if current ~= nil and current.behavior ~= nil
                         and current.behavior.id == "pw_infection_escape" then escaped = true end
                     farthest = math.max(farthest, seed:GetPos():Distance(survivor:GetPos()))
-                    if not (hits > 0 and movingShots > 0 and farthest >= initial + 100)
+                    retreat = math.max(retreat, (survivor:GetPos() - origin):Dot(away))
+                    if not (hits > 0 and movingShots > 0 and retreat >= 100)
                         and CurTime() - started < 24 then return end
                     hook.Remove("Tick", smoke)
                     hook.Remove("SetupMove", smoke)
                     hook.Remove("PostEntityTakeDamage", smoke)
                     print(string.format("[PW] Infection escape: initial=%.1f farthest=%.1f move=%d attack=%d"
-                        .. " movingShots=%d hits=%d escape=%s melee=%s", initial, farthest, movement, attacks,
-                        movingShots, hits, tostring(escaped), tostring(melee)))
+                        .. " movingShots=%d hits=%d retreat=%.1f escape=%s melee=%s", initial, farthest, movement,
+                        attacks, movingShots, hits, retreat, tostring(escaped), tostring(melee)))
                     expect(escaped).to.beTrue()
                     expect(movement > 0 and attacks > 0 and movingShots > 0 and hits > 0).to.beTrue()
                     expect(farthest >= initial + 100).to.beTrue()
+                    expect(retreat >= 100).to.beTrue() -- opponent knockback alone is not survivor movement evidence
                     expect(melee).to.beFalse()
                     expect(must(PW.Infection).Role(survivor)).to.equal("survivor")
                     expect(survivor:Alive()).to.beTrue()
