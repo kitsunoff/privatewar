@@ -1,5 +1,6 @@
 -- Ordinary flash status has one resolved strength/duration for packets, DSP and bot impairment.
 local lib = PW.Throwables --[[@as PW.ThrowablesLib]]
+local owner = MODULE
 ---@type table<Player, { strength: number, at: number }>
 local blinded = setmetatable({}, { __mode = "k" })
 
@@ -27,7 +28,7 @@ function lib.ClearBlinds()
 end
 
 function lib.Blind(ply, strength)
-    if not MODULE:IsValid() or not IsValid(ply) then return false end
+    if not owner:IsValid() or not IsValid(ply) then return false end
     local resolved = PW.Stat ~= nil and PW.Stat(ply, "flash_strength", strength) or strength
     if resolved ~= resolved or resolved < lib.Flash.minStrength then return false end
     resolved = lib._DecodeStrength(lib._EncodeStrength(math.Clamp(resolved, 0, 1)))

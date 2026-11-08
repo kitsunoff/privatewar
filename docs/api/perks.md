@@ -129,6 +129,8 @@ runtime. Automated and manual acceptance are separate. The existing four remain 
   `PW_EntityDisabled(kind, id, definition, reason)` first ends exact-definition instances;
   the perks cleanup-only observer then removes only matching owner entries and recomputes.
   A disabled perks module revokes all its owners without relying on its removed gameplay hooks.
+  Direct `Refresh`/`_Recompute` calls also respect module validity. An already-ended failed
+  constructor never enters the equipped-id or cached-stat lists.
 - `PW.LoadoutUI.PerkDescription(definition, selectedWeaponClasses)` uses each selected
   adapter's `SupportedStatMods` to append an unsupported-key warning. Picks stay valid;
   unsupported bases do not silently become compatible. Stock-footstep/custom-sound and

@@ -20,6 +20,10 @@ local tickPeriod = 0.1
 local syncEvery = 1
 local bodyHeights = { chest = 40, feet = 8 }
 local mask = MASK_OPAQUE_AND_NPCS
+---@type PW.BotSnapshotSet
+local noSight = {}
+---@type PW.BotSighting[]
+local noFresh = {}
 
 local function randomFn()
     return math.random()
@@ -103,7 +107,7 @@ end
 ---@return integer candidates
 ---@return integer traces
 local function gatherSeen(ply, params)
-    if not lib._FlashCanSee(ply, CurTime()) then return {}, 0, 0 end
+    if not lib._FlashCanSee(ply, CurTime()) then return noSight, 0, 0 end
     local eye, forward = ply:EyePos(), ply:EyeAngles():Forward()
     ---@type PW.BotCandidate[]
     local list = {}
@@ -168,7 +172,7 @@ local function tickBot(ply, board, now)
         local fresh = lib.Think(state, { params = params, seen = seen, valid = IsValid, random = randomFn }, now)
         if not lib._FlashCanSee(ply, now) then
             for _, contact in ipairs(state.contacts) do contact.visible = false end
-            fresh = {}
+            fresh = noFresh
         end
         for _, sighting in ipairs(fresh) do
             lib.Share({ state = state, team = state.team, pos = ply:GetPos() }, mates(), sighting, now)
