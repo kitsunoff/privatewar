@@ -38,6 +38,24 @@ return {
             end
         },
         {
+            name = "Device behavior Rank: legally perceived device is chosen above objectives when no player is known",
+            func = function()
+                stub(assert(PW.BotDevices), "Contact").returns({})
+                local context = { now = 10, contacts = {} }
+                local behavior = assert(assert(PW.Registries.bot_behaviors).Get("attack_device"))
+                expect(PW.Call(behavior, "Rank", {} --[[@as Player]], context --[[@as PW.BotBrainCtx]])).to.equal(25)
+            end
+        },
+        {
+            name = "Device behavior Rank: visible player combat always defeats device opportunism",
+            func = function()
+                stub(assert(PW.BotDevices), "Contact").returns({})
+                local context = { now = 10, contacts = { { visible = true, time = 10 } } }
+                local behavior = assert(assert(PW.Registries.bot_behaviors).Get("attack_device"))
+                expect(PW.Call(behavior, "Rank", {} --[[@as Player]], context --[[@as PW.BotBrainCtx]])).to.beFalse()
+            end
+        },
+        {
             name = "Bot streak eligibility: inventory polling performs no floor hull or exit traces",
             func = function()
                 local lib = assert(PW.Devices)

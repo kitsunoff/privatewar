@@ -265,6 +265,55 @@ local cases = {
         end
     },
     {
+        name = "Cache engine: ten total allied receipts exhaust one shared charge pool without further supply",
+        func = function()
+            local owner = fixture()
+            local ally = actor(2)
+            owner:StripWeapons()
+            owner:Give("weapon_pistol")
+            fixture()
+            place(ally, owner:GetPos() + Vector(0, 64, 0))
+            ally:StripWeapons()
+            ally:Give("weapon_pistol")
+            stub(assert(PW.Teams), "GetActive").returns({ 1, 2 })
+            hook.Add("PW_IsEnemy", key, function(a, b)
+                if (a == owner or a == ally) and (b == owner or b == ally) then return false end
+            end)
+            local record = deploy(owner, "ammo_cache")
+            local now = CurTime()
+            for i = 0, 4 do
+                owner:SetAmmo(0, "Pistol")
+                ally:SetAmmo(0, "Pistol")
+                maintain(now + i * 6, 1)
+            end
+            expect(record.charges).to.equal(0)
+            owner:SetAmmo(0, "Pistol")
+            ally:SetAmmo(0, "Pistol")
+            maintain(now + 30, 1)
+            expect(owner:GetAmmoCount("Pistol")).to.equal(0)
+            expect(ally:GetAmmoCount("Pistol")).to.equal(0)
+        end
+    },
+    {
+        name = "Medical engine: two allied physical stations still apply only the maximum five HP rate",
+        func = function()
+            local owner = fixture()
+            deploy(owner, "medical_station")
+            local ally = actor(2)
+            place(ally, owner:GetPos() + Vector(0, 64, 0))
+            deploy(ally, "medical_station")
+            stub(assert(PW.Teams), "GetActive").returns({ 1, 2 })
+            hook.Add("PW_IsEnemy", key, function(a, b)
+                if (a == owner or a == ally) and (b == owner or b == ally) then return false end
+            end)
+            owner:SetMaxHealth(100)
+            owner:SetHealth(50)
+            devices()._Damaged[owner] = CurTime() - 6
+            maintain(CurTime(), 1)
+            expect(owner:Health()).to.equal(55)
+        end
+    },
+    {
         name = "Medical engine: fresh damage interrupts healing and role prohibition prevents recipient benefit",
         func = function()
             local owner = fixture()
@@ -297,6 +346,7 @@ return {
     end,
     afterEach = function()
         hook.Remove("PW_ScoreEvent", key)
+        hook.Remove("PW_IsEnemy", key)
         hook.Remove("PW_CanUseLoadoutKind", key)
         devices().Clear()
         PW._Streaks = previous
