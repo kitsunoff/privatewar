@@ -32,7 +32,7 @@ function lib.Create(inst, kind, placement)
     local ent = ents.Create("pw_support_device") --[[@as PW.SupportDeviceEntity]]
     if not IsValid(ent) then return nil end
     ---@type Vector
-    local mins = util.GetModelBounds(cfg.model)
+    local mins = assert(lib.ModelBounds(kind))
     ent:SetModel(cfg.model)
     ent:SetPos(placement.position + Vector(0, 0, 2 - mins.z))
     ent:SetAngles(Angle())

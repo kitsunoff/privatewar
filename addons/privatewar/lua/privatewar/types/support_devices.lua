@@ -96,6 +96,7 @@
 ---@field Enabled fun(kind: PW.SupportDeviceKind): boolean
 ---@field Feedback fun(owner: Player, text: string)
 ---@field Validate fun(owner: Player, kind: PW.SupportDeviceKind, position: Vector): boolean, string?
+---@field ModelBounds fun(kind: PW.SupportDeviceKind): Vector?, Vector?
 ---@field EntityRemoved fun(entity: Entity)
 ---@field Damage fun(entity: Entity, damage: CTakeDamageInfo)
 ---@field _Records PW.SupportDevice[]

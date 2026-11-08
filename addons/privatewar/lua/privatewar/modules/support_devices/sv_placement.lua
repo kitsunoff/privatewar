@@ -1,6 +1,26 @@
 -- Authoritative local floor, supporting corners, actual model hull and player-sized exit footprint.
 local lib = PW.Devices --[[@as PW.DevicesLib]]
 
+---@type table<string, { mins: Vector, maxs: Vector }>
+local bounds = {}
+
+function lib.ModelBounds(kind)
+    local cfg = lib.Config[kind]
+    if cfg == nil or not util.IsValidModel(cfg.model) then return nil, nil end
+    local cached = bounds[kind]
+    if cached == nil then
+        -- GetModelBounds is an entity method on the supported engine. This unspawned probe never has collision.
+        local probe = ents.Create("base_anim")
+        if not IsValid(probe) then return nil, nil end
+        probe:SetModel(cfg.model)
+        local mins, maxs = probe:GetModelBounds()
+        probe:Remove()
+        cached = { mins = mins, maxs = maxs }
+        bounds[kind] = cached
+    end
+    return cached.mins, cached.maxs
+end
+
 ---@param owner Player
 ---@param kind PW.SupportDeviceKind
 ---@param position Vector
@@ -11,8 +31,8 @@ function lib.Validate(owner, kind, position)
     local eye, aim = owner:EyePos(), owner:GetAimVector()
     local floor = util.TraceLine({ start = position + Vector(0, 0, 12), endpos = position - Vector(0, 0, 20),
         filter = owner, mask = MASK_PLAYERSOLID })
-    ---@type Vector, Vector
-    local mins, maxs = util.GetModelBounds(cfg.model)
+    local mins, maxs = lib.ModelBounds(kind)
+    if mins == nil or maxs == nil then return false, "model" end
     local hull = util.TraceHull({ start = position + Vector(0, 0, 2 - mins.z),
         endpos = position + Vector(0, 0, 2 - mins.z), mins = mins, maxs = maxs,
         filter = owner, mask = MASK_PLAYERSOLID })
