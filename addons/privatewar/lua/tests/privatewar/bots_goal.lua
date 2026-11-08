@@ -95,7 +95,13 @@ end
 return {
     groupName = "PW bots goal",
     beforeAll = function(state)
-        -- In LOBBY a new teamless player is a fixed spectator (GM.TeamBased): give it the FFA team and spawn it.
+        local match, mode = must(PW.Match), must(PW.Modes.Get("ffa"))
+        state.phaseGetter, state.originalMode = match.GetPhase, PW.ActiveMode
+        state.liveFixture = true
+        -- Spectating offsets the engine origin from the floor and can leave no same-height target at 790 units.
+        -- Establish the ordinary live FFA spawn before creating the bot, without touching the phase store.
+        rawset(match, "GetPhase", function() return "LIVE" end)
+        PW.ActiveMode = mode
         local bot = player.CreateNextBot("PW goal test") --[[@as Player?]]
         state.bot = bot
         if bot ~= nil and IsValid(bot) then
@@ -104,6 +110,11 @@ return {
         end
     end,
     afterAll = function(state)
+        if state.liveFixture then
+            rawset(must(PW.Match), "GetPhase", state.phaseGetter)
+            PW.ActiveMode = state.originalMode
+        end
+        timer.Remove("PW.BotGoalSmoke")
         local bot = state.bot --[[@as Player?]]
         if bot ~= nil and IsValid(bot) then
             lib()._Drop(bot)
