@@ -16,12 +16,22 @@ function lib.ReleaseInput(bot)
     inputs[bot] = nil
 end
 
+function lib.Invalidate(record)
+    for bot, state in pairs(states) do
+        state.first[record.entity] = nil
+        if state.contact ~= nil and state.contact.device == record then
+            state.contact = nil
+            lib.ReleaseInput(bot)
+        end
+    end
+end
+
 ---@param bot Player
 ---@param record PW.SupportDevice
 ---@param fov number
 ---@return boolean
 local function sees(bot, record, fov)
-    if not IsValid(record.entity) or not IsValid(record.owner)
+    if record.retired or not IsValid(record.entity) or not IsValid(record.owner)
         or not PW.IsEnemy(bot, record.owner) or not lib.CanObserve(bot, CurTime()) then return false end
     local eye, point = bot:EyePos(), record.entity:WorldSpaceCenter()
     if not lib.Perceivable(eye, bot:GetAimVector(), point, 1800, fov, true) then return false end
@@ -64,6 +74,7 @@ function lib.Contact(bot)
     local state = states[bot]
     local contact = state ~= nil and state.contact or nil
     if not module:IsValid() or not bot:Alive() or contact == nil or not IsValid(contact.device.entity)
+        or contact.device.retired
         or not contact.visible or CurTime() - contact.seen > 0.3
         or not lib.CanObserve(bot, CurTime()) or not PW.IsEnemy(bot, contact.device.owner) then return nil end
     return contact

@@ -237,6 +237,8 @@ local cases = {
             owner:StripWeapons()
             local pistol = assert(owner:Give("weapon_pistol"))
             owner:SetAmmo(54, "Pistol")
+            -- Weapon creation precedes the final scene placement, just as a settled native loadout does.
+            fixture()
             local record = deploy(owner, "ammo_cache")
             maintain(CurTime())
             expect(record.charges).to.equal(10)

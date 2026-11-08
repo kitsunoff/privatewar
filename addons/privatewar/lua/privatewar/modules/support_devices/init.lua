@@ -55,6 +55,8 @@ function lib.Remove(record)
     for i, held in ipairs(lib._Records) do
         if held == record then
             table.remove(lib._Records, i)
+            record.retired = true
+            if PW.BotDevices ~= nil and PW.BotDevices.Invalidate ~= nil then PW.BotDevices.Invalidate(record) end
             if IsValid(record.entity) then
                 -- Remove is deferred by the engine; retirement must stop collision in this same transaction.
                 record.entity:SetNotSolid(true)

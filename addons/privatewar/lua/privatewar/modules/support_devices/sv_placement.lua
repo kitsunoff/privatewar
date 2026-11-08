@@ -4,6 +4,13 @@ local lib = PW.Devices --[[@as PW.DevicesLib]]
 ---@type table<string, { mins: Vector, maxs: Vector }>
 local bounds = {}
 
+---@param value Vector
+---@return boolean
+local function finite(value)
+    return isvector(value) and value.x == value.x and value.y == value.y and value.z == value.z
+        and math.abs(value.x) < math.huge and math.abs(value.y) < math.huge and math.abs(value.z) < math.huge
+end
+
 function lib.ModelBounds(kind)
     local cfg = lib.Config[kind]
     if cfg == nil or not util.IsValidModel(cfg.model) then return nil, nil end
@@ -26,9 +33,13 @@ end
 ---@param position Vector
 ---@return boolean, string?
 function lib.Validate(owner, kind, position)
+    if not IsValid(owner) then return false, "owner" end
+    local eye, aim = owner:EyePos(), owner:GetAimVector()
+    if not finite(position) or not finite(eye) or not finite(aim) or aim:LengthSqr() <= 0 then
+        return false, "invalid"
+    end
     local cfg = lib.Config[kind]
     if cfg == nil or not util.IsValidModel(cfg.model) then return false, "model" end
-    local eye, aim = owner:EyePos(), owner:GetAimVector()
     local floor = util.TraceLine({ start = position + Vector(0, 0, 12), endpos = position - Vector(0, 0, 20),
         filter = owner, mask = MASK_PLAYERSOLID })
     local mins, maxs = lib.ModelBounds(kind)
@@ -60,6 +71,7 @@ function lib.Prepare(owner, kind)
     if not IsValid(owner) or not owner:Alive() or not lib.Enabled(kind)
         or not assert(PW.SupportStreaks).Capacity(lib.List(), owner, kind) then return nil, "capacity" end
     local aim = owner:GetAimVector()
+    if not finite(aim) or not finite(owner:GetPos()) then return nil, "invalid" end
     local direction = Vector(aim.x, aim.y, 0)
     if direction:LengthSqr() < 0.001 then return nil, "aim" end
     direction:Normalize()

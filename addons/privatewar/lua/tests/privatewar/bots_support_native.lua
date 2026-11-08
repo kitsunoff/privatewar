@@ -99,7 +99,11 @@ return {
                 hook.Add("EntityFireBullets", key, function(who)
                     if who == bot then
                         shots = shots + 1
-                        if assert(PW.BotDevices).Contact(bot) == nil then premature = true end
+                        if assert(PW.BotDevices).Contact(bot) == nil then
+                            premature = true
+                            print("[PW] support unrecognized shot: n=" .. shots .. " retired="
+                                .. tostring(record.retired) .. " entity=" .. tostring(IsValid(record.entity)))
+                        end
                     end
                 end)
                 hook.Add("Tick", key, function()

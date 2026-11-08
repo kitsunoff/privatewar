@@ -33,7 +33,8 @@ function lib.Placement(f)
         or f.aim:LengthSqr() <= 0 then return false, "invalid" end
     if not f.hit or not f.world or f.sky or f.water or not f.supported then return false, "floor" end
     if f.normal.z < math.cos(math.rad(20)) - 1e-7 then return false, "slope" end
-    if f.origin:DistToSqr(f.position) > 192 * 192 or not f.visible then return false, "range" end
+    if f.origin:DistToSqr(f.position) > 192 * 192 then return false, "range" end
+    if not f.visible then return false, "occluded" end
     if not f.hullClear or not f.exitClear then return false, "blocked" end
     return true
 end

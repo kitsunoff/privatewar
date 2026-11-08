@@ -32,6 +32,7 @@
 ---@field charges? integer
 ---@field receipts? table<Player, number>
 ---@field pulse? number
+---@field retired? boolean authoritative retirement before engine deletion completes
 
 ---@class PW.SupportDeviceEntity : Entity
 ---@field GetDeviceKind fun(self: PW.SupportDeviceEntity): PW.SupportDeviceKind
@@ -123,6 +124,7 @@
 ---@field CanObserve fun(bot: Player, now: number): boolean
 ---@field OwnInput fun(bot: Player, intent: PW.BotIntent)
 ---@field ReleaseInput fun(bot: Player)
+---@field Invalidate fun(record: PW.SupportDevice)
 
 ---@class PW.BotDeviceState
 ---@field first table<Entity, number>
