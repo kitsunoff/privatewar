@@ -371,6 +371,13 @@ return {
                 local board = testBoard(stub, bot)
                 timer.Simple(0.5, function()
                     local start = bot:GetPos()
+                    local weapon = bot:GetActiveWeapon()
+                    print(string.format("[PW] goal fixture phase %s alive %s observer %d held %s"
+                        .. " team %d weapon %s pos %s",
+                        must(PW.Match).GetPhase(), tostring(bot:Alive()), bot:GetObserverMode(),
+                        tostring(bot:GetNW2Bool(must(PW.Jip).NetBool, false)), bot:Team(),
+                        IsValid(weapon) and weapon:GetClass() or "none", tostring(start)))
+                    print("[PW] goal fixture before selection: " .. smokeReport(bot, board))
                     local target = must(areaAt(start, 790))
                     local started = CurTime()
                     lib().SetGoal(bot, target, 64, "critical")

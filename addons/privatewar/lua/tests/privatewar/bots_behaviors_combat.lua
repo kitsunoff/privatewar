@@ -178,9 +178,13 @@ local function duelReport(bot, firedAt)
     if bot == nil or not IsValid(bot) then return "[PW] bots duel smoke: a bot is no longer valid" end
     local botBoard = PW._BotsManager.boards[bot]
     local behavior = botBoard ~= nil and botBoard.behavior or nil
-    return string.format("[PW] bots duel smoke: %s fired at %s s, alive %s, health %s, behaviour %s (%s)",
+    local weapon = bot:GetActiveWeapon()
+    return string.format("[PW] bots duel smoke: %s fired at %s s, alive %s, health %s, behaviour %s (%s)"
+        .. ", phase %s observer %d held %s team %d weapon %s pos %s",
         bot:Nick(), tostring(firedAt[bot]), tostring(bot:Alive()), tostring(bot:Health()),
-        tostring(behavior ~= nil and behavior.id or "none"), tostring(behavior ~= nil and behavior.reason or "-"))
+        tostring(behavior ~= nil and behavior.id or "none"), tostring(behavior ~= nil and behavior.reason or "-"),
+        must(PW.Match).GetPhase(), bot:GetObserverMode(), tostring(bot:GetNW2Bool(must(PW.Jip).NetBool, false)),
+        bot:Team(), IsValid(weapon) and weapon:GetClass() or "none", tostring(bot:GetPos()))
 end
 
 ---@param bot Player
@@ -469,6 +473,7 @@ return {
                 end
                 place(bots[1], must(a), must(b))
                 place(bots[2], must(b), must(a))
+                for _, bot in ipairs(bots) do print(duelReport(bot, firedAt)) end
                 local started = CurTime()
                 ---@param ent Player
                 hook.Add("EntityFireBullets", smokeHook, function(ent)

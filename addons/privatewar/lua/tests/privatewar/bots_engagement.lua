@@ -251,6 +251,12 @@ end
 ---@param bot Player
 ---@param track PW.EngagementTrack
 local function report(n, bot, track)
+    local weapon = bot:GetActiveWeapon()
+    print(string.format("[PW] engagement body duel %d %s phase %s alive %s observer %d held %s"
+        .. " team %d weapon %s pos %s",
+        n, bot:Nick(), must(PW.Match).GetPhase(), tostring(bot:Alive()), bot:GetObserverMode(),
+        tostring(bot:GetNW2Bool(must(PW.Jip).NetBool, false)), bot:Team(),
+        IsValid(weapon) and weapon:GetClass() or "none", tostring(bot:GetPos())))
     print(string.format("[PW] engagement duel %d %s: %s lost=%d", n, bot:Nick(), timeline(track), track.lost))
     print(string.format("[PW] engagement duel %d %s behaviours: %s", n, bot:Nick(),
         table.concat(track.behaviors, " ")))
@@ -276,6 +282,12 @@ end
 local function runDuel(bots, a, b, finish)
     place(bots[1], a, b)
     place(bots[2], b, a)
+    for _, bot in ipairs(bots) do
+        local weapon = bot:GetActiveWeapon()
+        print(string.format("[PW] engagement placed %s phase %s observer %d team %d weapon %s",
+            bot:Nick(), must(PW.Match).GetPhase(), bot:GetObserverMode(), bot:Team(),
+            IsValid(weapon) and weapon:GetClass() or "none"))
+    end
     local tracks = { newTrack(), newTrack() }
     local started = CurTime()
     hook.Add("EntityFireBullets", smokeHook, function(ent)
