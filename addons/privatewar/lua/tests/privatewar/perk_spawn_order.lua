@@ -83,8 +83,9 @@ local function nativeSpawn(role, check)
     local created = false
     local count = 0
     local base = { walk = 0, run = 0, max = 0 }
+    local selected, roleEnabled = false, false
     PW.ActiveMode = { ClassName = "pwt_native_spawn", Teams = 0,
-        PW_PlayerOverrides = function(_, ply) if ply == bot then return profile(role) end end }
+        PW_PlayerOverrides = function(_, ply) if ply == bot then return profile(roleEnabled) end end }
     local match = must(PW.Match)
     local phase = match.GetPhase
     rawset(match, "GetPhase", function() return "LIVE" end)
@@ -92,11 +93,17 @@ local function nativeSpawn(role, check)
     assert(IsValid(bot), "native spawn order test needs a player slot")
     hook.Add("PW_PlayerLoadout", "PW_Test_PerkSpawn", function(ply)
         if ply ~= bot then return end
-        count = count + 1
-        base.walk, base.run, base.max = ply:GetWalkSpeed(), ply:GetRunSpeed(), ply:GetMaxHealth()
-        return { perk1 = "fleet_foot" }
+        return selected and { perk1 = "fleet_foot" } or {}
+    end)
+    hook.Add("PW_LoadoutGiven", "PW_Test_PerkSpawn", function(ply)
+        if ply == bot then count = count + 1 end
     end)
     local ok, err = pcall(function()
+        -- A separate ordinary control life supplies native baseline values, not repeated Resolve queries.
+        must(PW.MatchRules).Spawn(bot)
+        base.walk, base.run, base.max = bot:GetWalkSpeed(), bot:GetRunSpeed(), bot:GetMaxHealth()
+        local controlGives = count
+        count, selected, roleEnabled = 0, true, role
         must(PW.MatchRules).Spawn(bot) -- actual native base PlayerSpawn -> PlayerLoadout -> post-base signal
         local mult = role and 1.15 or 1
         local walk, run, max, hp = bot:GetWalkSpeed(), bot:GetRunSpeed(), bot:GetMaxHealth(), bot:Health()
@@ -108,6 +115,7 @@ local function nativeSpawn(role, check)
         must(PW.PlayerOverrides).Refresh(bot)
         print(string.format("[PW] native perk spawn role=%s loadouts=%d base=%.2f/%.2f/%d final=%.2f/%.2f/%d",
             tostring(role), count, base.walk, base.run, base.max, walk, run, max))
+        check(controlGives).to.equal(1)
         check(count).to.equal(1)
         check(close(walk, base.walk * mult * 1.1) and close(run, base.run * mult * 1.1)).to.beTrue()
         check(max).to.equal(role and 400 or base.max)
@@ -117,6 +125,7 @@ local function nativeSpawn(role, check)
         check(close(bot:GetWalkSpeed(), base.walk) and close(bot:GetRunSpeed(), base.run)).to.beTrue()
     end)
     hook.Remove("PW_PlayerLoadout", "PW_Test_PerkSpawn")
+    hook.Remove("PW_LoadoutGiven", "PW_Test_PerkSpawn")
     must(PW.Perks).Revoke(bot)
     must(PW.PlayerOverrides).Release(bot)
     must(PW.Equipment).Revoke(bot)
@@ -133,6 +142,7 @@ return {
     end,
     afterEach = function(state)
         hook.Remove("PW_PlayerLoadout", "PW_Test_PerkSpawn")
+        hook.Remove("PW_LoadoutGiven", "PW_Test_PerkSpawn")
         for ply in pairs(must(PW._Perks).players) do
             must(PW.Perks).Revoke(ply)
             must(PW.PlayerOverrides).Release(ply)
