@@ -118,6 +118,9 @@
 ---@field Recognized fun(firstSeen: number?, now: number, delay: number, visible: boolean): boolean
 ---@field AttackWanted fun(playerThreat: boolean, deviceVisible: boolean): boolean
 ---@field Step fun(bot: Player)
+---@field CanObserve fun(bot: Player, now: number): boolean
+---@field OwnInput fun(bot: Player, intent: PW.BotIntent)
+---@field ReleaseInput fun(bot: Player)
 
 ---@class PW.BotDeviceState
 ---@field first table<Entity, number>

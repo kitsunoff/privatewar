@@ -200,7 +200,9 @@ local function activate(ply, def, plan)
     local source = def
     if plan ~= nil then
         -- The bridge installs data before construction without changing the registered definition.
-        source = setmetatable({ OnEquip = function(self, owner)
+        source = setmetatable({ IsValid = function()
+            return not isfunction(def.IsValid) or def:IsValid()
+        end, OnEquip = function(self, owner)
             self.Activation, self._Definition, self.OnEquip = plan, def, def.OnEquip
             PW.Call(self, "OnEquip", owner)
         end }, { __index = def }) --[[@as PW.Streak]]
