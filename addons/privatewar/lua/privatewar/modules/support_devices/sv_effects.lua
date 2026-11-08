@@ -87,7 +87,10 @@ function MODULE:Maintain(now, dt)
         local record = lib._Records[i]
         if not live(record, now) then lib.Remove(record) end
     end
-    if #lib._Records == 0 then return end
+    if #lib._Records == 0 then
+        for recipient in pairs(lib._Healing) do lib._Healing[recipient] = nil end
+        return
+    end
     local players = player.GetAll()
     ---@type table<Player, number[]>
     local rates = {}
@@ -102,6 +105,12 @@ function MODULE:Maintain(now, dt)
     for recipient, offered in pairs(rates) do
         local amount = assert(PW.SupportStreaks).HealAmount(recipient:Health(), recipient:GetMaxHealth(),
             lib._Damaged[recipient] or now - 5, now, dt, offered)
-        if amount > 0 then recipient:SetHealth(math.min(recipient:GetMaxHealth(), recipient:Health() + amount)) end
+        if amount > 0 then
+            local accumulated = amount + (lib._Healing[recipient] or 0)
+            local whole = math.floor(accumulated + 1e-7)
+            lib._Healing[recipient] = accumulated - whole
+            if whole > 0 then recipient:SetHealth(math.min(recipient:GetMaxHealth(), recipient:Health() + whole)) end
+        else lib._Healing[recipient] = nil end
     end
+    for recipient in pairs(lib._Healing) do if rates[recipient] == nil then lib._Healing[recipient] = nil end end
 end

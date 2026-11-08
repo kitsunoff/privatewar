@@ -73,7 +73,8 @@ return {
                 local bot = player.CreateNextBot("PW native device attacker")
                 assert(IsValid(bot), "native device smoke needs a second free slot")
                 actors[#actors + 1] = bot
-                place(bot, origin - Vector(256, 0, 0))
+                -- The owner's corpse is behind the device, not between the attacker and its sight line.
+                place(bot, origin + Vector(256, 0, 0))
                 bot:GodEnable()
                 bot:StripWeapons()
                 bot:Give("weapon_smg1")
@@ -84,6 +85,9 @@ return {
                 ---@type PW.BotBoard
                 local board = { bot = bot, contacts = {}, memory = {}, intent = { buttons = 0 },
                     difficulty = profiles.Snapshot(profiles.Tier("regular")) }
+                board.order = { id = "support_fixture_guard", type = "hold", priority = 1, since = CurTime(),
+                    objective = { id = "support_fixture_guard", pos = bot:GetPos(), radius = 8,
+                        action = "hold", weight = 1, want = 1 } }
                 local bots = assert(PW.Bot)
                 local original = assert(bots.Get)
                 stub(bots, "Get").with(function(who) if who == bot then return board end return original(who) end)

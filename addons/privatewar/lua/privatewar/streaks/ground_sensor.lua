@@ -23,5 +23,6 @@ function STREAK:OnUnequip()
 end
 
 function STREAK:BotShouldUse(owner)
-    return self:Prepare(owner) ~= nil
+    return PW.Devices ~= nil and PW.Devices.Enabled("ground_sensor")
+        and assert(PW.SupportStreaks).Capacity(PW.Devices.List(), owner, "ground_sensor")
 end

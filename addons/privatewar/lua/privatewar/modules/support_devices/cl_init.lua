@@ -3,7 +3,8 @@ local lib = PW.Devices --[[@as PW.DevicesLib]]
 ---@type table<PW.SupportDeviceEntity, PW.DeviceMarker>
 local tracked = setmetatable({}, { __mode = "k" })
 lib.Markers = {}
-surface.CreateFont("PW_SupportMarker", { font = "Tahoma", size = 18, weight = 700 })
+local hud = PW.HUD
+lib.MarkerFont = hud ~= nil and hud.Font ~= nil and hud.Font("support", 24, 700) or "DermaDefaultBold"
 
 function lib.ClientTrack(entity)
     if tracked[entity] == nil then tracked[entity] = { x = 0, y = 0, text = "", visible = false } end

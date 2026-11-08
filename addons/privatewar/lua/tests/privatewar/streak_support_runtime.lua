@@ -40,7 +40,8 @@ local function fixture()
         if area:GetSizeX() >= 600 and area:GetSizeY() >= 160 then
             place(owner, area:GetCenter())
             local plan = devices().Prepare(owner, "ground_sensor")
-            if plan ~= nil then return owner, plan end
+            if plan ~= nil and devices().Prepare(owner, "ammo_cache") ~= nil
+                and devices().Prepare(owner, "medical_station") ~= nil then return owner, plan end
         end
     end
     error("no clear broad walkable stock-device fixture was found")
@@ -60,11 +61,11 @@ end
 
 ---@param record PW.SupportDevice
 local function removed(record)
-    expect(IsValid(record.entity)).to.beFalse()
-    expect(record.instance:IsValid()).to.beFalse()
-    expect(assert(streaks()._Instances)[record.instance]).to.beNil()
-    for name in pairs(record.instance._Timers) do expect(timer.Exists(name)).to.beFalse() end
-    for _, live in ipairs(devices().List()) do expect(live == record).to.beFalse() end
+    assert(not IsValid(record.entity), "owned entity survived cleanup")
+    assert(not record.instance:IsValid(), "activation survived cleanup")
+    assert(assert(streaks()._Instances)[record.instance] == nil, "streak owner retained ended activation")
+    for name in pairs(record.instance._Timers) do assert(not timer.Exists(name), "instance timer survived cleanup") end
+    for _, live in ipairs(devices().List()) do assert(live ~= record, "device registry retained removed resource") end
 end
 
 ---@param now number

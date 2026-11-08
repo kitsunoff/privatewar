@@ -5,6 +5,16 @@ local module = MODULE
 local states = setmetatable({}, { __mode = "k" })
 ---@type table<Player, string>
 local registered = setmetatable({}, { __mode = "k" })
+---@type table<Player, PW.BotIntent>
+local inputs = setmetatable({}, { __mode = "k" })
+
+function lib.OwnInput(bot, intent) inputs[bot] = intent end
+
+function lib.ReleaseInput(bot)
+    local intent = inputs[bot]
+    if intent ~= nil then intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD))) end
+    inputs[bot] = nil
+end
 
 ---@param bot Player
 ---@param record PW.SupportDevice
@@ -12,7 +22,7 @@ local registered = setmetatable({}, { __mode = "k" })
 ---@return boolean
 local function sees(bot, record, fov)
     if not IsValid(record.entity) or not IsValid(record.owner)
-        or not PW.IsEnemy(bot, record.owner) then return false end
+        or not PW.IsEnemy(bot, record.owner) or not lib.CanObserve(bot, CurTime()) then return false end
     local eye, point = bot:EyePos(), record.entity:WorldSpaceCenter()
     if not lib.Perceivable(eye, bot:GetAimVector(), point, 1800, fov, true) then return false end
     local tr = util.TraceLine({ start = eye, endpos = point, filter = bot, mask = MASK_VISIBLE })
@@ -55,7 +65,7 @@ function lib.Contact(bot)
     local contact = state ~= nil and state.contact or nil
     if not module:IsValid() or not bot:Alive() or contact == nil or not IsValid(contact.device.entity)
         or not contact.visible or CurTime() - contact.seen > 0.3
-        or not PW.IsEnemy(bot, contact.device.owner) then return nil end
+        or not lib.CanObserve(bot, CurTime()) or not PW.IsEnemy(bot, contact.device.owner) then return nil end
     return contact
 end
 
@@ -81,6 +91,7 @@ PW.HookFor(module, "Think", function()
 end)
 
 local function clear()
+    for bot in pairs(inputs) do lib.ReleaseInput(bot) end
     for bot, id in pairs(registered) do
         PW.BotScheduler.Unregister(id)
         registered[bot], states[bot] = nil, nil
@@ -91,5 +102,6 @@ function MODULE:PW_MatchEnd() clear() end
 function MODULE:PW_RoundPreparing() clear() end
 function MODULE:PW_PlayerTeamChanged() clear() end
 hook.Add("PW_EntityDisabled", "PW.BotDevices", function(kind, _, definition)
-    if kind == "modules" and definition == module then clear() end
+    if (kind == "modules" and definition == module)
+        or (kind == "bot_behaviors" and definition == PW.BotBehaviors.Get("attack_device")) then clear() end
 end)

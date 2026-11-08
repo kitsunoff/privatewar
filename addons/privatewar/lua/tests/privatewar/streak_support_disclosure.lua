@@ -31,7 +31,7 @@ local function streaks() return assert(PW.Streaks) end
 ---@param owner Player
 local function scan(owner)
     assert(streaks().Give)(owner, "directional_scan")
-    expect(assert(streaks().Use)(owner, "directional_scan")).to.beTrue()
+    assert(assert(streaks().Use)(owner, "directional_scan"), "scan refused")
 end
 
 ---@param owner Player

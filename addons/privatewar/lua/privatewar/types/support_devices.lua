@@ -101,9 +101,11 @@
 ---@field Damage fun(entity: Entity, damage: CTakeDamageInfo)
 ---@field _Records PW.SupportDevice[]
 ---@field _Damaged table<Player, number>
+---@field _Healing table<Player, number> fractional health pending the next integer engine update
 ---@field ClientTrack? fun(entity: PW.SupportDeviceEntity)
 ---@field Markers? PW.DeviceMarker[]
 ---@field Notice? string
+---@field MarkerFont? string
 
 ---@class PW.BotDeviceContact
 ---@field device PW.SupportDevice

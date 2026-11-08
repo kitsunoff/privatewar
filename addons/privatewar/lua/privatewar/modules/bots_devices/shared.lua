@@ -3,6 +3,14 @@ MODULE.Name = "Bots device perception"
 local lib = (rawget(PW, "BotDevices") or {}) --[[@as PW.BotDevicesLib]]
 PW.BotDevices = lib
 
+function lib.CanObserve(bot, now)
+    local status = rawget(PW, "Throwables") --[[@as table<string, any>?]]
+    local impairment = status ~= nil and rawget(status, "Impairment") or nil
+    return impairment == nil or impairment(bot, now) <= 0.05
+end
+
+PW.BotProfiles.Reads("difficulty", "devices", { "fov", "reaction_mean" })
+
 function lib.Perceivable(eye, facing, point, range, fov, visible)
     local rules = PW.SupportStreaks
     if rules == nil or not visible then return false end

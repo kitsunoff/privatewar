@@ -3,6 +3,7 @@ local lib = PW.Devices --[[@as PW.DevicesLib]]
 local module = MODULE
 lib._Records = lib._Records or {}
 lib._Damaged = lib._Damaged or setmetatable({}, { __mode = "k" })
+lib._Healing = lib._Healing or setmetatable({}, { __mode = "k" })
 
 include("privatewar/modules/support_devices/sv_placement.lua")
 include("privatewar/modules/support_devices/sv_effects.lua")
@@ -80,6 +81,7 @@ end
 
 function lib.Clear()
     for i = #lib._Records, 1, -1 do lib.Remove(lib._Records[i]) end
+    lib._Healing = setmetatable({}, { __mode = "k" })
 end
 
 ---@param entity Entity
@@ -112,7 +114,10 @@ hook.Add("Think", "PW.SupportDevices", function()
 end)
 
 PW.HookFor(module, "EntityTakeDamage", function(_, entity, damage)
-    if entity:IsPlayer() and damage:GetDamage() > 0 then lib._Damaged[entity --[[@as Player]]] = CurTime() end
+    if entity:IsPlayer() and damage:GetDamage() > 0 then
+        lib._Damaged[entity --[[@as Player]]] = CurTime()
+        lib._Healing[entity --[[@as Player]]] = nil
+    end
 end)
 
 function MODULE:PW_PlayerTeamChanged(owner) lib.RemoveOwner(owner) end

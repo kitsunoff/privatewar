@@ -51,6 +51,7 @@ function BEHAVIOR:Update(bot, ctx)
     aim.Step(state.aim, { now = ctx.now, dt = 0.1, eye = bot:EyePos(), point = contact.position, radius = 8,
         canFire = clear and clip > 0 }, params)
     local intent = ctx:Intent()
+    if devices ~= nil then devices.OwnInput(bot, intent) end
     ctx:SetTarget(nil)
     intent.view, intent.viewTarget, intent.viewSpeed = Angle(state.aim.p, state.aim.y, 0), nil, nil
     intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD)))
@@ -59,8 +60,10 @@ function BEHAVIOR:Update(bot, ctx)
     return PW.BotBrain.Continue()
 end
 
+---@param bot Player
 ---@param ctx PW.BotBrainCtx
-local function release(_, ctx)
+local function release(bot, ctx)
+    if PW.BotDevices ~= nil then PW.BotDevices.ReleaseInput(bot) end
     local intent = ctx:Intent()
     intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD)))
     ctx:SetTarget(nil)

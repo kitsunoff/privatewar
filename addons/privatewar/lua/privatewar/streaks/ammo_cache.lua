@@ -23,5 +23,6 @@ function STREAK:OnUnequip()
 end
 
 function STREAK:BotShouldUse(owner)
-    return self:Prepare(owner) ~= nil
+    return PW.Devices ~= nil and PW.Devices.Enabled("ammo_cache")
+        and assert(PW.SupportStreaks).Capacity(PW.Devices.List(), owner, "ammo_cache")
 end
