@@ -38,6 +38,17 @@ return {
                 expect(engine.TickCount() > tick).to.beTrue()
                 expect(CurTime() > now).to.beTrue()
             end
+        },
+        {
+            name = "Every synchronous phase fixture case admits a post-cleanup coroutine boundary",
+            func = function()
+                local group = include("tests/privatewar/core_phases.lua") --[[@as GLuaTest_TestGroup]]
+                expect(#group.cases > 1).to.beTrue()
+                for _, case in ipairs(group.cases) do
+                    expect(case.coroutine).to.beTrue()
+                    expect(case.async == true).to.beFalse()
+                end
+            end
         }
     }
 }

@@ -6,6 +6,7 @@
 
 local listenerId = "PW_Test_Phases"
 local watched = { "PW_PhaseChange", "PW_MatchStart", "PW_MatchEnd" }
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
 
 ---Fails the case when a value is nil; returns it narrowed for the type checker.
 ---@generic T
@@ -106,11 +107,8 @@ local function eventCount(state, name)
     return count
 end
 
-return {
+local group = {
     groupName = "PW phase machine",
-    -- afterEach has restored every real store before yielding. A zero-delay group timer can run in this same tick;
-    -- phase listeners have queued real spawns/net updates even though the phase machine's players are injected.
-    afterAll = function() include("privatewar_fixtures/resource_lifecycle.lua").Yield(timer.Simple) end,
     beforeEach = function(state)
         state.previousStore = PW._Match
         state.previousSettings = PW._Settings
@@ -148,6 +146,9 @@ return {
         PW._Call = state.previousCall
         PW.ActiveMode = state.previousMode
         afterMatchVar():SetString(state.previousAfterMatch)
+        -- Real listeners queued spawns/net work despite injected players. Restore first, then let the engine drain
+        -- each case: a single group-end pause still overflows the client's reliable channel in the full suite.
+        resources.Yield(timer.Simple)
     end,
     cases = {
         {
@@ -481,7 +482,6 @@ return {
         },
         {
             name = "Pure rules: all ready ignores bots; the next step follows the timers",
-            coroutine = true,
             func = function()
                 local human = {}
                 expect(PW.Phase._AllReady({}, {})).to.beTrue()
@@ -501,3 +501,7 @@ return {
         }
     }
 }
+
+-- Public GLuaTest metadata: preserve every synchronous assertion and its original cleanup, without a runner patch.
+for _, case in ipairs(group.cases) do case.coroutine = true end
+return group
