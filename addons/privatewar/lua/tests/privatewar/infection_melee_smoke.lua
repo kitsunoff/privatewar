@@ -1,6 +1,7 @@
 -- Installed addon smoke: ordinary perception -> brain -> navigation/aim -> sole CUserCmd writer -> native fists.
 -- SetPos is fixture placement only, before measurement; no scripted attack, forced target or injected damage.
 local smoke = "PW.InfectionMeleeSmoke"
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
 
 ---@generic T
 ---@param value T?
@@ -116,13 +117,20 @@ return {
         end
         PW.ActiveMode = state.mode
         if PW.Infection ~= nil then PW.Infection.State = state.infection end
+        local deadline, remaining = CurTime() + 5, false
+        repeat
+            resources.Yield(timer.Simple)
+            remaining = false
+            for _, bot in ipairs(bots) do if IsValid(bot) then remaining = true end end
+        until not remaining or CurTime() >= deadline
+        assert(not remaining, "Infection smoke owned players did not disconnect")
     end,
     cases = {
         {
             name = "Infection real melee: legal sight pursuit moves into reach"
                 .. " and FIRST native hit converts alive without respawn via usercmd",
             skip = absent,
-            async = true,
+            coroutine = true,
             timeout = 30,
             func = function(state)
                 expect(game.GetMap()).to.equal("gm_construct")
@@ -157,6 +165,7 @@ return {
                 local spawns, deaths = 0, 0
                 local contactPos, contactVelocity, contactView = Vector(), Vector(), Angle()
                 local pursued, native = false, false
+                local finished = false
                 hook.Add("PlayerSpawn", smoke, function(ply) if ply == target then spawns = spawns + 1 end end)
                 hook.Add("PlayerDeath", smoke, function(ply) if ply == target then deaths = deaths + 1 end end)
                 hook.Add("SetupMove", smoke, function(ply, move)
@@ -192,31 +201,32 @@ return {
                     hook.Remove("PW_CanTakeDamage", smoke)
                     hook.Remove("PlayerSpawn", smoke)
                     hook.Remove("PlayerDeath", smoke)
-                    print(string.format("[PW] Infection melee: hits=%d attack=%d release=%d move=%d"
-                        .. " travel=%.1f pursuit=%s", hits, attackTicks, releaseTicks, movementTicks,
-                        seed:GetPos():Distance(initial), tostring(pursued)))
-                    expect(pursued).to.beTrue()
-                    expect(movementTicks > 0).to.beTrue()
-                    expect(seed:GetPos():Distance(initial) > 200).to.beTrue()
-                    expect(attackTicks > 0 and releaseTicks > 0).to.beTrue()
-                    expect(native).to.beTrue()
-                    expect(hits).to.equal(1)
-                    expect(must(PW.Infection).Role(target)).to.equal("infected")
-                    expect(target:Alive()).to.beTrue()
-                    expect(target:Health()).to.equal(400)
-                    expect({ spawns, deaths }).to.deepEqual({ 0, 0 })
-                    expect(target:GetPos():Distance(contactPos) < 1).to.beTrue()
-                    expect(target:GetVelocity():Distance(contactVelocity) < 1).to.beTrue()
-                    expect(target:EyeAngles()).to.equal(contactView)
-                    done()
+                    finished = true
                 end)
+                while not finished do resources.Yield(timer.Simple) end
+                print(string.format("[PW] Infection melee: hits=%d attack=%d release=%d move=%d"
+                    .. " travel=%.1f pursuit=%s", hits, attackTicks, releaseTicks, movementTicks,
+                    seed:GetPos():Distance(initial), tostring(pursued)))
+                expect(pursued).to.beTrue()
+                expect(movementTicks > 0).to.beTrue()
+                expect(seed:GetPos():Distance(initial) > 200).to.beTrue()
+                expect(attackTicks > 0 and releaseTicks > 0).to.beTrue()
+                expect(native).to.beTrue()
+                expect(hits).to.equal(1)
+                expect(must(PW.Infection).Role(target)).to.equal("infected")
+                expect(target:Alive()).to.beTrue()
+                expect(target:Health()).to.equal(400)
+                expect({ spawns, deaths }).to.deepEqual({ 0, 0 })
+                expect(target:GetPos():Distance(contactPos) < 1).to.beTrue()
+                expect(target:GetVelocity():Distance(contactVelocity) < 1).to.beTrue()
+                expect(target:EyeAngles()).to.equal(contactView)
             end
         },
         {
             name = "Infection real survivor: perceived infected triggers distance gain"
                 .. " and native gunfire while retreating",
             skip = absent,
-            async = true,
+            coroutine = true,
             timeout = 30,
             func = function(state)
                 expect(game.GetMap()).to.equal("gm_construct")
@@ -251,6 +261,7 @@ return {
                 local retreat = 0
                 local escaped, melee = false, false
                 local nextSample = started
+                local finished = false
                 hook.Add("SetupMove", smoke, function(ply, move)
                     if ply ~= survivor then return end
                     local moving = math.abs(move:GetForwardSpeed()) + math.abs(move:GetSideSpeed()) > 1
@@ -288,18 +299,19 @@ return {
                     hook.Remove("Tick", smoke)
                     hook.Remove("SetupMove", smoke)
                     hook.Remove("PostEntityTakeDamage", smoke)
-                    print(string.format("[PW] Infection escape: initial=%.1f farthest=%.1f move=%d attack=%d"
-                        .. " movingShots=%d hits=%d retreat=%.1f escape=%s melee=%s", initial, farthest, movement,
-                        attacks, movingShots, hits, retreat, tostring(escaped), tostring(melee)))
-                    expect(escaped).to.beTrue()
-                    expect(movement > 0 and attacks > 0 and movingShots > 0 and hits > 0).to.beTrue()
-                    expect(farthest >= initial + 100).to.beTrue()
-                    expect(retreat >= 100).to.beTrue() -- opponent knockback alone is not survivor movement evidence
-                    expect(melee).to.beFalse()
-                    expect(must(PW.Infection).Role(survivor)).to.equal("survivor")
-                    expect(survivor:Alive()).to.beTrue()
-                    done()
+                    finished = true
                 end)
+                while not finished do resources.Yield(timer.Simple) end
+                print(string.format("[PW] Infection escape: initial=%.1f farthest=%.1f move=%d attack=%d"
+                    .. " movingShots=%d hits=%d retreat=%.1f escape=%s melee=%s", initial, farthest, movement,
+                    attacks, movingShots, hits, retreat, tostring(escaped), tostring(melee)))
+                expect(escaped).to.beTrue()
+                expect(movement > 0 and attacks > 0 and movingShots > 0 and hits > 0).to.beTrue()
+                expect(farthest >= initial + 100).to.beTrue()
+                expect(retreat >= 100).to.beTrue() -- opponent knockback alone is not survivor movement evidence
+                expect(melee).to.beFalse()
+                expect(must(PW.Infection).Role(survivor)).to.equal("survivor")
+                expect(survivor:Alive()).to.beTrue()
             end
         }
     }
