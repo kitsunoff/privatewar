@@ -60,6 +60,7 @@ local function installStores(state)
         map = function() return currentMap end,
         mapChangeCount = function() return 5 end,
         delay = function() return 1 end, -- minimum delay; countdown boundaries have dedicated match-flow cases
+        announce = function() end, -- isolated persistence fixture: never leave a fake deadline on the real HUD
         bots = function() return 3 end,
         resolveMode = function(id) return id == "testmode" and state.mode or nil end,
         changelevel = function(map)

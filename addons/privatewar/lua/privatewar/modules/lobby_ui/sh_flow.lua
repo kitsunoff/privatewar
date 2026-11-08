@@ -71,7 +71,7 @@ end
 
 function lib._MapChangePopup(facts)
     local left = seconds(facts.changeAt, facts.now)
-    if left == nil then return nil end
+    if left == nil or facts.now >= facts.changeAt then return nil end
     return {
         title = lib.FlowText.popupTitle, map = lib._MapTitle(facts.map, facts.mapName),
         mode = string.upper(facts.modeName or ""), seconds = left,

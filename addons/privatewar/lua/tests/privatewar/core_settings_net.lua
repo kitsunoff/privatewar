@@ -115,6 +115,7 @@ local function installMapChange(state, map, count)
         map = function() return map end,
         mapChangeCount = function() return count end,
         delay = function() return 1 end, -- minimum delay; countdown boundaries have dedicated match-flow cases
+        announce = function() end, -- isolate the fake clock from the real client globals
         bots = function() return 0 end,
         resolveMode = function(id) return id == "pwt_tdm" and tdm(state) or nil end,
         changelevel = function(target)

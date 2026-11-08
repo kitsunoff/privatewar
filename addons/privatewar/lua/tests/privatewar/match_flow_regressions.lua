@@ -48,6 +48,25 @@ return {
     groupName = "PW match flow corrective regressions",
     cases = {
         {
+            name = "Button countdown: PREMATCH and pending map change share ceil and zero clamp without the old text",
+            func = function()
+                local lobby = must(PW.Lobby)
+                for _, now in ipairs({ 100, 102.9, 103, 103.1, 110 }) do
+                    local expected = math.max(0, math.ceil(103 - now))
+                    local start = must(lobby._StartButton({ phase = "PREMATCH", phaseEnd = 103,
+                        changeAt = -1, now = now }))
+                    local change = must(lobby._StartButton({ phase = "LOBBY", phaseEnd = -1,
+                        changeAt = 103, now = now }))
+                    expect(start.seconds).to.equal(expected)
+                    expect(change.seconds).to.equal(expected)
+                    expect(start.label).to.equal(string.format(lobby.FlowText.starting, expected))
+                    expect(change.label).to.equal(string.format(lobby.FlowText.changing, expected))
+                    expect(string.find(string.lower(start.label), "match starts from", 1, true)).to.beNil()
+                    expect(string.find(string.lower(change.label), "match starts from", 1, true)).to.beNil()
+                end
+            end
+        },
+        {
             name = "Map change: zero and negative delays announce the same clamped positive deadline",
             func = function(state)
                 local change = must(PW.MapChange)

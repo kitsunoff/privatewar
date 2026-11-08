@@ -599,8 +599,9 @@ Source: `gamemodes/privatewar/gamemode/core/sv_mapchange.lua` (server), `cl_read
 - `PW.MapChange.IsChanging() -> boolean`: `true` from the announcement (below) or the `changelevel` command until the
   new map (the Lua state resets) or the 10 s fallback. While it is `true`, `PW.Match.Start` refuses.
 - Delayed change (T-11.10): `PW.Match.Start(mode, otherMap)` calls `PW.MapChange.Schedule(mode, map)`. With
-  `pw_mapchange_delay` (archived, default 5, 0-60 s) above 0 it announces the change and begins it that many seconds
-  later from the `Think` tick; with 0 it begins at once. The announcement is three NW2 globals, written map, mode, end
+  `pw_mapchange_delay` (archived, default 5, range 1-60 s), it always announces before beginning the change that many
+  seconds later from the `Think` tick. Scheduling clamps to 1-60 s too, including a zero or negative injected delay.
+  The announced deadline is the same stored deadline used to start the change. The announcement is three NW2 globals, written map, mode, end
   time: `pw_mapchange_map` (string), `pw_mapchange_mode` (mode id), `pw_mapchange_at` (`CurTime()` of the change, `-1`
   for none); both realms read them with `PW.Phase.GetMapChange() -> map, mode, at` (keys in `PW.Phase._ChangeKeys`).
   Clients show the map change popup and the START button countdown (`ui.md`, "Match flow in the lobby"). Any phase
