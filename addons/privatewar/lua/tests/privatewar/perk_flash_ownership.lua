@@ -65,6 +65,8 @@ return {
         {
             name = "RoundEnd: actual human and bot flash packets DSP impairment timers and live projectile"
                 .. " clear together",
+            async = true,
+            timeout = 5,
             func = function()
                 packets(function(sent)
                     local lib = must(PW.Throwables)
@@ -76,20 +78,27 @@ return {
                     lib.Blind(human, 1)
                     lib.Blind(bot, 1)
                     local ownedTimer = "PW.Blind." .. tostring(human)
+                    local botTimer = "PW.Blind." .. tostring(bot)
                     expect(timer.Exists(ownedTimer)).to.beTrue()
                     PW.Notify("PW_RoundEnd", 1, false, {})
                     local remaining = { lib.Impairment(human), lib.Impairment(bot) }
-                    local dsp, timerLeft, projectileLeft = d.dsp, timer.Exists(ownedTimer), IsValid(projectile)
+                    local dsp, timerLeft = d.dsp, timer.Exists(ownedTimer) or timer.Exists(botTimer)
                     local zero = sent[#sent]
-                    -- Cleanup even on the expected pre-fix failure; collect observations before doing so.
-                    lib.ClearBlind(human)
-                    lib.ClearBlind(bot)
-                    lib._RemoveAll()
-                    expect(remaining).to.deepEqual({ 0, 0 })
-                    expect(dsp).to.equal(0)
-                    expect(timerLeft).to.beFalse()
-                    expect(projectileLeft).to.beFalse()
-                    expect({ zero.ply, zero.value, zero.bits }).to.deepEqual({ human, 0, 8 })
+                    -- Entity:Remove queues native deletion; observe after a frame, before failure-safe cleanup.
+                    timer.Simple(0.1, function()
+                        local projectileLeft = IsValid(projectile)
+                        local timerSettled = timer.Exists(ownedTimer) or timer.Exists(botTimer)
+                        lib.ClearBlind(human)
+                        lib.ClearBlind(bot)
+                        lib._RemoveAll()
+                        expect(remaining).to.deepEqual({ 0, 0 })
+                        expect(dsp).to.equal(0)
+                        expect(timerLeft).to.beFalse()
+                        expect(timerSettled).to.beFalse()
+                        expect(projectileLeft).to.beFalse()
+                        expect({ zero.ply, zero.value, zero.bits }).to.deepEqual({ human, 0, 8 })
+                        done()
+                    end)
                 end)
             end
         },

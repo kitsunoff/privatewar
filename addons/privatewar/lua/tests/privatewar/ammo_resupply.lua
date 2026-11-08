@@ -40,6 +40,42 @@ return {
     groupName = "PW capped ordinary reserve resupply",
     cases = {
         {
+            name = "Disabled resupply owner: retained public API cannot mutate reserve; attribution stays usable",
+            func = function()
+                local module = assert(PW.Modules.Get("weapons_ammo"))
+                expect(module:IsValid()).to.beTrue()
+                local owner, reserves, weapon = participant(false)
+                local calls = 0
+                rawset(owner, "SetAmmo", function(_, count, ammo)
+                    calls = calls + 1
+                    reserves[ammo] = count
+                end)
+                local resupply = PW.WeaponAmmo.Resupply
+                expect(resupply(owner, { weapon })).to.deepEqual({ [1] = 30 })
+                reserves[1], calls = 7, 0
+                PW.Modules._Disable("weapons_ammo", "test retained resupply API")
+                local ok, result, attributed, direct, plan, disabledReserve, disabledCalls = pcall(function()
+                    local result = resupply(owner, { weapon })
+                    local dmg = { GetInflictor = function() return weapon end,
+                        IsDamageType = function(_, mask) return bit.band(DMG_BULLET, mask) ~= 0 end }
+                    local attributed, direct = PW.WeaponAmmo.DamageWeapon(owner, dmg --[[@as CTakeDamageInfo]])
+                    return result, attributed, direct, PW.WeaponAmmo._ResupplyAmount(30, 7, 1, 3), reserves[1], calls
+                end)
+                PW.Modules._Enable("weapons_ammo") -- restore even when a retained entry point throws
+                assert(ok, tostring(result))
+                expect(result).to.deepEqual({})
+                expect(disabledReserve).to.equal(7)
+                expect(disabledCalls).to.equal(0)
+                expect(attributed).to.equal(weapon)
+                expect(direct).to.beTrue()
+                expect(plan).to.equal(30)
+                expect(module:IsValid()).to.beTrue()
+                expect(resupply(owner, { weapon })).to.deepEqual({ [1] = 30 })
+                expect(reserves[1]).to.equal(37)
+                expect(calls).to.equal(1)
+            end
+        },
+        {
             name = "Provenance: autonomous streak damage cannot borrow an owned active gun for XP or scavenging",
             func = function()
                 local owner, _, weapon = participant(false)
