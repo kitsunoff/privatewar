@@ -26,3 +26,4 @@ is `addons/privatewar/` in the repository, the integration and dev addons are th
 | `player-overrides.md` | Temporary player stats and appearance, new-life baseline and synchronous rollback | Integrated feature contract for Infection (2026-11-08) |
 | `hardpoint.md` | Rotating objective lifecycle, authored map data, snapshots and bot objective input | Integrated Hardpoint feature contract (2026-11-08); checkpoints pending |
 | `infection.md` | Optional addon role lifecycle, admission, round outcomes and personal postmatch standings | Integrated Infection feature contract (2026-11-08); checkpoints pending |
+| `support-devices.md` | K1–K4 support streaks, transactional deployment, cache/healing, source-owned reveal retirement and legal bot counterplay | Integrated feature contract at `3e2c1c9` (2026-11-08); independent automated gates green, human checkpoints pending |
