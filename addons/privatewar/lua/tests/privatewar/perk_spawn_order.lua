@@ -44,7 +44,8 @@ end
 local function close(n, expected) return math.abs(n - expected) < 0.001 end
 
 ---@param role boolean
-local function recordingSpawn(role)
+---@param check fun(value: any): any
+local function recordingSpawn(role, check)
     for _, bot in ipairs({ false, true }) do
         local ply, d = participant(bot)
         PW.ActiveMode = { PW_PlayerOverrides = function() return profile(role) end }
@@ -64,19 +65,20 @@ local function recordingSpawn(role)
         PW.ActiveMode = nil
         must(PW.PlayerOverrides).Refresh(ply)
         local ordinary = { d.hp, d.max, d.walk, d.run }
-        expect(complete).to.beTrue()
-        expect({ hp, max }).to.deepEqual(role and { 400, 400 } or { 100, 100 })
-        expect(during).to.deepEqual({ 100, 100, 200, 400 })
-        expect(refreshed[1]).to.equal(75)
-        expect(close(refreshed[2], 200 * mult * 1.1) and close(refreshed[3], 400 * mult * 1.1)).to.beTrue()
-        expect(roleOnly[1]).to.equal(role and 400 or 100)
-        expect(close(roleOnly[2], 200 * mult) and close(roleOnly[3], 400 * mult)).to.beTrue()
-        expect(ordinary).to.deepEqual({ 75, 100, 200, 400 })
+        check(complete).to.beTrue()
+        check({ hp, max }).to.deepEqual(role and { 400, 400 } or { 100, 100 })
+        check(during).to.deepEqual({ 100, 100, 200, 400 })
+        check(refreshed[1]).to.equal(75)
+        check(close(refreshed[2], 200 * mult * 1.1) and close(refreshed[3], 400 * mult * 1.1)).to.beTrue()
+        check(roleOnly[1]).to.equal(role and 400 or 100)
+        check(close(roleOnly[2], 200 * mult) and close(roleOnly[3], 400 * mult)).to.beTrue()
+        check(ordinary).to.deepEqual({ 75, 100, 200, 400 })
     end
 end
 
 ---@param role boolean
-local function nativeSpawn(role)
+---@param check fun(value: any): any
+local function nativeSpawn(role, check)
     local bot = player.GetBots()[1]
     local created = false
     local count = 0
@@ -104,13 +106,15 @@ local function nativeSpawn(role)
         must(PW.Perks).Revoke(bot)
         PW.ActiveMode = nil
         must(PW.PlayerOverrides).Refresh(bot)
-        expect(count).to.equal(1)
-        expect(close(walk, base.walk * mult * 1.1) and close(run, base.run * mult * 1.1)).to.beTrue()
-        expect(max).to.equal(role and 400 or base.max)
-        expect(hp).to.equal(role and 400 or base.max)
-        expect(refreshedHP).to.equal(75)
-        expect(bot:GetMaxHealth()).to.equal(base.max)
-        expect(close(bot:GetWalkSpeed(), base.walk) and close(bot:GetRunSpeed(), base.run)).to.beTrue()
+        print(string.format("[PW] native perk spawn role=%s loadouts=%d base=%.2f/%.2f/%d final=%.2f/%.2f/%d",
+            tostring(role), count, base.walk, base.run, base.max, walk, run, max))
+        check(count).to.equal(1)
+        check(close(walk, base.walk * mult * 1.1) and close(run, base.run * mult * 1.1)).to.beTrue()
+        check(max).to.equal(role and 400 or base.max)
+        check(hp).to.equal(role and 400 or base.max)
+        check(refreshedHP).to.equal(75)
+        check(bot:GetMaxHealth()).to.equal(base.max)
+        check(close(bot:GetWalkSpeed(), base.walk) and close(bot:GetRunSpeed(), base.run)).to.beTrue()
     end)
     hook.Remove("PW_PlayerLoadout", "PW_Test_PerkSpawn")
     must(PW.Perks).Revoke(bot)
@@ -137,13 +141,13 @@ return {
     end,
     cases = {
         { name = "Spawn order: human and bot loadout Fleet Foot is applied once after ordinary base initialization",
-            func = function() recordingSpawn(false) end },
+            func = function() recordingSpawn(false, expect) end },
         { name = "Spawn order: 400 HP role and 1.15 compose once with in-base loadout and restore ordinary baseline",
-            func = function() recordingSpawn(true) end },
+            func = function() recordingSpawn(true, expect) end },
         { name = "Native spawn order: selected Fleet Foot reaches PlayerLoadout before post-base signal"
                 .. " without double give",
-            func = function() nativeSpawn(false) end },
+            func = function() nativeSpawn(false, expect) end },
         { name = "Native spawn order: in-base role profile and Fleet Foot never capture a modified 400 HP baseline",
-            func = function() nativeSpawn(true) end }
+            func = function() nativeSpawn(true, expect) end }
     }
 }
