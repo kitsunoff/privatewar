@@ -44,6 +44,16 @@ function botLib.AddStimulus(botOrTeam, kind, data)
     return lib.Dispatch(botOrTeam, kind, data)
 end
 
+function botLib.RetireStimulusSource(token)
+    local removed = lib.RetireSource(token, CurTime())
+    if removed == 0 then return 0 end
+    for bot, state in pairs(lib.States) do
+        local board = botLib.Get(bot)
+        if board ~= nil then board.contacts, board.memory = state.contacts, state.memory end
+    end
+    return removed
+end
+
 ---@param a Player
 ---@param b Player
 ---@return boolean

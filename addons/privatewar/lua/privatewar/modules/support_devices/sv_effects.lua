@@ -69,7 +69,7 @@ local function sensor(record, players)
     end
     local streaks = PW.Streaks
     if streaks ~= nil and streaks.Viewer ~= nil and PW.Reveal ~= nil then
-        PW.Reveal(streaks.Viewer(record.owner), targets, 2.1, record.owner)
+        PW.Reveal(streaks.Viewer(record.owner), targets, 2.1, record.owner, record)
     end
 end
 

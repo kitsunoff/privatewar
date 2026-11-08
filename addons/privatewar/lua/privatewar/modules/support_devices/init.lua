@@ -76,6 +76,9 @@ function lib.Remove(record)
             retire(record.entity)
             record.instance.Device = nil
             local streaks = PW.Streaks
+            if record.kind == "ground_sensor" and streaks ~= nil and streaks.RetireRevealSource ~= nil then
+                streaks.RetireRevealSource(record)
+            end
             if streaks ~= nil and streaks._Instances ~= nil then streaks._Instances[record.instance] = nil end
             record.instance:Remove()
             return

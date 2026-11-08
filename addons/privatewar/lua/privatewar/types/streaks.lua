@@ -84,6 +84,8 @@
 
 ---Internal (server): reveal state and injectable engine calls.
 ---@class PW.RevealStore
+---@field knownSources? table<table, boolean> weak opaque producer identities
+---@field retiredSources? table<table, boolean> weak tombstones, reject late pulses of retired producers
 ---@field jams PW.RevealJam[]
 ---@field clock fun(): number
 ---@field isEnemy fun(a: any, b: any): boolean default PW.IsEnemy (no teams module: a ~= b)
@@ -92,6 +94,10 @@
 ---@field send fun(recipients: any[], blips: PW.RevealBlip[], duration: number) the radar data (net)
 ---@field jamSend fun(recipients: any[], duration: number) the jam notice (net)
 ---@field stimulus fun(viewer: any, target: any, pos: Vector, sourceToken?: table, expiresAt?: number)
+
+---@class PW.RevealPulse
+---@field sourceToken? table producer identity; absent for a legacy four-argument reveal
+---@field botToken? table independent internal identity even for legacy pulses
 
 ---Options of PW.Streaks._NewRevealStore; every field defaults to the engine.
 ---@class PW.RevealStoreOptions
