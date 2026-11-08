@@ -184,13 +184,28 @@ Source: `design/05-loadout.md` d.12 and d.13; code `modules/loadout/sh_classes.l
 `lua/privatewar/types/loadout.lua`.
 
 **Where classes come from.** Presets are data files in `lua/privatewar/classes/` (kind `classes`: folder `classes`, class
-table `CLASS`, never auto-subscribed, required `Name` string and `Loadout` table, optional `Description`; enable ConVar
+table `CLASS`, never auto-subscribed, required `Name` string and `Loadout` table, optional `Description` and
+`Hidden: boolean` (default false); enable ConVar
 `pw_class_<id>_enabled`; registry `PW.Classes`). Custom classes are the player's own, in the client file
 `data/privatewar/classes.json`, so they travel between servers. File format:
 
 ```json
 { "version": 1, "classes": [ { "name": "Mine", "loadout": { "primary": "weapon_ar2", "secondary": "weapon_pistol" } } ] }
 ```
+
+**Human visibility (T-11.15).** The class editor/customization list contains custom classes only. Human selection
+lists (lobby, pause and death/respawn) show custom classes first, then visible presets, retaining order within each
+category without mutating the source tables. `Hidden = true` removes a code preset from every human picker and
+server-side id selection. Hidden presets remain registered, enabled and accessible through `PW.Classes.Get(id)`;
+trusted technical code may use their `Loadout`, including from `PW_PlayerLoadout`. `Abstract` and enable semantics
+are unchanged. The existing bot pool still admits enabled presets only when `bots.classes` permits presets and
+match validation passes, regardless of `Hidden`; hiding grants no additional bot permission.
+
+The human upload/save wire carries raw custom loadouts, not preset ids or a trusted bot/technical flag. A hidden
+preset ref cannot be selected by saving/uploading, forging a pick, or using a bot sender on the human net path.
+An old selected ref that now names a hidden preset is cleared to the default loadout on refresh/upload/pick;
+custom slot contents, builds and progression checks are unchanged. Equivalent custom contents are not prohibited:
+visibility is id permission, not content DRM. No new messages or unbounded tables are introduced.
 
 `_ClassesFromJson` reads only `classes` (`version` is not checked). Per class it keeps the structure the wire can carry
 (slot id to an id or a list of ids, `builds` to slot to build slot to an id or `false`), drops a class whose loadout is
@@ -251,7 +266,7 @@ reason is the check's). The final check on the server is `_Validate` (slot rules
 
 | Function | Contract |
 | --- | --- |
-| `PW.Loadout.ClassState(ply)` | Server. Presets (enabled, in registry order) then the player's uploaded classes, each repaired and checked under the current settings: `{ selected, entries = { { ref, name, loadout, removed, available, reason? } } }` |
+| `PW.Loadout.ClassState(ply)` | Server. Uploaded custom classes first, then enabled visible presets in registry order, each repaired and checked under the current settings: `{ selected, entries = { { ref, name, loadout, removed, available, reason? } } }` |
 | `PW.Loadout.RefreshClasses(ply)` | Server. Recomputes the state; when the player has picked a class, sets it as the class when it is available and clears it (back to the default loadout) when it is not; sends the state; returns it |
 | `PW.Loadout._OnClasses(ply, classes)` | Server. Stores the upload (cut to `loadout.classes`) and refreshes |
 | `PW.Loadout._OnPick(ply, ref) -> boolean` | Server. An available class becomes the pick and the player's class (used from the next spawn through `Resolve`); an unavailable, unknown or malformed ref is refused and the previous pick stays. The state is sent either way. Returns whether the pick was taken |
@@ -259,6 +274,8 @@ reason is the check's). The final check on the server is `_Validate` (slot rules
 | `PW.Loadout.GetClassState()` | Client. The last state received, `nil` before the first answer |
 | `PW.Loadout.UploadClasses()` | Client. Reads `classes.json` and sends `pw_loadout_classes` |
 | `PW.Loadout.SendPick(ref)` | Client. Sends `pw_loadout_pick` |
+| `PW.Loadout._HumanClassEntries(entries, customOnly, lookup)` | Pure. Fresh stable custom-first list; when `customOnly` is true, no presets. `lookup(id)` supplies preset metadata; `Hidden = true` is omitted. Entry objects and loadouts are never changed |
+| `PW.Loadout.HumanClassState(state, customOnly?)` | Shared wrapper using public preset metadata. Fresh filtered state; selected is empty if absent from the filtered entries. Used by client state, preview/editor cards and in-match selectors |
 | `PW.Loadout._ClassCards(state)`, `_ClassRows(entry)` | Pure: the card model of the class list (badge `N/A` when unavailable, else `IN USE` for the selected one; text is the reason, else `Removed: ...`; tag `Preset` or `Custom class`) and the content rows of a class (slot id upper-cased and the item names; one `<SLOT> ATTACHMENTS` row per build with the option count) |
 
 A class that becomes unavailable because the match settings changed (for example a playlist lowers the budget) is kept

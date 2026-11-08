@@ -97,7 +97,7 @@ return {
             name = "Mandatory T-11.15: legacy code classes default visible; explicit false is visible",
             func = function(test)
                 local state = lib().ClassState(test.ply)
-                expect(refs(state.entries)).to.deepEqual({ "preset:visible", "preset:legacy" })
+                expect(refs(state.entries)).to.deepEqual({ "preset:legacy", "preset:visible" })
             end
         },
         {
@@ -215,7 +215,7 @@ return {
                         lib()._RegistryLookup)
                 end)
                 local state = lib().RefreshClasses(test.ply)
-                expect(refs(state.entries)).to.deepEqual({ "custom:1", "custom:2", "preset:visible", "preset:legacy" })
+                expect(refs(state.entries)).to.deepEqual({ "custom:1", "custom:2", "preset:legacy", "preset:visible" })
                 expect(state.entries[2].available).to.beFalse()
                 expect(state.entries[2].loadout).to.deepEqual(classes[2].loadout)
                 expect(classes).to.deepEqual(before)
