@@ -91,7 +91,8 @@ local function fixture(stubber, rounds, count)
     end)
     bind(must(PW.Match), "Finish", function(result) f.results[#f.results + 1] = result end)
     local finalize = must(mode.FinalizeRounds)
-    bind(mode, "FinalizeRounds", function(self, result)
+    -- PW.Call requires an actual function, not GLuaTest's callable stub table, for a mode method.
+    rawset(mode, "FinalizeRounds", function(self, result)
         local transformed = finalize(self, result)
         local base = must(PW.Modes.Get("round_base")) --[[@as PW.RoundBase]]
         print(string.format("[PW] Infection fixture transform valid %s winner %s draw %s rows %d",
