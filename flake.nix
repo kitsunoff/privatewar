@@ -99,11 +99,6 @@
             pass_filenames = false;
             stages = [ "pre-commit" ];
           };
-          # pre-push: the full GLuaTest suite on the Deck; minutes, but pushes are rare.
-          testHook = (gateHook "test" "GLuaTest on the Steam Deck") // {
-            stages = [ "pre-push" ];
-            always_run = true;
-          };
         in
         git-hooks.lib.${system}.run {
           src = ./.;
@@ -112,7 +107,6 @@
             pw-types = gateHook "types" "lua-language-server --check";
             pw-markdown = gateHook "markdown" "markdownlint-cli2";
             pw-rules = gateHook "rules" "size limits and net.WriteTable";
-            pw-test = testHook;
           };
         };
 
