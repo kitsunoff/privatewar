@@ -15,10 +15,12 @@ local function absent() return not file.Exists("privatewar/types/pw_infection.lu
 
 ---@param a Vector
 ---@param b Vector
+---@param min? number
+---@param max? number
 ---@return boolean
-local function clearPair(a, b)
+local function clearPair(a, b, min, max)
     local distance = a:Distance2D(b)
-    if distance < 400 or distance > 700 or math.abs(a.z - b.z) >= 12 then return false end
+    if distance < (min or 400) or distance > (max or 700) or math.abs(a.z - b.z) >= 12 then return false end
     local eye = Vector(0, 0, 64)
     local trace = util.TraceHull({ start = a + eye, endpos = b + eye, mask = MASK_SOLID_BRUSHONLY,
         mins = Vector(-16, -16, -32), maxs = Vector(16, 16, 8) })
@@ -26,13 +28,15 @@ local function clearPair(a, b)
 end
 
 ---@return Vector?, Vector?
-local function spots()
+---@param min? number
+---@param max? number
+local function spots(min, max)
     local areas = navmesh.GetAllNavAreas() --[[@as CNavArea[] ]]
     for i, area in ipairs(areas) do
         local a = area:GetCenter() + Vector(0, 0, 2)
         for j = i + 1, #areas do
             local b = areas[j]:GetCenter() + Vector(0, 0, 2)
-            if clearPair(a, b) then return a, b end
+            if clearPair(a, b, min, max) then return a, b end
         end
     end
     return nil, nil
@@ -181,6 +185,78 @@ return {
                     expect(target:GetPos():Distance(contactPos) < 1).to.beTrue()
                     expect(target:GetVelocity():Distance(contactVelocity) < 1).to.beTrue()
                     expect(target:EyeAngles()).to.equal(contactView)
+                    done()
+                end)
+            end
+        },
+        {
+            name = "Infection real survivor: perceived infected triggers distance gain"
+                .. " and native gunfire while retreating",
+            skip = absent,
+            async = true,
+            timeout = 30,
+            func = function(state)
+                expect(game.GetMap()).to.equal("gm_construct")
+                local a, b = spots(220, 300)
+                expect(a).to.exist()
+                expect(b).to.exist()
+                local bots = state.bots --[[@as Player[] ]]
+                for _, name in ipairs({ "PW Infection pressure", "PW Infection survivor" }) do
+                    local bot = player.CreateNextBot(name) --[[@as Player?]]
+                    expect(IsValid(bot)).to.beTrue()
+                    bots[#bots + 1] = must(bot)
+                    must(PW.Loadout).SetClass(must(bot), { primary = "weapon_smg1", melee = "weapon_crowbar" })
+                end
+                local mode = setmetatable({ IsValid = function() return true end, Setting = function(_, key)
+                    return key == "rounds" and 1 or (key == "intermission" and 5 or 120)
+                end }, { __index = must(PW.Modes.Get("pw_infection")) }) --[[@as PW.InfectionMode]]
+                PW.ActiveMode = mode
+                stub(player, "GetAll").with(function() return bots end)
+                stub(must(PW.Match), "GetPhase").with(function() return "LIVE" end)
+                begin(mode, bots)
+                local seed = must(PW.Infection).Role(bots[1]) == "infected" and bots[1] or bots[2]
+                local survivor = seed == bots[1] and bots[2] or bots[1]
+                place(seed, must(a), must(b))
+                place(survivor, must(b), must(a))
+                -- Stationary opponent is fixture setup; the measured survivor gets no scripted input or forced target.
+                must(PW.BotInput).SetScripted(seed, { buttons = 0, view = seed:EyeAngles() })
+                PW._BotsManager.boards[survivor] = board(survivor)
+                local started, initial = CurTime(), seed:GetPos():Distance(survivor:GetPos())
+                local farthest, movement, attacks, hits, movingShots = initial, 0, 0, 0, 0
+                local escaped, melee = false, false
+                hook.Add("SetupMove", smoke, function(ply, move)
+                    if ply ~= survivor then return end
+                    local moving = math.abs(move:GetForwardSpeed()) + math.abs(move:GetSideSpeed()) > 1
+                    if moving then movement = movement + 1 end
+                    if bit.band(move:GetButtons(), IN_ATTACK) ~= 0 then
+                        attacks = attacks + 1
+                        if moving then movingShots = movingShots + 1 end
+                    end
+                    local wep = survivor:GetActiveWeapon()
+                    if IsValid(wep) and wep:GetClass() ~= "weapon_smg1" then melee = true end
+                end)
+                hook.Add("PostEntityTakeDamage", smoke, function(victim, damage, took)
+                    if victim == seed and damage:GetAttacker() == survivor and took then hits = hits + 1 end
+                end)
+                hook.Add("Tick", smoke, function()
+                    local current = must(PW.Bot).Get(survivor)
+                    if current ~= nil and current.behavior ~= nil
+                        and current.behavior.id == "pw_infection_escape" then escaped = true end
+                    farthest = math.max(farthest, seed:GetPos():Distance(survivor:GetPos()))
+                    if not (hits > 0 and movingShots > 0 and farthest >= initial + 100)
+                        and CurTime() - started < 24 then return end
+                    hook.Remove("Tick", smoke)
+                    hook.Remove("SetupMove", smoke)
+                    hook.Remove("PostEntityTakeDamage", smoke)
+                    print(string.format("[PW] Infection escape: initial=%.1f farthest=%.1f move=%d attack=%d"
+                        .. " movingShots=%d hits=%d escape=%s melee=%s", initial, farthest, movement, attacks,
+                        movingShots, hits, tostring(escaped), tostring(melee)))
+                    expect(escaped).to.beTrue()
+                    expect(movement > 0 and attacks > 0 and movingShots > 0 and hits > 0).to.beTrue()
+                    expect(farthest >= initial + 100).to.beTrue()
+                    expect(melee).to.beFalse()
+                    expect(must(PW.Infection).Role(survivor)).to.equal("survivor")
+                    expect(survivor:Alive()).to.beTrue()
                     done()
                 end)
             end
