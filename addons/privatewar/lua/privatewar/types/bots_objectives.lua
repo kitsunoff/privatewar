@@ -11,6 +11,7 @@
 ---@field radius number
 ---@field action string "capture" | "defend" | "collect" | "deny" | "hold" | "plant" | "defuse"
 ---@field weight number 0..1
+---@field urgency? number opt-in objective pressure 0..1; absent/invalid means legacy rank, never beats survival
 ---@field want integer desired number of bots
 ---@field eligible? table<integer, boolean> UserID allow-set; nil all, empty none
 ---@field revision? integer nonnegative visit identity, changed revision releases orders
