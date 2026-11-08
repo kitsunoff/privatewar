@@ -85,8 +85,24 @@ local function fixture(stubber, rounds, count)
     bind(player, "GetAll", function() return f.players end)
     bind(player, "GetHumans", function() return {} end) -- no fake entity is ever a net recipient
     bind(must(PW.Match), "GetPhase", function() return "LIVE" end)
-    bind(must(PW.Match), "Abort", function(reason) f.aborts[#f.aborts + 1] = reason end)
+    bind(must(PW.Match), "Abort", function(reason)
+        f.aborts[#f.aborts + 1] = reason
+        print("[PW] Infection fixture abort: " .. reason .. ", count " .. #f.aborts)
+    end)
     bind(must(PW.Match), "Finish", function(result) f.results[#f.results + 1] = result end)
+    local finalize = must(mode.FinalizeRounds)
+    bind(mode, "FinalizeRounds", function(self, result)
+        local transformed = finalize(self, result)
+        local base = must(PW.Modes.Get("round_base")) --[[@as PW.RoundBase]]
+        print(string.format("[PW] Infection fixture transform valid %s winner %s draw %s rows %d",
+            tostring(base._ValidResult(transformed)), tostring(transformed ~= nil and transformed.winner),
+            tostring(transformed ~= nil and transformed.draw), transformed ~= nil and #transformed.standings or 0))
+        for _, ply in ipairs(f.players) do
+            print(string.format("[PW] Infection fixture identity user %d entity %s player %s",
+                ply:UserID(), tostring(isentity(ply)), tostring(ply:IsPlayer())))
+        end
+        return transformed
+    end)
     bind(_G, "CurTime", function() return f.now end)
     bind(math, "random", function() return 0 end)
     bind(must(PW.MatchRules), "Spawn", function(ply)
