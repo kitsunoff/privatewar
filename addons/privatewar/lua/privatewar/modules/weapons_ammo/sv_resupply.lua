@@ -1,5 +1,6 @@
 -- Existing weapons and ordinary primary reserve only; never the spawn Give path.
 local lib = PW.WeaponAmmo --[[@as PW.WeaponAmmoLib]]
+local module = MODULE
 
 ---@param wep Weapon
 ---@param owner Player
@@ -22,7 +23,7 @@ local function ordinary(ammo)
 end
 
 function lib.Resupply(ply, weapons, opts)
-    if not IsValid(ply) or not ply:IsPlayer() or not ply:Alive() then return {} end
+    if not module:IsValid() or not IsValid(ply) or not ply:IsPlayer() or not ply:Alive() then return {} end
     local options = opts or {}
     ---@type PW.ResupplyEntry[]
     local entries = {}

@@ -503,6 +503,8 @@ Spawn-only `Give` and delayed base-default-ammo suppression remain unchanged.
   `opts.fraction` is the requested magazine fraction (default 1), `opts.maxMagazines` the
   reserve ceiling in magazines (default 3). Return only ammo types actually supplied, mapped
   to rounds added. The cache requests fraction 1; Scavenger requests fraction 0.5.
+- A disabled `weapons_ammo` owner makes retained `Resupply` calls return `{}` without reserve
+  mutation. Pure resupply math and `DamageWeapon` remain usable utilities, including weapon XP attribution.
 - Read live capacity and primary ammo through the adapter. Reject invalid, foreign, clipless
   and grenade weapons, negative/unknown ammo types and the equipment ammo types. No `Give`,
   no clip mutation and no grenade-count mutation. Human and bot recipients follow one path.
