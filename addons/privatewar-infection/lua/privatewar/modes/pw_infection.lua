@@ -61,6 +61,10 @@ function MODE:PW_RespawnDelay() return 3 end
 function MODE:PW_CanJoinInProgress() return false end
 function MODE:PW_ScoreValue() return 0 end -- built-in events derive XP/currency from the resolved points
 
+function MODE:PW_CanTakeDamage(victim, attacker, damage)
+    return lib.Damage(victim, attacker, damage)
+end
+
 ---@param phase PW.PhaseName
 function MODE:PW_PhaseChange(phase)
     -- The old active mode hears leaving POSTMATCH too, even if its module was disabled for the next match.
@@ -112,7 +116,8 @@ end
 function MODE:PW_CanRunBotBehavior(ply, id)
     if lib.State == nil or not lib.State.playing or lib.Role(ply) == nil then return false end
     if lib.Role(ply) == "infected" then return allowed[id] == true end
-    if id == "pw_infection_pursuit" then return false end
+    if id == "pw_infection_pursuit" or id == "melee" or id == "fight" or id == "retaliate"
+        or id == "take_cover" or id == "reload_cover" then return false end
 end
 
 function MODE:PW_CanRunBotInput(ply)

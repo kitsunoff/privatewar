@@ -2,6 +2,7 @@ local lib = PW.Infection --[[@as PW.InfectionLib]]
 include("privatewar/modules/pw_infection_rules/sv_round.lua")
 include("privatewar/modules/pw_infection_rules/sv_snapshot.lua")
 include("privatewar/modules/pw_infection_rules/sv_results.lua")
+include("privatewar/modules/pw_infection_rules/sv_contact.lua")
 
 local dependencies = { pw_infection_rules = true, teams = true, loadout = true, operators = true,
     player_overrides = true, match_rules = true, lobby = true }
@@ -52,19 +53,6 @@ end)
 
 PW.HookFor(MODULE, "PlayerCanPickupItem", function(_, ply)
     if lib.Active() and lib.Role(ply) ~= "survivor" then return false end
-end)
-
----@param target Entity
----@param damage CTakeDamageInfo
-PW.HookFor(MODULE, "EntityTakeDamage", function(_, target, damage)
-    if not lib.Active() or not target:IsPlayer() then return end
-    local ply = target --[[@as Player]]
-    local s = assert(lib.State)
-    if not s.playing or lib.Role(ply) == nil then return true end
-    local attacker = damage:GetAttacker()
-    if IsValid(attacker) and attacker:IsPlayer() and attacker ~= ply
-        and (lib.Role(attacker --[[@as Player]]) == nil
-            or not assert(PW.IsEnemy)(ply, attacker --[[@as Player]])) then return true end
 end)
 
 -- Only human commands here; bots retain the sole generic bots_input writer.

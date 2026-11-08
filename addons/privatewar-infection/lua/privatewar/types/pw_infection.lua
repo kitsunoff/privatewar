@@ -187,7 +187,9 @@
 ---@field Start fun(mode: PW.RoundBase): boolean
 ---@field Prepare fun(round: integer)
 ---@field Spawned fun(ply: Player)
+---@field ValidateModel fun(ply: Player) checks the owner's applied player-model animations, never changes saved choices
 ---@field Death fun(victim: Player, attacker: Entity)
+---@field Damage fun(victim: Player, attacker: Entity, damage: CTakeDamageInfo): boolean?
 ---@field Disconnect fun(ply: Player)
 ---@field EndRound fun()
 ---@field Clear fun()

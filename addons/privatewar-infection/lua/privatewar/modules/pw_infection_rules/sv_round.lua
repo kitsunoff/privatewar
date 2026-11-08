@@ -116,6 +116,16 @@ function lib.Prepare(round)
     end
 end
 
+function lib.ValidateModel(ply)
+    local s = assert(lib.State)
+    if s.zombie and ply:GetModel() == zombie
+        and (not hasSequence(ply, idleSequences) or not hasSequence(ply, moveSequences)) then
+        s.zombie = false
+        print("[PW] infection: zombie player animations unavailable; using ordinary operators")
+        restoreOperators(s)
+    end
+end
+
 function lib.Spawned(ply)
     local s = lib.State
     if s == nil or s.current == nil or lib.Role(ply) == nil then return end
@@ -125,12 +135,7 @@ function lib.Spawned(ply)
     if entry.role == "infected" then
         revoke(ply)
         -- Validate installed PLAYER animations after the sole operators owner applied the model.
-        if s.zombie and ply:GetModel() == zombie
-            and (not hasSequence(ply, idleSequences) or not hasSequence(ply, moveSequences)) then
-            s.zombie = false
-            print("[PW] infection: zombie player animations unavailable; using ordinary operators")
-            restoreOperators(s)
-        end
+        lib.ValidateModel(ply)
     end
     lib.Publish()
 end
