@@ -40,9 +40,9 @@ The root GPL-3.0-or-later license applies; no third-party code or assets are bun
 
 ## Verification status
 
-The first-hit/survivor-distance revision above is approved, but only its tests/contracts are prepared.
-Its runtime is not implemented or validated yet. Work resumes after coordinator-confirmed nightly/main
-integration, the hook-removal configuration and permission to use the Deck for a newly observed RED.
+The first-hit/survivor-distance runtime above has been implemented after a newly observed native-hit RED,
+but its installed-game GREEN, full regression gate and fresh-client visual verification are still pending.
+The game session became unavailable during validation; no successful acceptance is claimed.
 Do not treat the previous death-conversion/two-hit smoke results as acceptance of this revision.
 
 Previously installed lifecycle and native-fists checks covered both roles and rollback. The POSTMATCH screen

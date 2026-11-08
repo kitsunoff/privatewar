@@ -384,6 +384,23 @@ local suite = {
             end
         },
         {
+            name = "Infection fallback death: an unproven infected attack cannot fabricate contact infection credit",
+            skip = absent,
+            func = function()
+                local f = fixture(stub, 3, 3)
+                start(f)
+                local lib = must(PW.Infection)
+                local seed, victim = f.players[1], f.players[2]
+                f.data[victim].hp, f.data[victim].alive = 0, false
+                -- Any-death fallback remains; only an accepted proven live native contact earns infection credit.
+                lib.Death(victim, seed)
+                expect(lib.Role(victim)).to.equal("infected")
+                expect(must(lib.State).infections).to.deepEqual({})
+                expect(f.data[victim].hp).to.equal(0)
+                expect(f.data[victim].spawns).to.equal(1)
+            end
+        },
+        {
             name = "Infection survivor policy: melee approach is excluded, role conversion retains infected pursuit",
             skip = absent,
             func = function()

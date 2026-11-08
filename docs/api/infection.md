@@ -5,12 +5,14 @@ The declarations ship with the addon in `lua/privatewar/types/pw_infection.lua`.
 An absent addon leaves `PW.Infection`, `PW.InfectionRules`, `PW.InfectionAI` and
 `PW.InfectionPresentation` absent. Do not require them from ordinary content.
 
-## Approved playtest revision — prepared contracts, runtime pending
+## Approved playtest revision — runtime implemented, acceptance pending
 
 The 2026-11-08 revision to `02-modes.md` d.8 replaces death-required native-melee conversion with immediate
-first-hit conversion. The tests below are prepared, not executed RED/GREEN evidence. Runtime changes wait
-for coordinator-confirmed nightly/main integration, the hook-removal configuration and explicit Deck
-availability. Historical gates cover the previous implementation only.
+first-hit conversion. The native-hit smoke observed RED before implementation: the first real fist hit
+left the target a survivor. Pure touch and survivor-policy/escape cases also observed RED. The runtime
+now implements the revision, but installed-game GREEN and the full regression/visual gates are pending:
+the listen-host session became unavailable during validation. Historical gates cover the previous
+implementation only; there is no acceptance claim for the new runtime.
 
 The existing generic `match_rules` `EntityTakeDamage` boundary asks
 `PW_CanTakeDamage(target, attacker, damage)`. A false answer cancels damage before a lethal hit can kill.
@@ -30,17 +32,22 @@ ordinary stat Refresh, which must remain non-healing. Remove cached survivor per
 applying the infected baseline. Repeated callbacks cannot reinitialize health, credit twice or reseal results.
 World/suicide death conversion and infected death's 3-second respawn remain separate unchanged policies.
 
-The prepared pure contract `Touch(round, victimId, victimLife, attackerId, attackerLife, now) -> boolean`
+The pure contract `Touch(round, victimId, victimLife, attackerId, attackerLife, now) -> boolean`
 accepts an already-proven native hit, validates current living/present opposite roles and life generations,
 resolves the deadline first, then converts without setting `deadLife` or changing `life`/`alive`.
 Only the initial infected earns the infected-victory personal win; converted players do not inherit one.
 
-`pw_infection_escape` is a planned addon-owned survivor Action, separate from infected pursuit. It consumes
+`pw_infection_escape` is an addon-owned survivor Action, separate from infected pursuit. It consumes
 perceived enemy snapshots through the public brain ctx and uses bounded local walkability probes and
 `SetGoal`/`Intent`/`SetTarget`. A walking retreat retains normal aim/fire eligibility; a safe range does
 not become an approach. A dry weapon does not justify a forward melee charge. No direct attack bit,
 snap view, enemy world-position lookup, private-board mutation or difficulty override is permitted.
 The existing infected pursuit and native input-release contracts remain mandatory.
+
+Review follow-up pending a fresh RED: the retained death fallback still attributes infection credit from
+attacker role alone. `Infection fallback death: an unproven infected attack cannot fabricate contact
+infection credit` now specifies that this fallback converts without claiming a proven contact. The new
+case has not run, and its matching correction must follow an observed RED before acceptance.
 
 ## Ownership and lifecycle
 
@@ -145,7 +152,8 @@ when a complete terminal snapshot arrives late. No per-frame Gather loop or hidd
   through the ordinary writer, followed by alive conversion with zero death/spawn and preserved motion/control.
   This explicitly supersedes the old two-applied-damage-hit premise, not legal-input/pursuit assertions.
   Initial placement and a stationary target are fixture setup only; the measured attacker receives no
-  forced target, scripted attack, injected damage or teleport. The revised smoke has not run yet.
+  forced target, scripted attack, injected damage or teleport. The revised smoke observed RED before
+  implementation; its post-implementation GREEN remains pending.
 - Generic cases remain mandatory with the addon absent: `teams_transition.lua`, `player_overrides.lua`,
   `infection_role_transition.lua`, `role_policy.lua` and `bots_tactics_reset.lua`.
 
