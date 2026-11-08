@@ -81,6 +81,12 @@ local function fixture(stubber, rounds, count)
         local ply, data = actor(id, id > 1)
         f.players[#f.players + 1], f.data[ply] = ply, data
     end
+    local originalIsEntity = isentity
+    -- These actors already model Player/UserID/IsValid. Model the engine identity predicate consistently too;
+    -- unrelated tables and real entities still use the original predicate. Tracked stubs restore per inner fixture.
+    bind(_G, "isentity", function(value)
+        return f.data[value] ~= nil or originalIsEntity(value)
+    end)
     PW.ActiveMode = f.mode
     bind(player, "GetAll", function() return f.players end)
     bind(player, "GetHumans", function() return {} end) -- no fake entity is ever a net recipient
