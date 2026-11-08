@@ -2,11 +2,11 @@
 
 Status: **frozen by orchestrator review; runtime implemented** in `modes/hardpoint.lua`,
 `modules/hardpoint/` and `hud/hardpoint.lua`. Authored `gm_construct` data is included.
-Shared generic follower containment/frame identity remains a merge blocker, not a missing API-name decision.
+The earlier shared follower blocker is historical; current combined-base fixture evidence is recorded below.
 Observed test-first RED: 1396 passed / 12 failed / 0 skipped before implementation; activation/wire RED:
 1396 / 15 / 0. First runtime GREEN (before lifecycle/smoke additions): 1411 / 0 / 0.
 Normal-input bot target: 1 / 0 / 0. Historical pre-mount combined run: 1472 / 1 / 9.
-Latest mounted-source combined run: **1474 / 10 / 0** (passed / failed / skipped), 1484 cases / 125 groups.
+Historical mounted-source combined run: **1474 / 10 / 0** (passed / failed / skipped), 1484 cases / 125 groups.
 Nine failures are mounted Infection rules/presentation with no runtime implementation; one is the generic projected
 cylinder/frame-identity seam. Hardpoint itself is **24 / 1 / 0**, 25 cases. No mounted failure is disguised as a skip.
 The original 1395 baseline cases remain passing and unchanged.
@@ -162,7 +162,24 @@ It uses a real player bot, actual scheduler/commander/objective/follower/input c
 fixture, observing both cylinder occupancy and actual user commands. It fails if the shared seam is missing;
 it is neither a skipped placeholder nor evidence for general projection safety. The real target passed with
 5.9 / 2.1 seconds of occupancy at visits 1 / 2, 1291 movement commands and 2977 units of travel in 29.689 seconds.
-The latest full run also passes it: 9.3 / 2.1 seconds, 933 movement commands, 2566 units of travel, visit 2 reached.
+That historical full run also passes it: 9.3 / 2.1 seconds, 933 movement commands, 2566 units of travel, visit 2 reached.
+
+Independent combined-base review subsequently exposed a fixture setup defect: outside `LIVE`, the ordinary spawn
+selector declines selection, so the engine can choose a distant arbitrary map spawn. The corrected smoke scopes
+the public match phase getter to `LIVE` and installs the actual HP mode before bot creation and initial spawn;
+the phase getter and previous mode are restored after the case. It records initial body/team/observer/held/nav state.
+No private phase store, production spawn policy or authored map data is changed, and no fixture spawn pool is used.
+On the combined base plus the approved common lobby cleanup, the native two-group scope passes **15 / 0 / 0**;
+HP holds **14.3 / 2.0 seconds** with **702 movement commands**, **2159 units** of displacement and visit 2 reached.
+The 20-second rotation, 75-second case timeout, 65-second journey bound, both 2-second holds, movement and score
+assertions remain unchanged. There is no teleport during the measured journey. This controls a subsystem fixture;
+it does not establish production random-spawn/all-zone travel fairness or replace human playtesting.
+The subsequent unfiltered combined run, with a 480-second whole-run budget and unchanged case timeouts, completes
+**1587 / 8 / 0**, 1595 cases / 138 groups in **239.707 seconds**. All Hardpoint cases pass, including the shared
+seam and native smoke: **10.5 / 2.0 seconds**, **947 movement commands**, **2423 units**, visit 2.
+Combat-moves also passes. Remaining failures are three ARC9 integration cases, two Infection lifecycle cases and
+native bot goal/engagement/combat cases; the combined suite is not GREEN. No cause is asserted for those failures,
+and no out-of-scope fixture or production code is changed to suppress them.
 No teleport, direct damage,
 fabricated contacts or foreign private-store access occurs in its asserted movement path.
 
