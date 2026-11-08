@@ -47,6 +47,8 @@
 ---@field y number
 ---@field text string
 ---@field visible boolean
+---@field width? number
+---@field height? number
 
 ---@class PW.SupportDeviceConfig
 ---@field model string
@@ -85,6 +87,7 @@
 ---@field ScanDirection fun(origin: Vector, facing: Vector, contacts: PW.BotContact[], publicPoint?: Vector): Vector
 ---@field EndReason fun(facts: PW.DeviceLifetimeFacts): string?
 ---@field DamageAllowed fun(hostilePlayer: boolean, world: boolean): boolean
+---@field LayoutMarkers fun(rows: PW.DeviceMarker[], width: number, height: number)
 
 ---@class PW.DevicesLib
 ---@field Config table<string, PW.SupportDeviceConfig>

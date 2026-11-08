@@ -186,6 +186,35 @@ local cases = {
         end
     },
     {
+        name = "Devices disable: exact resolved module cleanup removes resources but not unused inventory",
+        async = true,
+        func = function()
+            local owner = fixture()
+            local record = deploy(owner, "ammo_cache")
+            assert(streaks().Give)(owner, "medical_station")
+            PW.Notify("PW_EntityDisabled", "modules", "support_devices", assert(PW.Modules.Get("teams")), "foreign")
+            expect(record.instance:IsValid()).to.beTrue()
+            PW.Notify("PW_EntityDisabled", "modules", "support_devices",
+                assert(PW.Modules.Get("support_devices")), "test cleanup")
+            removed(record)
+            expect(streaks().Inventory(owner)).to.deepEqual({ "medical_station" })
+            finish(done)
+        end
+    },
+    {
+        name = "Device input disable: exact resolved perception module cleanup releases only its owned buttons",
+        func = function()
+            local bot = actor(1)
+            local input = { buttons = bit.bor(IN_ATTACK, IN_RELOAD, IN_DUCK) }
+            assert(PW.BotDevices).OwnInput(bot, input)
+            PW.Notify("PW_EntityDisabled", "modules", "bots_devices", assert(PW.Modules.Get("teams")), "foreign")
+            expect(bit.band(input.buttons, IN_ATTACK) ~= 0).to.beTrue()
+            PW.Notify("PW_EntityDisabled", "modules", "bots_devices",
+                assert(PW.Modules.Get("bots_devices")), "test cleanup")
+            expect(input.buttons).to.equal(IN_DUCK)
+        end
+    },
+    {
         name = "Devices engine: friendly damage is ignored and world destruction awards no support score",
         async = true,
         func = function()
@@ -349,6 +378,7 @@ return {
         hook.Remove("PW_IsEnemy", key)
         hook.Remove("PW_CanUseLoadoutKind", key)
         devices().Clear()
+        for _, bot in ipairs(actors) do assert(PW.BotDevices).ReleaseInput(bot) end
         PW._Streaks = previous
     end,
     afterAll = function()
