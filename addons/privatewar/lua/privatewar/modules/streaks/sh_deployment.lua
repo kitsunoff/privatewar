@@ -100,3 +100,40 @@ end
 function lib.DamageAllowed(hostilePlayer, world)
     return hostilePlayer or world
 end
+
+---@param row PW.DeviceMarker
+---@param other PW.DeviceMarker
+---@return boolean
+local function overlaps(row, other)
+    return other.visible and math.abs(row.x - other.x) < ((row.width or 160) + (other.width or 160)) * 0.5 + 4
+        and row.y > other.y - (other.height or 20) - 4 and row.y - (row.height or 20) < other.y + 4
+end
+
+---@param row PW.DeviceMarker
+---@param rows PW.DeviceMarker[]
+---@param index integer
+---@param down boolean
+---@param tall number
+local function separate(row, rows, index, down, tall)
+    for _ = 1, index do
+        for j = 1, index - 1 do
+            local other = rows[j]
+            if overlaps(row, other) then
+                row.y = down and other.y + tall + 4 or other.y - (other.height or 20) - 4
+            end
+        end
+    end
+end
+
+function lib.LayoutMarkers(rows, width, height)
+    for i, row in ipairs(rows) do
+        if row.visible then
+            local half, tall = math.min(row.width or 160, width - 16) * 0.5, row.height or 20
+            row.x = math.Clamp(row.x, half + 8, width - half - 8)
+            row.y = math.Clamp(row.y, tall + 8, height - 8)
+            local down = row.y < height * 0.5
+            separate(row, rows, i, down, tall)
+            row.y = math.Clamp(row.y, tall + 8, height - 8)
+        end
+    end
+end

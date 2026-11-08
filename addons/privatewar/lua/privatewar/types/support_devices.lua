@@ -33,6 +33,7 @@
 ---@field receipts? table<Player, number>
 ---@field pulse? number
 ---@field retired? boolean authoritative retirement before engine deletion completes
+---@field constructing? boolean reserved ownership, not yet available to effects or perception
 
 ---@class PW.SupportDeviceEntity : Entity
 ---@field GetDeviceKind fun(self: PW.SupportDeviceEntity): PW.SupportDeviceKind
@@ -133,6 +134,18 @@
 ---@field first table<Entity, number>
 ---@field index integer
 ---@field contact? PW.BotDeviceContact
+
+---@class PW.DeviceAimControl
+---@field difficulty? table
+---@field params PW.BotAimParams
+---@field state PW.BotAimState
+---@field view Angle
+---@field trace Trace
+---@field input PW.BotAimInput
+---@field device? PW.SupportDevice
+---@field weapon? Weapon
+---@field recoil? PW.Recoil
+---@field fire? PW.FireInfo
 
 ---@class PW.Streak
 ---@field Prepare? fun(self: PW.Streak, owner: Player): table?

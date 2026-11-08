@@ -23,6 +23,16 @@ function lib.Feedback(owner, text)
     owner:SetNW2Float("pw_support_notice_end", CurTime() + 3)
 end
 
+---@param entity Entity
+local function retire(entity)
+    if not IsValid(entity) then return end
+    entity:SetNotSolid(true)
+    entity:SetSolid(SOLID_NONE)
+    entity:PhysicsDestroy()
+    entity:SetNoDraw(true)
+    entity:Remove()
+end
+
 function lib.Create(inst, kind, placement)
     local owner = inst._Owner --[[@as Player]]
     if not inst:IsValid() or not IsValid(owner) or not owner:Alive() or not lib.Enabled(kind)
@@ -30,23 +40,29 @@ function lib.Create(inst, kind, placement)
         or PW.Ask("PW_CanUseLoadoutKind", owner, "streaks") == false
         or placement == nil or not lib.Validate(owner, kind, placement.position) then return nil end
     local cfg = lib.Config[kind]
+    local team, now = owner:Team(), CurTime()
     local ent = ents.Create("pw_support_device") --[[@as PW.SupportDeviceEntity]]
     if not IsValid(ent) then return nil end
+    if not IsValid(owner) or not inst:IsValid() or not lib.Enabled(kind)
+        or not assert(PW.SupportStreaks).Capacity(lib.List(), owner, kind) then retire(ent) return nil end
+    -- Own the allocation before any fallible engine initialization. PW.Call constructor cleanup can now retire it.
+    local record = { owner = owner, kind = kind, entity = ent, position = placement.position, team = team,
+        ends = now + cfg.duration, instance = inst, charges = 10, receipts = {}, pulse = now, constructing = true }
+    lib._Records[#lib._Records + 1] = record
+    inst.Device = record
     ---@type Vector
     local mins = assert(lib.ModelBounds(kind))
     ent:SetModel(cfg.model)
     ent:SetPos(placement.position + Vector(0, 0, 2 - mins.z))
     ent:SetAngles(Angle())
     ent:Spawn()
-    if not IsValid(ent:GetPhysicsObject()) then ent:Remove() return nil end
-    local now = CurTime()
-    local record = { owner = owner, kind = kind, entity = ent, position = placement.position, team = owner:Team(),
-        ends = now + cfg.duration, instance = inst, charges = 10, receipts = {}, pulse = now }
-    lib._Records[#lib._Records + 1] = record
-    inst.Device = record
+    if not inst:IsValid() or record.retired or not IsValid(ent) or not IsValid(owner) or not owner:Alive()
+        or owner:Team() ~= team or PW.Ask("PW_CanUseLoadoutKind", owner, "streaks") == false
+        or not IsValid(ent:GetPhysicsObject()) or not lib.Enabled(kind) then lib.Remove(record) return nil end
     ent:SetDeviceKind(kind)
     ent:SetDeviceOwner(owner)
     ent:SetDeviceEnds(record.ends)
+    record.constructing = nil
     lib.Feedback(owner, cfg.name .. " DEPLOYED")
     return record
 end
@@ -57,14 +73,7 @@ function lib.Remove(record)
             table.remove(lib._Records, i)
             record.retired = true
             if PW.BotDevices ~= nil and PW.BotDevices.Invalidate ~= nil then PW.BotDevices.Invalidate(record) end
-            if IsValid(record.entity) then
-                -- Remove is deferred by the engine; retirement must stop collision in this same transaction.
-                record.entity:SetNotSolid(true)
-                record.entity:SetSolid(SOLID_NONE)
-                record.entity:PhysicsDestroy()
-                record.entity:SetNoDraw(true)
-                record.entity:Remove()
-            end
+            retire(record.entity)
             record.instance.Device = nil
             local streaks = PW.Streaks
             if streaks ~= nil and streaks._Instances ~= nil then streaks._Instances[record.instance] = nil end
@@ -110,7 +119,10 @@ function MODULE:DamageDevice(entity, damage)
     end
 end
 
-function lib.Damage(entity, damage) PW.Call(module, "DamageDevice", entity, damage) end
+function lib.Damage(entity, damage)
+    local definition = PW.Modules.Get("support_devices")
+    if definition ~= nil then PW.Call(definition, "DamageDevice", entity, damage) end
+end
 
 local nextTick = 0
 hook.Add("Think", "PW.SupportDevices", function()
@@ -119,7 +131,8 @@ hook.Add("Think", "PW.SupportDevices", function()
     if now < nextTick then return end
     local dt = math.min(1, math.max(0, now - nextTick + 0.25))
     nextTick = now + 0.25
-    PW.Call(module, "Maintain", now, dt)
+    local definition = PW.Modules.Get("support_devices")
+    if definition ~= nil then PW.Call(definition, "Maintain", now, dt) end
 end)
 
 PW.HookFor(module, "EntityTakeDamage", function(_, entity, damage)
@@ -136,7 +149,8 @@ PW.HookFor(module, "PlayerDisconnected", function(_, owner) lib.RemoveOwner(owne
 hook.Add("PreCleanupMap", "PW.SupportDevices", lib.Clear)
 hook.Add("ShutDown", "PW.SupportDevices", lib.Clear)
 hook.Add("PW_EntityDisabled", "PW.SupportDevices", function(kind, _, definition)
-    if (kind == "modules" and (definition == module or definition == PW.Modules.GetStored("streaks"))) then
+    if (kind == "modules" and (definition == PW.Modules.Get("support_devices")
+        or definition == PW.Modules.Get("streaks"))) then
         lib.Clear()
     elseif kind == "streaks" then
         for i = #lib._Records, 1, -1 do

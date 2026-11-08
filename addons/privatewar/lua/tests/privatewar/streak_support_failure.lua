@@ -17,7 +17,7 @@ return {
     end,
     cases = {
         {
-            name = "Deployment transaction: a post-allocation Spawn error retires the entity and preserves inventory",
+            name = "Deployment transaction: initialization error retires allocated entity and preserves inventory",
             async = true,
             func = function()
                 local lib, devices = assert(PW.Streaks), assert(PW.Devices)
@@ -47,11 +47,20 @@ return {
                     local allocated = create(class)
                     if class == "pw_support_device" then
                         resource = allocated
-                        rawset(allocated:GetTable(), "Spawn", function() error("intentional device Spawn failure") end)
                     end
                     return allocated
                 end
                 stub(ents, "Create").with(allocate)
+                local meta = assert(FindMetaTable("Entity"))
+                ---@type fun(self: Entity, model: string)
+                local setModel = meta.SetModel
+                ---@param allocated Entity
+                ---@param model string
+                local function initialize(allocated, model)
+                    if allocated:GetClass() == "pw_support_device" then error("intentional model setup failure") end
+                    setModel(allocated, model)
+                end
+                stub(meta, "SetModel").with(initialize)
                 assert(lib.Give)(actor, "ammo_cache")
                 expect(assert(lib.Use)(actor, "ammo_cache")).to.beFalse()
                 expect(lib.Inventory(actor)).to.deepEqual({ "ammo_cache" })

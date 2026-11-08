@@ -111,9 +111,9 @@ function MODULE:Maintain(now, dt)
     ---@type table<Player, number[]>
     local rates = {}
     for _, record in ipairs(lib._Records) do
-        if record.kind == "medical_station" then
+        if not record.constructing and record.kind == "medical_station" then
             medical(record, players, rates)
-        elseif now >= (record.pulse or 0) then
+        elseif not record.constructing and now >= (record.pulse or 0) then
             record.pulse = now + (record.kind == "ground_sensor" and 2 or 1)
             if record.kind == "ammo_cache" then cache(record, players, now) else sensor(record, players) end
         end

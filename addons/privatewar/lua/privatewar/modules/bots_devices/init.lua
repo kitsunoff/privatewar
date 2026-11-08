@@ -7,6 +7,10 @@ local states = setmetatable({}, { __mode = "k" })
 local registered = setmetatable({}, { __mode = "k" })
 ---@type table<Player, PW.BotIntent>
 local inputs = setmetatable({}, { __mode = "k" })
+---@type table<Player, PW.DeviceAimControl>
+local controls = setmetatable({}, { __mode = "k" })
+---@type PW.BotContact[]
+local noContacts = {}
 
 function lib.OwnInput(bot, intent) inputs[bot] = intent end
 
@@ -14,6 +18,7 @@ function lib.ReleaseInput(bot)
     local intent = inputs[bot]
     if intent ~= nil then intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD))) end
     inputs[bot] = nil
+    controls[bot] = nil
 end
 
 function lib.Invalidate(record)
@@ -31,7 +36,7 @@ end
 ---@param fov number
 ---@return boolean
 local function sees(bot, record, fov)
-    if record.retired or not IsValid(record.entity) or not IsValid(record.owner)
+    if record.retired or record.constructing or not IsValid(record.entity) or not IsValid(record.owner)
         or not PW.IsEnemy(bot, record.owner) or not lib.CanObserve(bot, CurTime()) then return false end
     local eye, point = bot:EyePos(), record.entity:WorldSpaceCenter()
     if not lib.Perceivable(eye, bot:GetAimVector(), point, 1800, fov, true) then return false end
@@ -80,7 +85,100 @@ function lib.Contact(bot)
     return contact
 end
 
+---@param bot Player
 function MODULE:ScanBot(bot) lib.Step(bot) end
+
+---@param bot Player
+---@param board PW.BotBoard
+---@param contact PW.BotDeviceContact
+---@param now number
+---@return PW.DeviceAimControl
+local function controlFor(bot, board, contact, now)
+    local cached = controls[bot]
+    if cached ~= nil and cached.difficulty == board.difficulty then return cached end
+    local aim = assert(PW.BotAim)
+    local params, eye = aim.ParamsFor(board.difficulty), bot:EyeAngles()
+    local control = {
+        difficulty = board.difficulty, params = params, state = aim.NewState(eye.p, eye.y, params, now),
+        view = Angle(eye.p, eye.y, 0), trace = { start = bot:EyePos(), endpos = contact.position,
+            filter = bot, mask = MASK_SHOT },
+        input = { now = now, dt = 0, eye = bot:EyePos(), point = contact.position, radius = 8, canFire = false }
+    }
+    controls[bot] = control
+    return control
+end
+
+---@param bot Player
+---@param control PW.DeviceAimControl
+---@param now number
+local function recoil(bot, control, now)
+    local weapon = bot:GetActiveWeapon()
+    if control.weapon ~= weapon then
+        control.weapon = weapon
+        if IsValid(weapon) then
+            control.recoil = PW.Adapters.CallFor(weapon, "GetRecoil", weapon)
+            control.fire = PW.Adapters.CallFor(weapon, "GetFireInfo", weapon)
+        else control.recoil, control.fire = nil, nil end
+    end
+    local punch, kick = bot:GetViewPunchAngles(), 0
+    local r, fire = control.recoil, control.fire
+    if r ~= nil and r.affectsBotAim and fire ~= nil and control.state.firingSince ~= nil then
+        local shots = math.min(math.floor((now - control.state.firingSince) * fire.rpm / 60) + 1,
+            assert(PW.BotAim).Config.maxKickShots)
+        kick = r.pitch * shots
+    end
+    control.input.kickP, control.input.kickY = punch.p - kick, punch.y
+end
+
+---@param bot Player
+---@param intent PW.BotIntent
+---@param now number
+---@param dt number
+function MODULE:DriveInput(bot, intent, now, dt)
+    intent.buttons = bit.band(intent.buttons or 0, bit.bnot(bit.bor(IN_ATTACK, IN_RELOAD)))
+    local board = PW.Bot ~= nil and PW.Bot.Get ~= nil and PW.Bot.Get(bot) or nil
+    local contact, aim = lib.Contact(bot), PW.BotAim
+    if board == nil or contact == nil or aim == nil then return end
+    for _, known in ipairs(board.contacts or noContacts) do
+        if known.visible or now - known.time < 1 then return end
+    end
+    local control = controlFor(bot, board, contact, now)
+    if control.device ~= contact.device then
+        aim.Acquire(control.state, control.params, now, nil)
+        control.device = contact.device
+    end
+    local eye = bot:EyePos()
+    control.trace.start, control.trace.endpos = eye, contact.position
+    local tr = util.TraceLine(control.trace)
+    local clear = tr.Entity == contact.device.entity or tr.Fraction >= 0.99
+    local weapon = bot:GetActiveWeapon()
+    local clip = IsValid(weapon) and PW.Adapters.CallFor(weapon, "GetClip", weapon) or 0
+    control.input.now, control.input.dt = now, math.min(dt, 0.1)
+    control.input.eye, control.input.point = eye, contact.position
+    control.input.canFire = clear and clip > 0
+    recoil(bot, control, now)
+    aim.Step(control.state, control.input, control.params)
+    control.view.p, control.view.y, control.view.r = control.state.p, control.state.y, 0
+    intent.view, intent.viewTarget, intent.viewSpeed = control.view, nil, nil
+    if clip <= 0 then intent.buttons = bit.bor(intent.buttons, IN_RELOAD)
+    elseif control.state.fire then intent.buttons = bit.bor(intent.buttons, IN_ATTACK) end
+end
+
+PW.HookFor(module, "Tick", function()
+    local definition = PW.Modules.Get("bots_devices")
+    if definition == nil then return end
+    local now, dt = CurTime(), engine.TickInterval()
+    for bot, intent in pairs(inputs) do
+        if IsValid(bot) then PW.Call(definition, "DriveInput", bot, intent, now, dt)
+        else lib.ReleaseInput(bot) end
+    end
+end)
+
+---@param bot Player
+local function scan(bot)
+    local definition = PW.Modules.Get("bots_devices")
+    if definition ~= nil then PW.Call(definition, "ScanBot", bot) end
+end
 
 PW.HookFor(module, "Think", function()
     local scheduler = PW.BotScheduler
@@ -90,7 +188,7 @@ PW.HookFor(module, "Think", function()
         if board ~= nil and bot:Alive() and registered[bot] == nil then
             local id = "devices:" .. bot:UserID()
             registered[bot] = id
-            scheduler.Register(id, function() PW.Call(module, "ScanBot", bot) end, { period = 0.1 })
+            scheduler.Register(id, function() scan(bot) end, { period = 0.1 })
         end
     end
     for bot, id in pairs(registered) do
@@ -113,6 +211,6 @@ function MODULE:PW_MatchEnd() clear() end
 function MODULE:PW_RoundPreparing() clear() end
 function MODULE:PW_PlayerTeamChanged() clear() end
 hook.Add("PW_EntityDisabled", "PW.BotDevices", function(kind, _, definition)
-    if (kind == "modules" and definition == module)
+    if (kind == "modules" and definition == PW.Modules.Get("bots_devices"))
         or (kind == "bot_behaviors" and definition == PW.BotBehaviors.Get("attack_device")) then clear() end
 end)

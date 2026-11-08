@@ -27,6 +27,8 @@ local function marker(viewer, entity, row, now)
     local screen = (entity:WorldSpaceCenter() + Vector(0, 0, 20)):ToScreen()
     row.x, row.y, row.visible = screen.x, screen.y, screen.visible
     row.text = cfg.name .. " / " .. owner:Nick() .. " / " .. math.ceil(entity:GetDeviceEnds() - now) .. "s"
+    surface.SetFont(lib.MarkerFont or "DermaDefaultBold")
+    row.width, row.height = surface.GetTextSize(row.text)
     return true
 end
 
@@ -46,6 +48,7 @@ PW.HookFor(MODULE, "Think", function()
         end
     end
     for i = #lib.Markers, n + 1, -1 do lib.Markers[i] = nil end
+    if PW.SupportStreaks ~= nil then PW.SupportStreaks.LayoutMarkers(lib.Markers, ScrW(), ScrH()) end
     lib.Notice = viewer:GetNW2Float("pw_support_notice_end", 0) > now and viewer:GetNW2String("pw_support_notice", "")
         or ""
 end)
