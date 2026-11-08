@@ -108,6 +108,9 @@ end
 
 return {
     groupName = "PW phase machine",
+    -- afterEach has restored every real store before yielding. A zero-delay group timer can run in this same tick;
+    -- phase listeners have queued real spawns/net updates even though the phase machine's players are injected.
+    afterAll = function() include("privatewar_fixtures/resource_lifecycle.lua").Yield(timer.Simple) end,
     beforeEach = function(state)
         state.previousStore = PW._Match
         state.previousSettings = PW._Settings
@@ -478,6 +481,7 @@ return {
         },
         {
             name = "Pure rules: all ready ignores bots; the next step follows the timers",
+            coroutine = true,
             func = function()
                 local human = {}
                 expect(PW.Phase._AllReady({}, {})).to.beTrue()
