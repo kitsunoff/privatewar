@@ -59,7 +59,7 @@ local function installStores(state)
         time = function() return state.time end,
         map = function() return currentMap end,
         mapChangeCount = function() return 5 end,
-        delay = function() return 0 end, -- the delayed change has its own cases (match_flow_ui.lua)
+        delay = function() return 1 end, -- minimum delay; countdown boundaries have dedicated match-flow cases
         bots = function() return 3 end,
         resolveMode = function(id) return id == "testmode" and state.mode or nil end,
         changelevel = function(map)
@@ -205,6 +205,9 @@ return {
                 local forFile = must(PW.Settings._ForFile)
                 local expectedSettings = forFile(state.mode --[[@as table]])
                 expect(match().Start(state.mode, otherMap)).to.beTrue()
+                expect(changelevelCount(state)).to.equal(0)
+                advance(state, 1)
+                changer()._Tick()
                 expect(changelevelCount(state)).to.equal(1)
                 local call = state.changelevels[1] --[[@as { map: string, text: string? }]]
                 expect(call.map).to.equal(otherMap)
@@ -227,8 +230,10 @@ return {
                     return { ["76561198000000001"] = 2 }
                 end)
                 local ok = match().Start(state.mode, otherMap)
-                hook.Remove("PW_PendingTeams", listenerId)
                 expect(ok).to.beTrue()
+                advance(state, 1)
+                changer()._Tick()
+                hook.Remove("PW_PendingTeams", listenerId)
                 expect(#asked).to.equal(1)
                 expect(asked[1]).to.equal(state.mode)
                 local call = state.changelevels[1] --[[@as { map: string, text: string? }]]
@@ -270,6 +275,10 @@ return {
                 expect(match().Start(state.mode, otherMap)).to.beFalse()
                 expect(match().Start(state.mode, "gm_pw_test_third")).to.beFalse()
                 expect(match().Start(state.mode)).to.beFalse()
+                expect(changelevelCount(state)).to.equal(0)
+                advance(state, 1)
+                changer()._Tick()
+                expect(match().Start(state.mode, otherMap)).to.beFalse()
                 expect(changelevelCount(state)).to.equal(1)
                 expect(match().GetPhase()).to.equal("LOBBY")
                 expect(loggedWith(state, "map change")).to.beTrue()
@@ -290,6 +299,8 @@ return {
             name = "Failed changelevel: still on the old map after 10 s, back to LOBBY with an error for the host",
             func = function(state)
                 expect(match().Start(state.mode, otherMap)).to.beTrue()
+                advance(state, 1)
+                changer()._Tick()
                 advance(state, 9.9)
                 changer()._Tick()
                 expect(changer().IsChanging()).to.beTrue()
@@ -302,6 +313,8 @@ return {
                 expect(string.find(reason, otherMap, 1, true)).to.exist()
                 expect(loggedWith(state, otherMap)).to.beTrue()
                 expect(match().Start(state.mode, otherMap)).to.beTrue()
+                advance(state, 1)
+                changer()._Tick()
                 expect(changelevelCount(state)).to.equal(2)
             end
         },
