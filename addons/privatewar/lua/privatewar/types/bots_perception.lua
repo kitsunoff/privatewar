@@ -98,6 +98,8 @@
 ---@field vel? Vector
 ---@field time? number default CurTime()
 ---@field dir? Vector
+---@field sourceToken? table server-only opaque radar provenance
+---@field expiresAt? number absolute radar lifetime; ordinary stimuli retain normal contact decay
 
 ---A listener of a sound: its state and ears.
 ---@class PW.BotListener
@@ -152,6 +154,7 @@
 ---Feeds a stimulus to a bot or to every bot of a team; returns how many bots got it. A table in place of kind is a
 ---stimulus with its kind in the field `kind`.
 ---@field AddStimulus fun(botOrTeam: any, kind: any, data: any): integer
+---@field RetireStimulusSource? fun(sourceToken: table?): integer removes only the exact source's radar evidence
 ---Five search points around the freshest lost contact of the bot (or of ent): last seen, ahead, left, right, far ahead.
 ---@field GetSearchPlan fun(bot: any, ent: any?): Vector[]?
 

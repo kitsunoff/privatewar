@@ -91,7 +91,7 @@
 ---@field players fun(): any[] every connected player
 ---@field send fun(recipients: any[], blips: PW.RevealBlip[], duration: number) the radar data (net)
 ---@field jamSend fun(recipients: any[], duration: number) the jam notice (net)
----@field stimulus fun(viewer: any, target: any, pos: Vector) feeds bots (PW.Bot.AddStimulus, kind "radar")
+---@field stimulus fun(viewer: any, target: any, pos: Vector, sourceToken?: table, expiresAt?: number)
 
 ---Options of PW.Streaks._NewRevealStore; every field defaults to the engine.
 ---@class PW.RevealStoreOptions
@@ -101,7 +101,7 @@
 ---@field players? fun(): any[]
 ---@field send? fun(recipients: any[], blips: PW.RevealBlip[], duration: number)
 ---@field jamSend? fun(recipients: any[], duration: number)
----@field stimulus? fun(viewer: any, target: any, pos: Vector)
+---@field stimulus? fun(viewer: any, target: any, pos: Vector, sourceToken?: table, expiresAt?: number)
 
 ---Client: the radar data received from the server.
 ---@class PW.RadarView
@@ -113,7 +113,7 @@
 ---Server. The deliberate reveal (DESIGN.md net rule): shows the positions of `targets` to `viewer` (a team index
 ---or a player) for `duration` seconds. Targets hidden by a hostile Counter-UAV are skipped. Sends the radar data
 ---to the viewer's human players and feeds the positions to its bots. Returns how many targets were revealed.
----@field Reveal? fun(viewer: integer|Player, targets: Player[], duration: number, owner?: Player): integer
+---@field Reveal? fun(viewer: integer|Player, targets: Player[], secs: number, owner?: Player, token?: table): integer
 ---@field _Streaks? PW.StreaksStore
 ---@field _Reveal? PW.RevealStore
 
@@ -155,6 +155,7 @@
 ---@field StreakDamage? fun(fn: (fun(...: any)), ...: any)
 ---Server. Starts a Counter-UAV of `owner` for `duration` seconds and notifies the hostile players.
 ---@field Jam? fun(owner: Player, duration: number)
+---@field RetireRevealSource? fun(sourceToken: table?) retire only this source's human and bot radar contribution
 ---Server. The living enemies of a player (PW.IsEnemy).
 ---@field Enemies? fun(owner: Player): Player[]
 ---Server. The reveal viewer of a player: its team index in a team mode, else the player.
