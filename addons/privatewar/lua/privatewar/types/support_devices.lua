@@ -1,5 +1,5 @@
 ---@meta
--- Tests-first contract: docs/api/support-devices.md. Runtime implementation is a separate TDD step.
+-- Support runtime contracts: docs/api/support-devices.md. Source-scoped reveal retirement remains a shared dependency.
 
 ---@alias PW.SupportDeviceKind "ammo_cache"|"medical_station"|"ground_sensor"
 

@@ -202,6 +202,29 @@ local cases = {
         end
     },
     {
+        name = "Device contact: recognized sight is revalidated across scheduler hitches and lost LOS revokes it",
+        func = function()
+            local owner = fixture()
+            local record = deploy(owner, "ground_sensor")
+            local bot = actor(2)
+            place(bot, record.position + Vector(160, 0, 2))
+            bot:SetEyeAngles((record.entity:WorldSpaceCenter() - bot:EyePos()):Angle())
+            local bots, perception = assert(PW.Bot), assert(PW.BotDevices)
+            local original = assert(bots.Get)
+            local board = { contacts = {}, difficulty = { fov = 110, reaction_mean = 0 } }
+            stub(bots, "Get").with(function(who) if who == bot then return board end return original(who) end)
+            perception.Step(bot)
+            expect(perception.Contact(bot) ~= nil).to.beTrue()
+            local later = CurTime() + 1
+            stub(_G, "CurTime").returns(later)
+            local held = assert(perception.Contact(bot))
+            expect(held.device).to.equal(record)
+            expect(held.seen).to.equal(later)
+            stub(util, "TraceLine").returns({ Fraction = 0, Entity = NULL })
+            expect(perception.Contact(bot)).to.beNil()
+        end
+    },
+    {
         name = "Device input disable: exact resolved perception module cleanup releases only its owned buttons",
         func = function()
             local bot = actor(1)
@@ -257,6 +280,31 @@ local cases = {
             maintain(CurTime() + 1)
             expect(owner:GetAmmoCount("Pistol")).to.equal(18)
             expect(record.charges).to.equal(9)
+        end
+    },
+    {
+        name = "Cache engine: disabled ammo owner grants nothing and preserves receipt charges and cooldown",
+        func = function()
+            local owner = fixture()
+            owner:StripWeapons()
+            local weapon = assert(owner:Give("weapon_pistol"))
+            local ammo = weapon:GetPrimaryAmmoType()
+            owner:SetAmmo(0, ammo)
+            local record = deploy(owner, "ammo_cache")
+            local now = CurTime()
+            PW.Modules._Disable("weapons_ammo", "support cache retained service test")
+            local ok, err = pcall(function()
+                maintain(now, 0.25)
+                expect(owner:GetAmmoCount(ammo)).to.equal(0)
+                expect(record.charges).to.equal(10)
+                expect(assert(record.receipts)[owner]).to.equal(nil)
+            end)
+            PW.Modules._Enable("weapons_ammo")
+            assert(ok, tostring(err))
+            maintain(now + 1, 0.25)
+            expect(owner:GetAmmoCount(ammo)).to.equal(18)
+            expect(record.charges).to.equal(9)
+            expect(assert(record.receipts)[owner]).to.equal(now + 1)
         end
     },
     {

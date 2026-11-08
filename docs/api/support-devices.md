@@ -1,7 +1,9 @@
 # Support streaks and owned devices
 
 Status: frozen implementation contract for the approved K1–K4 slice (2026-11-08).
-This contract is tests-first; it does not claim the runtime or its in-game checks exist yet.
+The four content entries, transactional deployment, physical devices, support effects, HUD and native-input
+bot counterplay are implemented. Source-scoped sensor reveal retirement remains an unmet shared dependency;
+this document does not claim final acceptance or a green full-suite gate.
 Existing [streaks](streaks.md), [role policy](role-policy.md) and [bots](bots-blackboard.md)
 contracts remain authoritative outside the additions below. No aircraft or lethal content is included.
 
@@ -40,6 +42,9 @@ all partial owned resources are removed. A valid accepted instance consumes exac
 The device content's `Prepare` calls `PW.Devices.Prepare(owner, kind)` and `OnEquip` calls
 `PW.Devices.Create(instance, kind, instance.Activation)`. Both reject stale/invalid placement and cap races.
 Creation failure ends the instance. Only successful activation publishes inventory changes.
+Allocated entities enter instance ownership before fallible initialization. A construction error therefore
+retires the partial resource and preserves inventory, not just the registry entry. Construction-in-progress
+records count toward capacity but cannot supply, heal or become bot contacts.
 
 Preparation validates finite origin/aim/floor vectors, local deployment distance, current line to the floor,
 world-supported floor, slope at most 20 degrees, full device hull clearance and a player-sized surrounding
@@ -77,6 +82,8 @@ Pure predicates live in `modules/streaks/sh_deployment.lua` (`PW.SupportStreaks`
 `SupportEligible(facts)` (owner, recipient, teams, allied, alive, allowed, distance, radius, visible),
 `ReceiptReady(charges, last, now)`, `HealAmount(health, maximum, lastDamage, now, dt, rates)` and
 `ScanDirection(origin, facing, contacts, publicPoint?) -> Vector`.
+`LayoutMarkers(rows, width, height)` separates measured visible labels and keeps them inside screen padding;
+projection, text measurement and layout run outside the paint loop.
 `EndReason(facts) -> string?` checks absolute expiry, owner validity, unchanged team, content/module enable
 and role allowance without looking at owner life/health. `DamageAllowed(hostilePlayer, world)` rejects
 friendly/unknown attackers and accepts hostile players or world damage. Lifecycle event cleanup still removes
@@ -90,12 +97,15 @@ does not consume a charge or begin its cooldown. Ten receipts are global to one 
 ## Ammunition dependency
 
 The perks lane owns the capped ordinary-reserve API and adapter documentation.
-The cache consumer requests **one magazine, maximum three reserve magazines**, once per eligible receipt.
-That service owns ordinary weapon classification, magazine size, shared-ammo deduplication and reserve clamping.
+The cache calls `PW.WeaponAmmo.Resupply(recipient, explicitWeapons, { fraction = 1, maxMagazines = 3 })`:
+**one magazine, maximum three reserve magazines**, once per eligible receipt.
+Its explicit weapon pool contains only enabled public catalogue entries with `Kind == "gun"`.
+Unknown weapons, launchers, throwables and equipment are conservatively excluded even with positive clip capacity.
+The shared service owns magazine size, ammo validity, shared-ammo deduplication and reserve clamping.
 It must not call spawn-time `Give`, modify clips, or supply grenade/launcher/equipment ammo.
-The exact committed API must be integrated before writing the cache consumer; this document deliberately
-does not name a missing ammo method as implemented. Tests here do not substitute a fake successful cache
-consumer for the required real-service integration.
+The integrated service rejects mutation while its module owner is disabled; an empty result consumes neither
+a cache receipt nor its recipient cooldown. Pure reserve math and damage attribution remain usable independently.
+Tests exercise the actual cache consumer and real service, including positive-capacity launcher/grenade exclusion.
 
 ## Healing eligibility
 
@@ -122,6 +132,9 @@ per bot per scheduled pass; it never uses `ents.Find*`. A candidate outside sigh
 The behavior keeps player combat/survival priority. On loss of current device LOS it stops firing, not chasing
 hidden coordinates. It uses the existing pure spring/settle/fire controller (`PW.BotAim`) over a legally perceived
 point, writes ordinary `ctx:Intent()` view/buttons and lets the existing `bots_input` writer issue `CUserCmd`.
+The behavior claims its input while an owned every-tick controller updates aim, adapter recoil and shot LOS.
+Reading a previously recognized contact revalidates current range/FOV/LOS; delayed scheduled discovery does not
+grant blind fire or manufacture a new contact. Losing sight revokes recognition and resets acquisition.
 It never uses the dev/test aim override, direct damage, `SetPos`, fabricated radar stimuli or a foreign board store.
 The behavior owns its attack bit only while running and releases it on end/suspend/death/invalidation.
 The required engine smoke must observe native weapon fire destroying a genuinely perceived device;
@@ -133,9 +146,13 @@ this slice implements nearby automatic receipt, not deliberate visits or telepor
 
 ## Verification status
 
-Keep all mandatory T-4.6, T-6.6 and T-5.7 cases unchanged. New tests are in
+Keep all mandatory T-4.6, T-6.6 and T-5.7 cases unchanged. Initial tests are in
 `streak_deployment.lua`, `streak_directional_scan.lua`, `streak_ammo_cache.lua`,
 `streak_medical_station.lua`, `streak_ground_sensor.lua` and `bots_support_devices.lua` under
-`lua/tests/privatewar/`. Pure cases supplement, not replace, engine placement, cleanup, input-combat
-and client-visible marker/feedback cases. No passes, performance numbers or screenshots are claimed here.
+`lua/tests/privatewar/`. Additional engine, failure, disclosure, finite-boundary, catalogue, marker and
+source-retirement regressions are in `streak_support_*.lua`; native counterplay and input safety are in
+`bots_support_native.lua` and `bots_support_safety.lua`. Pure cases supplement, not replace, engine placement,
+cleanup, input-combat and client-visible marker/feedback checks. No final passes, performance numbers or
+screenshots are claimed here. The real sensor-removal regression must remain enabled until source-only human
+and bot reveal cleanup preserves unrelated same-owner UAV/CUAV; owner-wide effect clearing is not compatible.
 Human/P2P, controller, multilevel/indoor, optional-adapter and late-join checks remain manual until observed.

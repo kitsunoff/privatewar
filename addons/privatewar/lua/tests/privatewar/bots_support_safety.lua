@@ -56,6 +56,30 @@ return {
             end
         },
         {
+            name = "Device tick: lost contact clears stale fire and reload without tracing hidden coordinates",
+            func = function()
+                local bot = {} --[[@as Player]]
+                stub(assert(PW.Bot), "Get").returns({ contacts = {} })
+                stub(assert(PW.BotDevices), "Contact").returns(nil)
+                stub(util, "TraceLine").with(function() error("lost contact must not trace hidden coordinates") end)
+                local intent = { buttons = bit.bor(IN_ATTACK, IN_RELOAD, IN_DUCK) }
+                PW.Call(assert(PW.Modules.Get("bots_devices")), "DriveInput", bot, intent, 10, 0.015)
+                expect(intent.buttons).to.equal(IN_DUCK)
+            end
+        },
+        {
+            name = "Device tick: a newly perceived player prevents device fire before the next brain update",
+            func = function()
+                local bot = {} --[[@as Player]]
+                stub(assert(PW.Bot), "Get").returns({ contacts = { { visible = true, time = 10 } } })
+                stub(assert(PW.BotDevices), "Contact").returns({})
+                stub(util, "TraceLine").with(function() error("player priority must precede device traces") end)
+                local intent = { buttons = bit.bor(IN_ATTACK, IN_RELOAD, IN_DUCK) }
+                PW.Call(assert(PW.Modules.Get("bots_devices")), "DriveInput", bot, intent, 10, 0.015)
+                expect(intent.buttons).to.equal(IN_DUCK)
+            end
+        },
+        {
             name = "Bot streak eligibility: inventory polling performs no floor hull or exit traces",
             func = function()
                 local lib = assert(PW.Devices)

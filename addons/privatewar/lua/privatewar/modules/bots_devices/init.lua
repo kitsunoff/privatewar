@@ -59,7 +59,7 @@ function lib.Step(bot)
         held.visible = sees(bot, held.device, fov or 110)
         if held.visible then
             held.position, held.seen = held.device.entity:WorldSpaceCenter(), now
-        else state.contact = nil end
+        else state.first[held.device.entity], state.contact = nil, nil end
     end
     local records = devices.List()
     if #records == 0 then state.contact, state.first = nil, {} return end
@@ -80,8 +80,17 @@ function lib.Contact(bot)
     local contact = state ~= nil and state.contact or nil
     if not module:IsValid() or not bot:Alive() or contact == nil or not IsValid(contact.device.entity)
         or contact.device.retired
-        or not contact.visible or CurTime() - contact.seen > 0.3
+        or not contact.visible
         or not lib.CanObserve(bot, CurTime()) or not PW.IsEnemy(bot, contact.device.owner) then return nil end
+    local board = PW.Bot ~= nil and PW.Bot.Get ~= nil and PW.Bot.Get(bot) or nil
+    local fov = board ~= nil and board.difficulty ~= nil and tonumber(board.difficulty.fov) or 110
+    -- A scheduled scan may lag behind usercmd simulation. Revalidate only the already recognized device,
+    -- rather than treating an elapsed scheduling budget as either new knowledge or permission to fire blind.
+    if not sees(bot, contact.device, fov or 110) then
+        assert(state).first[contact.device.entity], assert(state).contact = nil, nil
+        return nil
+    end
+    contact.position, contact.seen = contact.device.entity:WorldSpaceCenter(), CurTime()
     return contact
 end
 
