@@ -188,8 +188,8 @@ return {
                 expect(#state.sent).to.equal(1)
                 local sent = state.sent --[[@as PW.LoadoutClassState[] ]]
                 local entries = sent[1].entries
-                expect(entries[#entries].ref).to.equal("custom:1")
-                expect(entries[#entries].available).to.beTrue()
+                expect(entries[1].ref).to.equal("custom:1")
+                expect(entries[1].available).to.beTrue()
             end
         },
         {

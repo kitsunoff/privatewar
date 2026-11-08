@@ -1,7 +1,7 @@
 -- Class picker during a match (T-7.6; 10-frontend.md d.1 "class picker on death"; 05-loadout.md d.12). Root of the
 -- in-match tab CLASS: the compact root that opens on death in LIVE (ui_kit/cl_match.lua). The pause menu pushes the
--- same screen (CHANGE CLASS), where Back returns to the menu. The cards are the player's classes (presets, then
--- custom), the current one marked CURRENT, an unavailable one locked with its reason. Choosing an available class
+-- same screen (CHANGE CLASS), where Back returns to the menu. The cards are custom classes, then visible presets;
+-- the current one is marked CURRENT, an unavailable one locked with its reason. Choosing an available class
 -- sends the class pick (PW.Loadout.SendPick); it applies from the next spawn. Thin glue over PW.UI.Match.ClassCards
 -- and Choose (sh_match.lua).
 

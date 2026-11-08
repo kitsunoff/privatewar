@@ -960,6 +960,9 @@ Gaps (the design is silent; no contradiction):
       kept until the map changes). Every class passes `PW.Loadout.Validate` under the current match settings (budget,
       bans, `PW_ValidateLoadout`), never progression. An empty set or nothing valid gives an empty pool: the bot keeps
       the default loadout.
+      `CLASS.Hidden` is human-picker policy only: it neither filters this existing enabled-preset pool nor bypasses
+      its source setting, budget, bans or `PW_ValidateLoadout`. Hidden definitions remain publicly resolvable for
+      technical/bot callers; the human class-selection net path never gains bot permission from its sender.
     - Weights: the personality field `class_weights` maps the category of a class's primary weapon to a weight (an
       unlisted category weighs 1, `0` removes it; all zero falls back to an even draw). Values: `cqb` shotgun 3, smg 2,
       sniper 0.25; `run_and_gun` smg 3, ar 1.5, sniper 0.5; `camper` sniper 3, lmg 2, ar 1.5, shotgun 0.5. Every class

@@ -162,11 +162,25 @@ Inherited from `04-weapons.md`:
 
 13. **Addons define ready-made classes: a kind `classes/` (data).** Packs ship presets (for example "Assault", "Sniper"). Players can copy a preset into a custom class.
 
+    **Revision 2026-11-08 (user-approved T-11.15): human class visibility.**
+    - Customization and class-editor lists contain only player-created custom classes, not code presets.
+    - Human class selectors (including respawn and pause) show custom classes first, then visible code presets;
+      each category retains its existing order. Filtering never modifies saved custom slots or builds.
+    - A code class may declare `Hidden: boolean`, default false. Hidden presets stay registered and resolvable
+      through the public registry for technical callers, including trusted `PW_PlayerLoadout` overrides, but are
+      absent from human pickers and cannot be selected or cloned by hidden preset id through human requests.
+      A persisted human pick of a newly hidden preset falls back to the default loadout without rewriting custom data.
+    - Hiding is a picker/id permission, not a ban on equivalent raw custom loadout contents. Existing progression,
+      repair, budget, module enable checks and next-spawn application timing remain unchanged.
+
 14. **Bots can use players' classes.**
     - `match` setting `bots.classes` (type `set`): sources a bot picks from — `preset` (the `classes/` kind) and `players` (custom classes of humans who joined this session), default both.
     - The `players` pool collects every human's valid custom classes during the session and keeps them after the player leaves (until the map changes).
     - A player's class was already validated for that player (including unlocks); a bot using it is not checked against progression, only against the current match settings (budget, bans).
     - Rationale: bots play with real community builds, which makes them feel less generic.
+    - `CLASS.Hidden` changes human visibility only, not bot pool eligibility: enabled code presets, including hidden
+      ones, still require the existing `bots.classes` source permission and match validation. Hiding neither adds
+      technical presets outside that policy nor excludes otherwise eligible presets from bots.
 
 ### Gunsmith server flow
 

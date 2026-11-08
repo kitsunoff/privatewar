@@ -1,5 +1,6 @@
 -- Controlled subsystem smoke: real scheduler, commander, objective behavior, nav follower and CUserCmd input.
 -- Public phase/board providers are scoped fixtures; no foreign private stores, damage or fabricated contacts.
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
 ---@return Player, boolean
 local function acquireBot()
     -- Other groups kick their pool in afterAll; IsValid stays true until that queued kick completes.
@@ -11,16 +12,20 @@ end
 
 return {
     groupName = "PW Hardpoint real-input bot smoke",
-    afterAll = function(state)
+    ---@param state GLuaTest_TestState
+    afterEach = function(state)
         timer.Remove("PW.HardpointHoldSmoke")
         hook.Remove("SetupMove", "PW.HardpointInputSmoke")
         local bot = state.bot --[[@as Player?]]
+        local cleaned, reason = true, nil
         if state.mode ~= nil then
-            assert(PW.Hardpoint).Cleanup(state.mode)
+            cleaned, reason = pcall(assert(PW.Hardpoint).Cleanup, state.mode)
             PW.ActiveMode = state.originalMode
+            state.mode = nil
             if bot ~= nil and IsValid(bot) then bot:SetTeam(state.originalTeam) end
         end
         if bot ~= nil and IsValid(bot) and state.owned then bot:Kick("Hardpoint smoke complete") end
+        assert(cleaned, reason)
     end,
     cases = {
         {
@@ -128,7 +133,8 @@ return {
                     expect(commands > 0).to.beTrue()
                     expect(travel > 64).to.beTrue()
                     expect(runtime.state.scores[1] >= 2).to.beTrue()
-                    done()
+                    if owned and IsValid(bot) then bot:Kick("Hardpoint smoke complete") end
+                    resources.Disconnected({ bot }, done, timer.Simple)
                 end)
             end
         }

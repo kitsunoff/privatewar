@@ -69,7 +69,7 @@
 ---@field LeaveGuestText string
 ---@field LobbyText string
 ---@field LobbyGuestText string
----Cards of the class picker (presets then custom classes, as the server sent them) and the ref of the current
+---Cards of the human class picker (custom classes then visible presets, stable within each category) and the current
 ---class (nil when none). The current card carries the badge CURRENT; an unavailable one is locked with its reason.
 ---@field ClassCards fun(state?: PW.LoadoutClassState): PW.UICard[], string?
 ---Asks for a class: an available class other than the current one is sent through send(ref).

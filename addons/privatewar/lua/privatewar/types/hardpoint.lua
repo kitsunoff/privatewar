@@ -71,6 +71,20 @@
 ---@field zoneRemaining number
 ---@field matchRemaining number
 
+---@class PW.HardpointWaypoint
+---@field x number screen pixels, clamped to the central HUD-safe region
+---@field y number screen pixels
+---@field angle number screen-space arrow angle in degrees
+---@field edge boolean offscreen or behind; draw a directional pointer
+---@field visible boolean false for invalid camera projection
+
+---@class PW.HardpointGuidance
+---@field visible boolean active HP and a living nonspectating participant only
+---@field zoneId string current public zone only, empty when hidden
+---@field action string capture, defend or contested; localize in the client wrapper
+---@field token string existing relative control palette token
+---@field distance integer nearest metre, Source units converted with 0.0254
+
 ---@class PW.HardpointLib
 ---@field Inside fun(zone: PW.HardpointZone, pos: Vector): boolean
 ---@field Presence fun(zone: PW.HardpointZone, actors: PW.HardpointActor[],
@@ -86,6 +100,11 @@
 ---@field AcceptSnapshot fun(current: PW.HardpointSnapshot?, incoming: PW.HardpointSnapshot): PW.HardpointSnapshot
 ---@field View fun(snapshot: PW.HardpointSnapshot, now: number, out: PW.HardpointView): PW.HardpointView
 ---@field ControlToken fun(control: integer, contested: boolean, ownTeam: integer): string
+---Pure camera-space projection; caller owns and reuses output, no trace or engine view access.
+---@field ProjectWaypoint fun(right: number, up: number, forward: number, fov: number, width: number,
+---    height: number, out: PW.HardpointWaypoint): PW.HardpointWaypoint
+---@field Guidance fun(snapshot: PW.HardpointSnapshot?, phase: PW.PhaseName, mode: string?, playerVisible: boolean,
+---    ownTeam: integer, distance: number, out: PW.HardpointGuidance): PW.HardpointGuidance
 ---@field ValidateActivation fun(layout: PW.HardpointLayout,
 ---    probe: fun(zone: PW.HardpointZone): boolean): boolean, string?
 ---@field CheckActivation fun(layout: PW.HardpointLayout): boolean, string?

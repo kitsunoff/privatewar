@@ -73,17 +73,17 @@ return {
     groupName = "PW UI death picker and pause menu",
     cases = {
         {
-            name = "Picker list: presets then custom classes in the server's order",
+            name = "Picker list: custom classes then visible presets, preserving each category's order",
             func = function()
                 local cards = match().ClassCards(state())
                 expect(#cards).to.equal(4)
-                expect(cards[1].id).to.equal("preset:assault")
-                expect(cards[2].id).to.equal("preset:close_quarters")
-                expect(cards[3].id).to.equal("custom:1")
-                expect(cards[4].id).to.equal("custom:2")
-                expect(cards[1].title).to.equal("Assault")
-                expect(cards[1].tags).to.equal("Preset")
-                expect(cards[3].tags).to.equal("Custom class")
+                expect(cards[1].id).to.equal("custom:1")
+                expect(cards[2].id).to.equal("custom:2")
+                expect(cards[3].id).to.equal("preset:assault")
+                expect(cards[4].id).to.equal("preset:close_quarters")
+                expect(cards[3].title).to.equal("Assault")
+                expect(cards[3].tags).to.equal("Preset")
+                expect(cards[1].tags).to.equal("Custom class")
             end
         },
         {
@@ -91,20 +91,20 @@ return {
             func = function()
                 local cards, current = match().ClassCards(state())
                 expect(current).to.equal("preset:close_quarters")
-                expect(cards[2].badge).to.equal("CURRENT")
+                expect(cards[4].badge).to.equal("CURRENT")
                 expect(cards[1].badge).to.beNil()
-                expect(cards[2].locked).to.beFalse()
+                expect(cards[4].locked).to.beFalse()
             end
         },
         {
             name = "Picker list: an unavailable class is greyed (locked) with its reason",
             func = function()
                 local cards = match().ClassCards(state())
-                expect(cards[4].locked).to.beTrue()
-                expect(cards[4].badge).to.equal("N/A")
-                expect(cards[4].reason).to.equal("Not available: over the budget (12 of 10)")
-                expect(cards[4].text).to.equal("over the budget (12 of 10)")
-                expect(cards[3].locked).to.beFalse()
+                expect(cards[2].locked).to.beTrue()
+                expect(cards[2].badge).to.equal("N/A")
+                expect(cards[2].reason).to.equal("Not available: over the budget (12 of 10)")
+                expect(cards[2].text).to.equal("over the budget (12 of 10)")
+                expect(cards[1].locked).to.beFalse()
             end
         },
         {

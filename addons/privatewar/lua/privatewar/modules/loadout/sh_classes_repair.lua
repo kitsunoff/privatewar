@@ -167,7 +167,8 @@ end
 
 -- Cards and rows ----------------------------------------------------------------------------------------------------
 
-function lib._ClassCards(state)
+function lib._ClassCards(state, customOnly)
+    state = lib.HumanClassState(state, customOnly)
     ---@type PW.UICard[]
     local cards = {}
     for index, entry in ipairs(state.entries) do

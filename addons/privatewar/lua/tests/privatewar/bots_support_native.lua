@@ -13,6 +13,23 @@ local previousFill
 local previousVars = {}
 ---@type PW.BotObjective[]
 local guardObjectives = {}
+---@type PW.Mode?
+local previousMode
+
+---@return PW.Mode
+local function sceneMode()
+    return { Name = "Support native fixture", Base = "ffa", Teams = 0,
+        -- The device-only scene has exactly two participants; ordinary FFA remains unchanged outside this mode.
+        PW_IsEnemy = function(_, a, b)
+            return a ~= b and ((a == actors[1] and b == actors[2]) or (a == actors[2] and b == actors[1]))
+        end,
+        PW_CanTakeDamage = function(_, target)
+            if target ~= actors[1] and target ~= actors[2] then return false end
+        end,
+        -- A deployed owner's ordinary FFA respawn would introduce a second, living combat target.
+        PW_CanRespawn = function(_, ply) if ply == actors[1] then return false end end,
+        BotObjectives = function() return guardObjectives end }
+end
 
 ---@return PW.DevicesLib
 local function devices() return assert(PW.Devices) end
@@ -49,6 +66,7 @@ end
 return {
     groupName = "PW support native device counterplay",
     beforeEach = function()
+        previousMode = PW.ActiveMode
         previous = PW._Streaks
         devices().Clear()
         PW._Streaks = assert(assert(PW.Streaks)._NewStore)({
@@ -75,6 +93,7 @@ return {
         PW._Streaks = previous
         for _, bot in ipairs(actors) do if IsValid(bot) then bot:Kick("native support smoke complete") end end
         actors = {}
+        PW.ActiveMode = previousMode
     end,
     cases = {
         {
@@ -88,12 +107,21 @@ return {
                     local origin = owner:GetPos()
                     owner:GodDisable()
                     owner:KillSilent()
+                    expect(record.owner).to.equal(owner)
+                    expect(PW.Ask("PW_CanRespawn", owner)).to.beFalse()
                     expect(IsValid(record.entity)).to.beTrue()
                     local bot = player.CreateNextBot("PW native device attacker")
                     assert(IsValid(bot), "native device smoke needs a second free slot")
                     actors[#actors + 1] = bot
                     -- The owner's corpse is behind the device, not between the attacker and its sight line.
                     place(bot, origin + Vector(256, 0, 0))
+                    expect(PW.IsEnemy(bot, owner)).to.beTrue()
+                    for _, other in ipairs(player.GetAll()) do
+                        if other ~= bot and other ~= owner then
+                            expect(PW.IsEnemy(bot, other)).to.beFalse()
+                            expect(PW.IsEnemy(other, bot)).to.beFalse()
+                        end
+                    end
                     bot:GodEnable()
                     bot:StripWeapons()
                     bot:Give("weapon_smg1")
@@ -114,6 +142,7 @@ return {
                         if who == bot then return board end return original(who)
                     end)
                     local shots, commands, recognized, premature = 0, 0, false, false
+                    local playerContact = false
                     local started, sampled = CurTime(), 0
                     hook.Add("SetupMove", key, function(who, _, cmd)
                         if who == bot and bit.band(cmd:GetButtons(), IN_ATTACK) ~= 0 then commands = commands + 1 end
@@ -121,14 +150,17 @@ return {
                     hook.Add("EntityFireBullets", key, function(who)
                         if who ~= bot then return end
                         shots = shots + 1
-                        if assert(PW.BotDevices).Contact(bot) == nil then
+                        local contact = assert(PW.BotDevices).Contact(bot)
+                        if contact == nil or contact.device ~= record then
                             premature = true
                             print("[PW] support unrecognized shot: n=" .. shots .. " retired="
                                 .. tostring(record.retired) .. " entity=" .. tostring(IsValid(record.entity)))
                         end
                     end)
                     hook.Add("Tick", key, function()
-                        if assert(PW.BotDevices).Contact(bot) ~= nil then recognized = true end
+                        local contact = assert(PW.BotDevices).Contact(bot)
+                        if contact ~= nil and contact.device == record then recognized = true end
+                        if #(board.contacts or {}) > 0 then playerContact = true end
                         if IsValid(record.entity) and CurTime() >= sampled then
                             sampled = CurTime() + 2
                             local eye, point = bot:EyePos(), record.entity:WorldSpaceCenter()
@@ -140,18 +172,35 @@ return {
                                 tostring(PW.BotScheduler.GetPhase("devices:" .. bot:UserID())),
                                 tostring(PW.IsEnemy(bot, owner)), tostring(fov),
                                 tostring(tr.Entity == record.entity or tr.Fraction >= 0.99), eye:Distance(point)))
+                            print("[PW] support scene: bot=" .. tostring(bot:GetPos()) .. " device="
+                                .. tostring(point) .. " target=" .. tostring(board.target)
+                                .. " targetPos=" .. tostring(IsValid(board.target) and board.target:GetPos() or nil))
+                            for _, known in ipairs(board.contacts or {}) do
+                                print(string.format(
+                                    "[PW] support player contact: entity=%s visible=%s source=%s pos=%s",
+                                    tostring(known.ent), tostring(known.visible), known.source,
+                                    tostring(known.pos)))
+                            end
+                            for _, human in ipairs(player.GetHumans()) do
+                                print("[PW] support host relation: human=" .. tostring(human) .. " enemy="
+                                    .. tostring(PW.IsEnemy(bot, human)) .. " pos=" .. tostring(human:GetPos()))
+                            end
                         end
                         if IsValid(record.entity) and CurTime() - started < 23 then return end
                         hook.Remove("Tick", key)
                         print(string.format(
-                            "[PW] support native: sight=%s bullets=%d commands=%d destroyed=%s behavior=%s",
+                            "[PW] support native: sight=%s bullets=%d commands=%d destroyed=%s behavior=%s"
+                                .. " playerContact=%s ownerAlive=%s",
                             tostring(recognized), shots, commands, tostring(not IsValid(record.entity)),
-                            board.behavior ~= nil and board.behavior.id or "none"))
+                            board.behavior ~= nil and board.behavior.id or "none",
+                            tostring(playerContact), tostring(owner:Alive())))
                         expect(recognized).to.beTrue()
                         expect(shots > 0).to.beTrue()
                         expect(commands > 0).to.beTrue()
                         expect(premature).to.beFalse()
                         expect(IsValid(record.entity)).to.beFalse()
+                        expect(playerContact).to.beFalse()
+                        expect(owner:Alive()).to.beFalse()
                         done()
                     end)
                 end
@@ -163,8 +212,7 @@ return {
                     previousVars[name] = convar:GetString()
                     convar:SetString("0")
                 end
-                assert(assert(PW.Modes).Register({ Name = "Support native fixture", Base = "ffa",
-                    BotObjectives = function() return guardObjectives end }, modeId))
+                assert(assert(PW.Modes).Register(sceneMode(), modeId))
                 matchStarted = true
                 assert(assert(PW.Match).Start(assert(assert(PW.Modes).Get(modeId))))
                 local deadline = CurTime() + 5
@@ -172,6 +220,36 @@ return {
                     if assert(PW.Match).GetPhase() == "LIVE" then timer.Remove(key .. ".live") smoke()
                     elseif CurTime() >= deadline then error("native support fixture never entered LIVE") end
                 end)
+            end
+        },
+        {
+            name = "Device native fixture: host is neutral, device owner is hostile, ordinary FFA is unchanged",
+            func = function()
+                local host = assert(player.GetHumans()[1], "native fixture requires a listen host")
+                local function actor()
+                    return { Team = function() return assert(PW.MatchRules).FreeTeam end } --[[@as Player]]
+                end
+                local owner, guard, outsider = actor(), actor(), actor()
+                actors = { owner, guard }
+                PW.ActiveMode = sceneMode()
+                expect(PW.IsEnemy(guard, owner)).to.beTrue()
+                expect(PW.IsEnemy(owner, guard)).to.beTrue()
+                expect(PW.IsEnemy(guard, guard)).to.beFalse()
+                expect(PW.Ask("PW_CanRespawn", owner)).to.beFalse()
+                expect(PW.IsEnemy(guard, host)).to.beFalse()
+                expect(PW.IsEnemy(host, guard)).to.beFalse()
+                expect(PW.IsEnemy(guard, outsider)).to.beFalse()
+                expect(PW.IsEnemy(outsider, guard)).to.beFalse()
+                expect(PW.Ask("PW_CanTakeDamage", host)).to.beFalse()
+                expect(PW.Ask("PW_CanRespawn", host) == false).to.beFalse()
+                expect(PW.Ask("PW_CanRespawn", guard) == false).to.beFalse()
+                PW.ActiveMode = assert(assert(PW.Modes).Get("ffa"))
+                expect(PW.IsEnemy(guard, host)).to.beTrue()
+                expect(PW.IsEnemy(host, guard)).to.beTrue()
+                expect(PW.IsEnemy(guard, owner)).to.beTrue()
+                expect(PW.IsEnemy(guard, guard)).to.beFalse()
+                expect(PW.Ask("PW_CanRespawn", owner)).to.beTrue()
+                expect(PW.Ask("PW_CanTakeDamage", host) == false).to.beFalse()
             end
         }
     }

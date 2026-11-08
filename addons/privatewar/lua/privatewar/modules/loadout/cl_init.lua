@@ -70,7 +70,8 @@ end
 
 net.Receive("pw_loadout_class_state", function()
     if not IsValid(module) then return end
-    view.state = lib._DecodeClassState(lib._NetReader())
+    -- Keep GetClassState's object stable between messages: the editor recognizes save acknowledgements by identity.
+    view.state = lib.HumanClassState(lib._DecodeClassState(lib._NetReader()))
     notify()
 end)
 

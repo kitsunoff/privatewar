@@ -78,6 +78,19 @@ function lib.Death(round, id, life, now)
     return converted
 end
 
+function lib.Touch(round, id, life, attacker, attackerLife, now)
+    if lib.Winner(round, now) ~= nil then return false end
+    local victim, source = round.players[id], round.players[attacker]
+    if victim == nil or source == nil or id == attacker
+        or not victim.present or not victim.alive or victim.role ~= "survivor"
+        or victim.life ~= life or victim.deadLife == life
+        or not source.present or not source.alive or source.role ~= "infected"
+        or source.life ~= attackerLife or source.deadLife == attackerLife then return false end
+    victim.role, victim.converted = "infected", true
+    lib.Winner(round, now)
+    return true
+end
+
 function lib.Disconnect(round, id, now)
     if lib.Winner(round, now) ~= nil then return end
     local entry = round.players[id]

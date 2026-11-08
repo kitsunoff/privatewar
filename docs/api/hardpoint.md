@@ -50,6 +50,63 @@ The additional mode scope is authorized separately; this draft does not modify `
 Declarations: `addons/privatewar/lua/privatewar/types/hardpoint.lua`.
 `PW.Hardpoint` is optional, supplied by module `hardpoint`.
 
+### Playtest guidance and pressure extension
+
+The screen waypoint uses only the accepted current-zone snapshot, never a future zone or hidden actor data.
+`ProjectWaypoint(right, up, forward, fov, width, height, out)` is pure camera-space projection with reusable output.
+Onscreen bearings project normally; offscreen and behind bearings intersect a central HUD-safe rectangle and carry
+a directional arrow angle. Exact-behind has a finite turn cue. Invalid coordinates hide and reset the output.
+`Guidance(snapshot, phase, mode, playerVisible, ownTeam, distance, out)` returns the current zone id, relative control
+palette token, `capture` / `defend` / `contested` label key and nearest-metre distance (Source units times 0.0254).
+It hides outside active LIVE Hardpoint or for a dead, observing or nonparticipating viewer. The client confirms the
+published HP score prefix in addition to the active snapshot, so a stale snapshot cannot appear in another mode.
+HUD strings, fonts and polygons are prepared outside paint; the waypoint does not use depth/occlusion traces.
+Existing score clocks and the optional world marker remain. Client visual acceptance is separate from pure math.
+
+The coordinator-frozen generic objective extension is `PW.BotObjective.urgency?: number`, finite and clamped 0..1.
+Absent, mistyped or nonfinite urgency means the exact legacy behavior; malformed urgency never discards an otherwise
+valid objective. The sanitized field passes through commander orders and local resolution without enemy metadata.
+HP emits 1 for an empty, enemy-controlled or contested point, or while behind; a friendly leading hold emits 0.5.
+Only the current visit is eligible. Opt-in objective rank 31 beats ordinary combat/chase rank 30, never survival 40.
+A recognized visible threat at or within 400 units yields to ordinary combat, including during the cached rank
+interval. Distant recognized contacts remain legal aim targets during objective movement through `ctx:SetTarget`;
+the normal aim/fire/reaction/flash policy still decides whether a shot is allowed. No enemy contacts are invented.
+Urgent travel releases a suspended direct strafe drive, avoids sprinting while aiming at a recognized enemy, and
+does not chase distant enemies out of the active point. Non-opt-in DOM/KC/S&D selection remains unchanged.
+
+Test-first native scope before implementation: 1 passed / 12 failed / 0 skipped across the initial 13 guidance and
+pressure cases. A separate cached-near-threat regression was observed RED (7/1/0) before the safety correction.
+The team smoke adds three teammates through ordinary LIVE engine spawns and the public board-provider seam;
+at least two must hold both visits for 2 seconds, move through actual CUserCmd and travel more than 64 units.
+It is team movement evidence, not opposing-team combat, all-zone fairness or a human playtest checkpoint.
+
+Initial playtest-fix evidence: the focused native suite passes **49 / 0 / 0** across 6 groups, including 7 screen
+geometry/policy cases, 8 pressure cases, the original smoke, the new team smoke and legacy DOM/KC/S&D contracts.
+Original smoke holds 11.1 / 2.0 seconds with 977 movement commands and 2381 units of displacement; the team smoke
+records multiple participants completing both visits through ordinary input. Static checks pass, including all
+gate/package/export selftests. This is not full acceptance: the subsequent unfiltered 480-second attempt produces
+no final summary after core bot-allocation failures and host reliable-buffer overflow/disconnect at `PW.Instance`.
+No engine-hang cause or Hardpoint causation is inferred. Fresh-client wall/offscreen/behind visual inspection and
+a completed full native suite remain pending; pure geometry tests are not a substitute for the client inspection.
+
+Final acceptance supersedes that historical blocker: the coherent owned-disconnect and post-restoration phase
+fixture boundaries are included, without changing game policy or engine buffers. The final native scope passes
+**62 / 0 / 0**, 9 groups, including an additional observed-RED server HUD-registration regression. Localization
+and projection now stay in the client realm while the shared HUD definition registers safely on the server.
+The subsequent unfiltered suite completes **1794 / 0 / 0**, 173 groups in **173.195 seconds**, with the 480-second
+whole-run budget and all original case timeouts/assertions intact. The final team scenario has all three teammates
+complete both visits; the original smoke records 14.5 / 2.0 seconds, 707 commands and 2055 units of displacement.
+Full static checks and gate/package/export selftests pass. This establishes the reproduced fixture-resource route,
+not a general networking-engine fix.
+
+Fresh-client **1280x720** scenes were inspected: `gm_construct0151` shows `CAPTURE Courtyard / 33 m` through an
+occluding vertical brush wall; `0152` shows the right offscreen pointer; `0153` shows the behind-turn pointer below
+centre. Client probes confirm x = 1049.6 and y = 518.4 clamps at that resolution. The label, distance and current-zone
+clocks are readable, with no clipping or overlap of existing HUD blocks. Other resolutions have logic coverage,
+not screenshot acceptance. Staging is human-camera-only, not bot movement evidence. Match/settings/class/health/
+armor/god/freeze/input cleanup was verified; the final audit is LOBBY, no active mode, one host, zero bots, empty
+command queue and no owned smoke timers. Human/controller/P2P/all-zone fairness checkpoints remain pending.
+
 | Surface | Contract |
 | --- | --- |
 | `Inside`, `Presence`, `ScoreDelta` | Pure finite cylinder/eligible actor reduction; score once per team tick, never per occupant. Presence has control/contest only, not a public member list. |

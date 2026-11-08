@@ -168,6 +168,13 @@
             PW_TEST_GATE = pkgs.lib.getExe (gateCommand pkgs self' "test");
             shellHook = ''
               ${gitHooks.shellHook}
+              # The generated root-checkout path is shared with linked worktrees, whose .git is a file.
+              # Normalize only that generated local value; leave custom hook directories untouched.
+              if git rev-parse --git-dir >/dev/null 2>&1 \
+                && [ -L "$GIT_WC/.pre-commit-config.yaml" ] \
+                && [ "$(git config --local --get core.hooksPath)" = ".git/hooks" ]; then
+                git config --local core.hooksPath "$(git rev-parse --path-format=absolute --git-common-dir)/hooks"
+              fi
               # LuaLS reads the GMod annotations and GLuaTest types from stable paths named in .luarc.json.
               mkdir --parents .nix
               ln --symbolic --force --no-target-directory "$PW_GLUA_API" .nix/glua-api

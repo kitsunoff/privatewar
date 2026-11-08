@@ -116,6 +116,16 @@ function lib.Prepare(round)
     end
 end
 
+function lib.ValidateModel(ply)
+    local s = assert(lib.State)
+    if s.zombie and ply:GetModel() == zombie
+        and (not hasSequence(ply, idleSequences) or not hasSequence(ply, moveSequences)) then
+        s.zombie = false
+        print("[PW] infection: zombie player animations unavailable; using ordinary operators")
+        restoreOperators(s)
+    end
+end
+
 function lib.Spawned(ply)
     local s = lib.State
     if s == nil or s.current == nil or lib.Role(ply) == nil then return end
@@ -125,32 +135,21 @@ function lib.Spawned(ply)
     if entry.role == "infected" then
         revoke(ply)
         -- Validate installed PLAYER animations after the sole operators owner applied the model.
-        if s.zombie and ply:GetModel() == zombie
-            and (not hasSequence(ply, idleSequences) or not hasSequence(ply, moveSequences)) then
-            s.zombie = false
-            print("[PW] infection: zombie player animations unavailable; using ordinary operators")
-            restoreOperators(s)
-        end
+        lib.ValidateModel(ply)
     end
     lib.Publish()
 end
 
-function lib.Death(victim, attacker)
+function lib.Death(victim, _)
     local s = lib.State
     if s == nil or s.current == nil or not s.playing or lib.Role(victim) == nil then return end
     local id = assert(s.identities[victim])
-    local credit = IsValid(attacker) and attacker:IsPlayer() and attacker ~= victim
-        and lib.Role(attacker --[[@as Player]]) == "infected"
     if rules.Death(s.current, id, s.lives[victim] or s.current.players[id].life, CurTime()) then
         local ok, note = assert(PW.Teams).Transition(victim, 2, "role_change")
         if not ok then error("Infection conversion failed: " .. tostring(note)) end
         revoke(victim)
         assert(PW.PlayerOverrides).Refresh(victim)
         assert(PW.Operators).Refresh(victim)
-        if credit then
-            local credited = s.identities[attacker --[[@as Player]]]
-            if credited ~= nil then s.infections[credited] = (s.infections[credited] or 0) + 1 end
-        end
     end
     if s.current.winner ~= nil then s.playing = false end
     lib.Publish()
