@@ -80,7 +80,7 @@ The team smoke adds three teammates through ordinary LIVE engine spawns and the 
 at least two must hold both visits for 2 seconds, move through actual CUserCmd and travel more than 64 units.
 It is team movement evidence, not opposing-team combat, all-zone fairness or a human playtest checkpoint.
 
-Current playtest-fix evidence: the focused native suite passes **49 / 0 / 0** across 6 groups, including 7 screen
+Initial playtest-fix evidence: the focused native suite passes **49 / 0 / 0** across 6 groups, including 7 screen
 geometry/policy cases, 8 pressure cases, the original smoke, the new team smoke and legacy DOM/KC/S&D contracts.
 Original smoke holds 11.1 / 2.0 seconds with 977 movement commands and 2381 units of displacement; the team smoke
 records multiple participants completing both visits through ordinary input. Static checks pass, including all
@@ -88,6 +88,24 @@ gate/package/export selftests. This is not full acceptance: the subsequent unfil
 no final summary after core bot-allocation failures and host reliable-buffer overflow/disconnect at `PW.Instance`.
 No engine-hang cause or Hardpoint causation is inferred. Fresh-client wall/offscreen/behind visual inspection and
 a completed full native suite remain pending; pure geometry tests are not a substitute for the client inspection.
+
+Final acceptance supersedes that historical blocker: the coherent owned-disconnect and post-restoration phase
+fixture boundaries are included, without changing game policy or engine buffers. The final native scope passes
+**62 / 0 / 0**, 9 groups, including an additional observed-RED server HUD-registration regression. Localization
+and projection now stay in the client realm while the shared HUD definition registers safely on the server.
+The subsequent unfiltered suite completes **1794 / 0 / 0**, 173 groups in **173.195 seconds**, with the 480-second
+whole-run budget and all original case timeouts/assertions intact. The final team scenario has all three teammates
+complete both visits; the original smoke records 14.5 / 2.0 seconds, 707 commands and 2055 units of displacement.
+Full static checks and gate/package/export selftests pass. This establishes the reproduced fixture-resource route,
+not a general networking-engine fix.
+
+Fresh-client **1280x720** scenes were inspected: `gm_construct0151` shows `CAPTURE Courtyard / 33 m` through an
+occluding vertical brush wall; `0152` shows the right offscreen pointer; `0153` shows the behind-turn pointer below
+centre. Client probes confirm x = 1049.6 and y = 518.4 clamps at that resolution. The label, distance and current-zone
+clocks are readable, with no clipping or overlap of existing HUD blocks. Other resolutions have logic coverage,
+not screenshot acceptance. Staging is human-camera-only, not bot movement evidence. Match/settings/class/health/
+armor/god/freeze/input cleanup was verified; the final audit is LOBBY, no active mode, one host, zero bots, empty
+command queue and no owned smoke timers. Human/controller/P2P/all-zone fairness checkpoints remain pending.
 
 | Surface | Contract |
 | --- | --- |
