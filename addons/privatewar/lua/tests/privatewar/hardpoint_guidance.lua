@@ -31,6 +31,14 @@ return {
     groupName = "PW Hardpoint screen guidance",
     cases = {
         {
+            name = "Hardpoint guidance: shared HUD registration never requires client localization on the server",
+            func = function()
+                local element = must(PW.Hud).Get("hardpoint_guidance")
+                expect(element).to.exist()
+                expect(isfunction(must(element).Draw)).to.beTrue()
+            end
+        },
+        {
             name = "Hardpoint guidance: active zone projects on screen without a world-visibility trace",
             func = function()
                 stub(util, "TraceLine").with(function() error("screen guidance must not trace occlusion") end)
