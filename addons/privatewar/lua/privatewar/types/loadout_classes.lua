@@ -9,6 +9,7 @@
 ---@field Name string display name
 ---@field Loadout PW.Loadout the loadout, repaired against the match settings like a player's class
 ---@field Description? string
+---@field Hidden? boolean human picker/id permission only; nil/false is visible, not bot eligibility or Abstract
 
 ---Where a class comes from: the classes kind or the player's own list.
 ---@alias PW.LoadoutClassSource "preset"|"custom"
@@ -45,7 +46,7 @@
 ---What the server sends a player after an upload, a pick or a phase change.
 ---@class PW.LoadoutClassState
 ---@field selected string the ref of the class in use, "" for none (the default loadout)
----@field entries PW.LoadoutClassEntry[] presets first, then the custom classes in their order
+---@field entries PW.LoadoutClassEntry[] custom classes first, then visible presets; stable within each category
 
 ---Internal: server state and injectable engine calls of the classes part.
 ---@class PW.LoadoutClassStore
@@ -95,8 +96,15 @@
 ---check?: fun(loadout: PW.Loadout): boolean, string?): PW.LoadoutClassStatus
 ---Pure: "preset:<id>" or "custom:<n>" to its source and key; nil for anything else.
 ---@field _ParseRef fun(ref: any): PW.LoadoutClassSource?, string|integer|nil
+---Pure stable partition/filter; copies the list, not entry objects or loadouts.
+---A missing preset keeps legacy visibility.
+---@field _HumanClassEntries fun(entries: PW.LoadoutClassEntry[], customOnly: boolean,
+---lookup: fun(id: string): PW.ClassPreset?): PW.LoadoutClassEntry[]
+---Shared human view using public preset metadata; customOnly excludes all presets. Does not mutate state.
+---Selected is empty when absent from the filtered entries; does not change the authoritative stored pick.
+---@field HumanClassState fun(state: PW.LoadoutClassState, customOnly?: boolean): PW.LoadoutClassState
 ---Pure: the cards of the class list (badge IN USE for the class in use, N/A and the reason for an unavailable one).
----@field _ClassCards fun(state: PW.LoadoutClassState): PW.UICard[]
+---@field _ClassCards fun(state: PW.LoadoutClassState, customOnly?: boolean): PW.UICard[]
 ---Pure: key and value rows of a class (slot, item name; attachments counted per weapon slot).
 ---@field _ClassRows fun(entry: PW.LoadoutClassEntry, nameOf?: fun(kind: string, id: string): string):
 ---{ [1]: string, [2]: string }[]

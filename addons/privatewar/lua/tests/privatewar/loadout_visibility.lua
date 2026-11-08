@@ -30,8 +30,7 @@ end
 ---@param editor? boolean
 ---@return PW.LoadoutClassState
 local function humanState(state, editor)
-    local fn = must(rawget(lib(), "HumanClassState"))
-    return fn(state, editor)
+    return lib().HumanClassState(state, editor)
 end
 
 ---@param test table<string, any>
@@ -64,6 +63,22 @@ return {
     end,
     cases = {
         {
+            name = "T-11.15: pure human-list policy takes plain metadata and never sorts source tables",
+            func = function()
+                local entries = { entry("preset:hidden"), entry("preset:old"), entry("custom:2"), entry("custom:1") }
+                local before = table.Copy(entries)
+                local lookup = function(id)
+                    return { ClassName = id, Name = id, Loadout = {}, Hidden = id == "hidden" }
+                end
+                local filtered = lib()._HumanClassEntries(entries, false, lookup)
+                expect(refs(filtered)).to.deepEqual({ "custom:2", "custom:1", "preset:old" })
+                expect(refs(lib()._HumanClassEntries(entries, true, lookup)))
+                    .to.deepEqual({ "custom:2", "custom:1" })
+                expect(entries).to.deepEqual(before)
+                expect(filtered[1]).to.equal(entries[3])
+            end
+        },
+        {
             name = "Mandatory T-11.15: editor custom-only, never code presets",
             func = function()
                 local state = { selected = "preset:visible", entries = {
@@ -72,7 +87,7 @@ return {
                 local filtered = humanState(state, true)
                 expect(refs(filtered.entries)).to.deepEqual({ "custom:2", "custom:1" })
                 expect(filtered.selected).to.equal("")
-                local cards = lib()._ClassCards(filtered)
+                local cards = lib()._ClassCards(state, true)
                 expect(#cards).to.equal(2)
                 expect(cards[1].tags).to.equal("Custom class")
             end
@@ -115,7 +130,8 @@ return {
                 local result = must(PW.UI).Match.Choose(state, "preset:technical", function() sent = true end)
                 expect(result).to.equal("unknown")
                 expect(sent).to.beFalse()
-                expect(#lib()._ClassCards(humanState(state, true))).to.equal(1)
+                expect(#lib()._ClassCards(state, true)).to.equal(1)
+                expect(#lib()._ClassCards(state)).to.equal(2)
             end
         },
         {
@@ -154,8 +170,9 @@ return {
             name = "Mandatory T-11.15: authorized bot pool keeps hidden presets but retains bans and source policy",
             func = function(test)
                 local setting = PW.Setting
+                local sources = { preset = true }
                 stub(PW, "Setting").with(function(id)
-                    if id == "bots.classes" then return { preset = true } end
+                    if id == "bots.classes" then return sources end
                     if id == "loadout.bannedweapons" then return { weapon_shotgun = true } end
                     return setting(id)
                 end)
@@ -166,10 +183,7 @@ return {
                 local pick = must(bots.Find(pool, "preset:technical"))
                 lib().SetClass(test.ply, pick.loadout)
                 expect(lib().Resolve(test.ply)).to.deepEqual(pick.loadout)
-                stub(PW, "Setting").with(function(id)
-                    if id == "bots.classes" then return {} end
-                    return setting(id)
-                end)
+                sources = {}
                 expect(#bots.PoolFor(test.ply)).to.equal(0)
             end
         },
