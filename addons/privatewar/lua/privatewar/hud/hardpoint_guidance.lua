@@ -10,10 +10,12 @@ local neutral, background = Color(232, 237, 233), Color(11, 15, 12, 225)
 ---@type table<string, Color>
 local colors = { text = neutral, warning = Color(255, 181, 71),
     team_friendly = Color(79, 195, 247), team_enemy = Color(255, 77, 77) }
-language.Add("pw.hp.capture", "CAPTURE")
-language.Add("pw.hp.defend", "DEFEND")
-language.Add("pw.hp.contested", "CONTESTED")
-language.Add("pw.hp.distance", "%d m")
+if CLIENT then
+    language.Add("pw.hp.capture", "CAPTURE")
+    language.Add("pw.hp.defend", "DEFEND")
+    language.Add("pw.hp.contested", "CONTESTED")
+    language.Add("pw.hp.distance", "%d m")
+end
 local font, label, detail = "", "", ""
 local cachedId, cachedAction, cachedDistance, cachedWidth = "", "", -1, -1
 local shownRevision, shownPlayer = -1, NULL
@@ -34,6 +36,7 @@ end
 
 -- All projection, text formatting and polygon mutation happens outside HUDPaint; tables/fonts/colors are reused.
 PW.HookFor(HUDELEMENT, "Think", function()
+    if not CLIENT then return end -- The shared kind registers on the server; projection/localization is client-only.
     local me, snapshot = LocalPlayer(), hp.ClientSnapshot
     local valid = IsValid(me)
     local offset = snapshot ~= nil and valid and snapshot.zone.pos - EyePos() or vector_origin
