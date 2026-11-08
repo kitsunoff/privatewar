@@ -39,6 +39,30 @@ return {
     afterEach = function(state) PW.ActiveMode = state.mode end,
     cases = {
         {
+            name = "Client DSP ownership: expired weak overlay never resets DSP through the actual render callback",
+            func = function()
+                local ply, d = participant(false)
+                ---@type function?
+                local render
+                local client = { Blinded = { strength = 0.2, at = 0 }, _BlindAlpha = function() return 0 end }
+                local env = setmetatable({
+                    PW = { Throwables = client, HookFor = function(_, name, callback)
+                        if name == "RenderScreenspaceEffects" then render = callback end
+                    end },
+                    MODULE = {}, net = { Receive = function() end },
+                    CurTime = function() return 10 end, LocalPlayer = function() return ply end
+                }, { __index = _G })
+                local code = must(file.Read("privatewar/modules/throwables/cl_init.lua", "LUA"))
+                local chunk = CompileString(code, "perk_flash_client_owner_test", false)
+                assert(isfunction(chunk), tostring(chunk))
+                setfenv(chunk --[[@as function]], env)
+                chunk()
+                must(render)()
+                expect(d.dsp).to.equal(17)
+                expect(d.calls).to.deepEqual({})
+            end
+        },
+        {
             name = "RoundEnd: actual human and bot flash packets DSP impairment timers and live projectile"
                 .. " clear together",
             func = function()

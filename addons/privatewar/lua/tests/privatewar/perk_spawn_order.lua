@@ -107,6 +107,10 @@ local function nativeSpawn(role, check)
         must(PW.MatchRules).Spawn(bot) -- actual native base PlayerSpawn -> PlayerLoadout -> post-base signal
         local mult = role and 1.15 or 1
         local walk, run, max, hp = bot:GetWalkSpeed(), bot:GetRunSpeed(), bot:GetMaxHealth(), bot:Health()
+        local firstGives = count
+        count = 0
+        must(PW.MatchRules).Spawn(bot) -- another life while the previous override is still owned
+        local repeatWalk, repeatRun, repeatMax = bot:GetWalkSpeed(), bot:GetRunSpeed(), bot:GetMaxHealth()
         bot:SetHealth(75)
         must(PW.PlayerOverrides).Refresh(bot)
         local refreshedHP = bot:Health()
@@ -116,8 +120,11 @@ local function nativeSpawn(role, check)
         print(string.format("[PW] native perk spawn role=%s loadouts=%d base=%.2f/%.2f/%d final=%.2f/%.2f/%d",
             tostring(role), count, base.walk, base.run, base.max, walk, run, max))
         check(controlGives).to.equal(1)
+        check(firstGives).to.equal(1)
         check(count).to.equal(1)
         check(close(walk, base.walk * mult * 1.1) and close(run, base.run * mult * 1.1)).to.beTrue()
+        check(close(repeatWalk, base.walk * mult * 1.1) and close(repeatRun, base.run * mult * 1.1)).to.beTrue()
+        check(repeatMax).to.equal(role and 400 or base.max)
         check(max).to.equal(role and 400 or base.max)
         check(hp).to.equal(role and 400 or base.max)
         check(refreshedHP).to.equal(75)
