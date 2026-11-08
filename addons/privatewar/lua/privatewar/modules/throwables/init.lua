@@ -121,32 +121,9 @@ function lib._RemoveAll()
     end
 end
 
----Only this owner's active flash is cancelled; already expired DSP or unrelated players are not reset.
-local function clearBlind()
-    local store = assert(PW._Throwables)
-    local blind = store.blind or {}
-    store.blind = setmetatable({}, { __mode = "k" })
-    for ply, effect in pairs(blind) do
-        if IsValid(ply) then
-            if effect.dsp and effect.untilTime > CurTime() then ply:SetDSP(0, false) end
-            if not ply:IsBot() then
-                net.Start("pw_blind")
-                net.WriteUInt(0, 8)
-                net.Send(ply)
-            end
-        end
-    end
-end
-
 function MODULE:PW_MatchEnd()
     lib.ClearBlinds()
     lib._RemoveAll()
-    clearBlind()
-end
-
-function MODULE:PW_RoundEnd()
-    lib._RemoveAll()
-    clearBlind()
 end
 
 function MODULE:PW_RoundEnd()
