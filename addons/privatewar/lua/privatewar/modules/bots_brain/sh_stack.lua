@@ -143,6 +143,11 @@ local function callFrame(state, env, frame, method)
     local ctx = state.ctx
     ctx.state = frame.state
     local result = PW.Call(frame.def, method, env.bot, ctx)
+    -- The facade or handler may already be disabled: runner-owned resources must still be released.
+    if frame.id == "objective" and (method == "OnEnd" or method == "OnSuspend") then
+        local objectives = PW.BotObjectives
+        if objectives ~= nil then objectives.EndAction(ctx) end
+    end
     ctx.state = nil
     return result
 end
@@ -225,6 +230,7 @@ local function endTop(state, env, now)
     local stack = state.stack
     local frame = stack[#stack]
     callFrame(state, env, frame, "OnEnd")
+    if stack[#stack] ~= frame then return end -- synchronous dependency abort may already have stopped this stack
     stack[#stack] = nil
     state.evals[frame.id] = nil
     local cooldown = tonumber(frame.def.Cooldown) or 0
@@ -396,7 +402,10 @@ function lib.Think(state, env, now)
     local byId = selectTop(state, env, now)
     releaseLegs(state, env.board)
     local top = state.stack[#state.stack]
-    if top ~= nil then apply(state, env, callFrame(state, env, top, "Update"), byId, now) end
+    if top ~= nil then
+        local result = callFrame(state, env, top, "Update")
+        if state.stack[#state.stack] == top then apply(state, env, result, byId, now) end
+    end
     writeDebug(state, env)
 end
 

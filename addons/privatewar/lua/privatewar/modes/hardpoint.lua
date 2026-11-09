@@ -3,6 +3,7 @@ MODE.Base = "tdm"
 MODE.Name = "Hardpoint"
 MODE.Short = "HP"
 MODE.Teams = 2
+MODE.Dependencies = { objective_actions = { "hold" }, modules = { "bots_objectives", "hardpoint" } }
 MODE.MapData = true
 MODE.Description = "Occupy the active zone alone as a team. Contested or empty zones score nothing."
 MODE.Settings = {

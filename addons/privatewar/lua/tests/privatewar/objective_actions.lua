@@ -52,14 +52,17 @@ return {
                 local kind = must(PW.Kinds.Get("objective_actions"))
                 expect(kind.Global).to.equal("OBJECTIVEACTION")
                 expect(kind.Subscribe).to.equal("never")
+                expect(GetConVar("pw_objectiveaction_capture_enabled")).to.exist()
                 for _, id in ipairs({ "capture", "hold", "defend", "collect", "deny", "plant", "defuse" }) do
                     local def = must(state.registry.Get(id)) --[[@as PW.Entity]]
                     expect(isfunction(def.Update)).to.beTrue()
                 end
                 local reg = PW.Registry.New("test_actions", { required = kind.Required, log = function() end })
                 reg.Register({}, "invalid")
+                reg.Register({ Update = "wrong type" }, "mistyped")
                 reg.ResolveAll()
                 expect(reg.Get("invalid")).to.beNil()
+                expect(reg.Get("mistyped")).to.beNil()
             end
         },
         {
@@ -165,6 +168,96 @@ return {
                 expect(actions().RunAction(ctx, target).kind).to.equal("done")
                 expect(ctx.board.target).to.beNil()
                 expect(ctx.board.goal).to.beNil()
+            end
+        },
+        {
+            name = "Actions: failed OnEnd cannot retain runner-owned input, look or movement",
+            func = function()
+                local reg = PW.Registry.New("objective_actions", { preRegister = function() end, log = function() end })
+                local ends = 0
+                reg.Register({ Update = function() return must(PW.BotBrain).Continue() end,
+                    OnEnd = function() ends = ends + 1 error("cleanup failed") end }, "bad_end")
+                reg.ResolveAll()
+                rawset(PW, "ObjectiveActions", reg)
+                local ctx = context()
+                actions().RunAction(ctx, objective("bad_end"))
+                ctx:Intent().buttons = IN_USE
+                ctx:SetTarget(Vector(1, 2, 3) --[[@as any]])
+                ctx:SetGoal(Vector(), 10, "objective")
+                actions().EndAction(ctx)
+                actions().EndAction(ctx)
+                expect(ends).to.equal(1)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
+                expect(ctx.board.goal).to.beNil()
+                expect(ctx.board.target).to.beNil()
+            end
+        },
+        {
+            name = "Actions: authoritative facts reject stale orders by identity, action, revision and eligibility",
+            func = function()
+                local ctx, target = context(), objective("plant")
+                local facts = actions().Facts(ctx) --[[@as PW.BotFacts]]
+                facts.authoritative, facts.objectives = true, { target }
+                ctx.order = { id = target.id, type = target.action, objective = table.Copy(target), since = 0,
+                    priority = 1 }
+                local lib = must(PW.BotObjectives)
+                local _, _, ordered = lib.Resolve(ctx, facts)
+                expect(ordered).to.beTrue()
+                target.eligible = {}
+                expect(lib.Resolve(ctx, facts)).to.beNil()
+                target.eligible = { [7] = true }
+                target.revision = 2
+                local _, _, stale = lib.Resolve(ctx, facts)
+                expect(stale).to.beFalse()
+                target.revision, target.action = 1, "defuse"
+                local _, _, changed = lib.Resolve(ctx, facts)
+                expect(changed).to.beFalse()
+                facts.objectives = {}
+                expect(lib.Resolve(ctx, facts)).to.beNil()
+            end
+        },
+        {
+            name = "Actions: suspended invalidation and death cleanup work even if the objective facade is disabled",
+            func = function()
+                local brain, ctx, target = must(PW.BotBrain), context(), objective("plant")
+                must(actions().Facts(ctx) --[[@as PW.BotFacts]]).pos = target.pos
+                actions().RunAction(ctx, target)
+                local facade = must(must(PW.BotBehaviors).Get("objective")) --[[@as PW.BotBehavior]]
+                local state = brain.NewState()
+                state.stack = { { id = "objective", def = facade, state = must(ctx.state), since = 0,
+                    rank = 20, weight = 1, via = "select", reason = "test" } }
+                state.ctx = ctx
+                local env = { bot = ctx.bot, board = ctx.board, behaviors = {}, mode = "test",
+                    random = function() return 0 end, api = ctx._api }
+                PW._Call.failed[facade] = true
+                brain._InvalidateObjective(state, env, 10, target.id, 1)
+                expect(#state.stack).to.equal(0)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
+                expect(ctx.board.goal).to.beNil()
+                PW._Call.failed[facade] = nil
+                ctx.state = {}
+                actions().RunAction(ctx, target)
+                PW.Call(facade, "OnSuspend", ctx.bot, ctx)
+                local suspended = must(ctx.state)
+                local guard = { ClassName = "cover_fixture", Rank = function() return "survival" end,
+                    Weight = function() return 1 end, Update = function() return brain.Continue() end }
+                state.stack = { { id = "objective", def = facade, state = suspended, since = 0,
+                    rank = 20, weight = 1, via = "select", reason = "test" },
+                    { id = "cover_fixture", def = guard, state = {}, since = 0,
+                        rank = 40, weight = 1, via = "select", reason = "test" } }
+                state.legsOf = "cover_fixture"
+                ctx:SetGoal(Vector(100, 200, 0), 20, "critical")
+                local coverGoal = ctx.board.goal
+                brain._InvalidateObjective(state, env, 10, target.id, 1)
+                expect(#state.stack).to.equal(1)
+                expect(ctx.board.goal).to.equal(coverGoal)
+                ctx.state = {}
+                actions().RunAction(ctx, target)
+                state.stack = { { id = "objective", def = facade, state = must(ctx.state), since = 0,
+                    rank = 20, weight = 1, via = "select", reason = "test" } }
+                brain.Stop(state, env, 11, "dead")
+                expect(#state.stack).to.equal(0)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
             end
         },
         {

@@ -10,6 +10,8 @@ local function match() return must(PW.Match) end
 ---@return table<string, any>
 local function api() return match() --[[@as table<string, any>]] end
 
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
+
 return {
     groupName = "PW objective mode dependencies",
     beforeEach = function(state)
@@ -35,6 +37,7 @@ return {
         PW._Match, PW.ActiveMode, PW._Enable, PW._Settings = state.match, state.mode, state.enable, state.settings
         PW.Registries, PW._Call = state.registries, state.call
         state.reg._Release()
+        resources.Yield(timer.Simple)
     end,
     cases = {
         {
@@ -90,6 +93,50 @@ return {
             end
         },
         {
+            name = "Dependencies: enable edits wait for next match; required modules are explicit",
+            func = function(state)
+                local enabled = true
+                PW._Enable = must(PW.Enable)._NewStore({ registries = function() return PW.Registries end,
+                    read = function() return enabled end, exists = function() return true end })
+                match().Start(state.definition)
+                match()._SetPhase("LIVE")
+                enabled = false
+                match()._Tick()
+                expect(match().GetPhase()).to.equal("LIVE")
+                expect(state.reg.Get("test_required"):IsValid()).to.beTrue()
+                match().Abort("test next match")
+                match().Start(state.definition)
+                expect(match().GetPhase()).to.equal("LOBBY")
+                state.definition.Dependencies = { modules = { "missing_runner" } }
+                match().Start(state.definition)
+                expect(match().GetPhase()).to.equal("LOBBY")
+            end
+        },
+        {
+            name = "Dependencies: synchronous abort during objective Update cannot apply to an already-stopped stack",
+            func = function(state)
+                local brain = must(PW.BotBrain)
+                local stack = brain.NewState()
+                local board = { bot = "fixture" --[[@as any]], intent = { buttons = 0 } }
+                local env = { bot = board.bot, board = board, behaviors = {}, mode = "test",
+                    random = function() return 0 end }
+                local def = { ClassName = "abort_fixture", Rank = function() return "objective" end,
+                    Weight = function() return 1 end,
+                    Update = function()
+                        state.reg._Disable("test_required", "test failure")
+                        brain.Stop(stack, env, 0, "synchronous match end")
+                        return brain.Done("aborted")
+                    end }
+                env.behaviors = { def }
+                match().Start(state.definition)
+                match()._SetPhase("LIVE")
+                brain.Think(stack, env, 0)
+                expect(match().GetPhase()).to.equal("LOBBY")
+                expect(#stack.stack).to.equal(0)
+                expect(PW._Call.failed[def]).to.beNil()
+            end
+        },
+        {
             name = "Dependencies: current match pins old definitions across reload; next match uses replacements",
             func = function(state)
                 match().Start(state.definition)
@@ -102,6 +149,14 @@ return {
                 PW.Registries.objective_actions = replacement
                 expect(api().Dependency("objective_actions", "test_required")).to.equal(pinned)
                 expect(pinned:IsValid()).to.beTrue()
+                local target = { id = "visit", action = "test_required", pos = Vector(), radius = 10,
+                    weight = 1, want = 1 }
+                local ctx = must(PW.BotBrain).NewState().ctx
+                local bot = { IsValid = function() return false end } --[[@as Player]]
+                ctx.bot, ctx.board, ctx.state = bot, { bot = bot }, {}
+                expect(must(PW.BotObjectives).RunAction(ctx, target).kind).to.equal("continue")
+                expect(#must(PW.BotCommander).Sanitize({ target })).to.equal(1)
+                must(PW.BotObjectives).EndAction(ctx)
                 match().Abort("test restart")
                 match().Start(state.definition)
                 local nextDefinition = api().Dependency("objective_actions", "test_required") --[[@as PW.Entity]]

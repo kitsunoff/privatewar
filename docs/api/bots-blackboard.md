@@ -760,6 +760,35 @@ Without that serialized grant, commander-only changes would leave a bypass and l
 This narrow ownership and the unified team/round notifications are now approved. Commander also clears all
 its orders/hunt/retained state on `PW_RoundPrepared`; it never accesses another layer's private stores.
 
+### Registered objective handlers
+
+Kind `objective_actions`, folder `objective_actions/`, class table `OBJECTIVEACTION`; required `Update` function,
+`Subscribe = "never"`. Ordinary registry inheritance, `PW_PreRegister`, validation and enable ConVars apply
+(`pw_objectiveaction_<id>_enabled`). The existing `objective` behavior remains the utility/urgency facade.
+The commander still owns assignment, eligibility, revisions, defender caps and capture/hold anti-dither.
+Its sanitizer accepts registered action ids; `plant`/`defuse` retain their stricter eligibility/revision rules.
+
+Handler methods are `Update(bot, ctx, target, state)` and optional `OnStart` / `OnEnd` with the same arguments.
+They run through `PW.Call` on the shared definition. `state` is mutable per bot and objective visit, never stored
+on the definition; `Update` returns `PW.BotBrain.Continue()` or `Done(reason)`. No return or an invalid transition
+fails the handler. Actions only produce ordinary input/goal intents: the mode alone owns progress and verdicts.
+
+`PW.BotObjectives.RunAction(ctx, target)` dispatches the handler. `EndAction(ctx)` is idempotent: it detaches the
+visit, attempts handler cleanup when callable, and independently releases use, look, movement and goal resources.
+Cleanup therefore still works after a failed handler or disabled facade. Suspension ends the visit; resume starts
+a fresh, revalidated visit. Invalidation also removes suspended frames without clearing another behavior's new
+resources. Death, team/round reset and match end use the same cleanup boundary.
+
+Live gathered facts are authoritative: a commander order must still match current objective id, action, revision
+and eligibility. The handler rechecks actor life/eligibility before dispatch and authoritative projected/actual
+containment before use. Fixture callers may still supply independent local facts/orders as before.
+
+Built-ins preserve capture/hold approach and drift, defend guard timing/outward look, collect/deny touch goals,
+and plant/defuse held-use input. There is no bomb weapon or new gameplay in this contract.
+Modes declare their required actions and runner explicitly; see `modes.md` "Required dependencies".
+Automated tests are in `objective_actions.lua` and `objective_dependencies.lua`, alongside the unchanged legacy
+behavior, commander, Hardpoint pressure and S&D input suites. Human gameplay acceptance remains separate.
+
 ## Commander
 
 Module `bots_commander` (T-5.11; `07 d.3`, `07 d.9`, `07 d.14`), global `PW.BotCommander`. Server only; one pass every

@@ -26,6 +26,7 @@ include("core/sh_enable.lua")
 if SERVER then
     include("core/sv_enable.lua")
     include("core/sv_match.lua")
+    include("core/sv_dependencies.lua")
     include("core/sv_net.lua")
     include("core/sv_settings.lua")
     include("core/sv_mapchange.lua")

@@ -262,6 +262,10 @@ end
 function PW.Loader.Boot()
     ---@type table[]
     local active = { rawget(PW, "ActiveMode") }
+    local match = rawget(PW, "Match") --[[@as PW.MatchLib?]]
+    if match ~= nil then
+        for _, definition in ipairs(match._DependencyEntities()) do active[#active + 1] = definition end
+    end
     ---@type PW.LoadContext
     local context = PW.Loader._Rescan(PW.Registries, { active = active })
     PW.Registries = context.registries
