@@ -122,7 +122,8 @@ local function prepare(ply, opts)
     if all == nil then all = n == 0 or not first end
     local teamBonus = opts.teamBonus
     if teamBonus == nil then teamBonus = n > 0 end
-    local pool = lib._Pool(opts.spawns or assert(PW.Map).GetSpawns(), ply:Team(), all)
+    local firstTeam = first and n > 0 and not all and ply:Team() or nil
+    local pool = lib._Pool(opts.spawns or assert(PW.Map).GetSpawns(firstTeam), ply:Team(), all)
     local cands = lib._Sample(pool, opts.sample or lib.Budget.sample, math.random)
     for _, c in ipairs(cands) do c.jitter = math.random() * lib.Weights.jitter end
     local enemies, mates = opts.enemies, opts.mates

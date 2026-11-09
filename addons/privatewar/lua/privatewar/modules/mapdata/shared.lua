@@ -115,20 +115,25 @@ end
 ---@param detected PW.MapSpawns
 ---@param navSamples? PW.MapSpawn[]
 ---@param minSpawns? integer
+---@param supplements? PW.MapSpawn[] cold-validated quality fallback, never the legacy unvalidated samples
+---@param firstTeam? integer keep an existing team's original first-spawn pool
 ---@return PW.MapSpawns
-function lib._Layer(fileSpawns, detected, navSamples, minSpawns)
+function lib._Layer(fileSpawns, detected, navSamples, minSpawns, supplements, firstTeam)
     local spawns, fileTotal = lib._CleanSpawns(fileSpawns)
     if fileTotal > 0 then return spawns end
-    if navSamples == nil or #navSamples == 0 or minSpawns == nil or total(detected) >= minSpawns then
-        return detected
+    local extra = navSamples
+    if minSpawns == nil or total(detected) >= minSpawns then
+        if firstTeam ~= nil and #(detected[firstTeam] or {}) > 0 then return detected end
+        extra = supplements
     end
+    if extra == nil or #extra == 0 then return detected end
     ---@type PW.MapSpawns
     local layered = {}
     for team, list in pairs(detected) do layered[team] = list end
     ---@type PW.MapSpawn[]
     local any = {}
     for _, point in ipairs(detected[lib.AnyTeam] or {}) do any[#any + 1] = point end
-    for _, point in ipairs(navSamples) do any[#any + 1] = point end
+    for _, point in ipairs(extra) do any[#any + 1] = point end
     layered[lib.AnyTeam] = any
     return layered
 end
@@ -141,6 +146,9 @@ lib._NavRules = {
     minSpawns = 8,
     budgetMs = 100
 }
+
+if SERVER then AddCSLuaFile("privatewar/modules/mapdata/sh_spawn_quality.lua") end
+include("privatewar/modules/mapdata/sh_spawn_quality.lua")
 
 ---@param corners Vector[]
 ---@return number

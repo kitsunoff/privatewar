@@ -83,7 +83,7 @@ Types: `lua/privatewar/types/map.lua`.
 | `PW.Map.Id(mapName) -> string` | shared | The map data file id of a map name (see "Map data file id") |
 | `PW.Map.Get(mapName?) -> MAP?` | shared | The map data entry of a map (default: the current map, `game.GetMap()`), looked up by `PW.Map.Id`. `nil` without a file or when the entry is disabled |
 | `PW.Map.GetModeData(modeId) -> table?` | shared | The `MAP.Modes.<modeId>` table of the current map. Returns the first existing entry along the mode's `Base` chain: `hardcore_dom` has no entry, its base `dom` has one, so it gets `MAP.Modes.dom`. `nil` when no mode of the chain has an entry, when the map has no data file, or when the entry is not a table (`03-mapdata.md` d.6) |
-| `PW.Map.GetSpawns() -> table<integer, { pos: Vector, yaw: number }[]>` | server | The spawn points of the current map by team index, after the layers of "Spawn sources". Empty when no layer has a point. Do not modify the result |
+| `PW.Map.GetSpawns(firstTeam?) -> table<integer, { pos: Vector, yaw: number }[]>` | server | The spawn points of the current map by team index, after the layers of "Spawn sources". Optional integer `firstTeam` preserves an existing detected team pool on the quality-fallback path (see below); it does not change authored spawns or the legacy `<8` fallback. Empty when no layer has a point. Do not modify the result |
 | `PW.Map.GetDetectedSpawns() -> ...` | server | Layer 2 only: the auto-detected spawn points, grouped like `Spawns`. Collected once per map at `InitPostEntity` (and on first use if the cache is empty); the cache survives `pw_reload`. Do not modify the result |
 | `PW.Map.GetNavSamples() -> { pos: Vector, yaw: number }[]` | server | The navmesh fallback points (layer 3), any team. Empty without a navmesh or before the navmesh was read. Do not modify the result |
 | `PW.Map.ModeFits(mode, mapName) -> boolean, string?` | shared | Whether a mode is offered on a map, for any map that has a data file (not only the current one); see "`MODE.MapData` and `MODE:ValidateMapData`" |
@@ -164,8 +164,10 @@ Module `mapdata` (T-2.7) builds the spawn list of the current map from the layer
   `_GroupSpawns` (`TASKS.md` T-2.7, mandatory case). The list is the research list of `notes/11-navmesh-generation.md`
   ("Recommendations", step 4).
 - Layer 3, the fallback (lane agent decision, T-2.8): about 200 points sampled from navmesh areas, see "Navmesh
-  fallback" below. It is added only when layer 2 has fewer than `PW.Map._NavRules.minSpawns` (8) points in total: the
-  samples are appended to the `AnyTeam` (0) list, the team lists of layer 2 are kept.
+  fallback" below. The legacy path is unchanged: when layer 2 has fewer than `PW.Map._NavRules.minSpawns` (8) points
+  in total, the samples are appended to the `AnyTeam` (0) list and the team lists of layer 2 are kept. At 8 or more
+  detected points, only the separately validated quality supplements below may be appended. Neither path changes
+  the priority of a nonempty valid `MAP.Spawns`.
 
 ### Navmesh fallback
 
@@ -189,6 +191,48 @@ Thresholds `PW.Map._NavRules` (lane agent decision, T-2.8; `03-mapdata.md` d.7):
 - Pausing the sampler during navmesh generation (`notes/11-navmesh-generation.md`, "What the server does on confirm",
   step 2): `PW.Map.PauseNav(true)`, called by the `navgen` module (see "Navmesh generation").
 
+### Clustered detected-spawn quality fallback
+
+This additional path applies only without valid authored `MAP.Spawns`. Its engineering thresholds address the
+observed `nz_shipment` cluster; they are not a general map-suitability test. The legacy `<8` path above does not gain
+these extra checks or change its first-spawn behavior.
+
+`PW.Map._FallbackRules` bounds the cold validation pass:
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| `minSpawns` | 8 | Minimum total detected points for this path |
+| `diameter` | 256 | Every pair of detected points must be at most this far apart (3D Hammer units) |
+| `farDistance` | 800 | Each supplement must be at least this far from every detected point |
+| `minCandidates` | 8 | Fewer accepted supplements reject the entire supplement set |
+| `separation` | 32 | Minimum distance between accepted supplements |
+| `maxDetected` | 256 | More detected points skip quality supplementation |
+| `maxAreas` | 4096 | Maximum navmesh graph nodes |
+| `maxEdges` | 32768 | Maximum directed adjacency entries |
+| `maxCandidates` | 200 | Maximum input samples (the existing navmesh samples, not a new sampler) |
+| `budgetMs` | 100 | Elapsed-time rejection threshold, checked during and after validation; not a hard frame-time cap |
+
+- Nonfinite detected positions reject this path; nonfinite candidate positions are excluded. Detected anchors and
+  candidates use `navmesh.GetNearestNavArea(pos, false, 256, false, true)`, with the closest surface point no more
+  than 64 units away. Every detected anchor must project successfully and belong to the same strongly connected
+  component. Only candidates in that component qualify. The graph uses directed `GetAdjacentAreas` edges only:
+  no inferred reverse edges or ladder links. Invalid, incomplete or over-limit graphs reject the supplement set.
+- Candidates are considered in deterministic area-id/position/yaw order. In addition to the sampler's area checks,
+  a supplement needs a standing 32-by-32-by-72 hull at `pos + Vector(0, 0, 8)` with `MASK_PLAYERSOLID` and both
+  `StartSolid` and `AllSolid` false. A brush-only floor trace from 8 units above to 32 below must hit within 8 units
+  of `pos`, with neither solid flag and a normal within the existing 30-degree slope limit.
+- Validation runs in `_LoadNav`, not per spawn; the resulting supplements are cached in `PW._Map.nav` alongside
+  the samples and survive `pw_reload`. A detected-spawn refresh invalidates supplements; `PauseNav(true)` drops
+  supplements and areas while retaining legacy samples. `GetSpawns` only layers the cached results; it does not
+  rebuild the graph or revalidate supplements on demand. Missing/rejected supplements leave detected spawns intact.
+- Supplements append only to `AnyTeam`; detected lists are not rewritten. On this quality path,
+  `GetSpawns(firstTeam)` returns detected spawns without supplements when that team's detected list is nonempty.
+  Teams without their own list, respawns and FFA can use the supplements. Existing detected `AnyTeam` points remain
+  available even when a team's first-spawn pool is preserved.
+- These are cold geometric and directed-graph checks, not proof of physical bot traversal, objective reachability
+  from every spawn, or good match flow. No mode data is interpreted. Dynamic occupancy is still checked by `Pick`;
+  representative-map feel and native performance/traversal remain checkpoint concerns.
+
 ## `PW.Spawns.Pick(ply, opts)` (module `spawns`)
 
 `PW.Spawns.Pick(ply, opts?) -> { pos: Vector, yaw: number }?` (server) is the shared logic behind `PW_SelectSpawn`
@@ -210,15 +254,22 @@ Thresholds `PW.Map._NavRules` (lane agent decision, T-2.8; `03-mapdata.md` d.7):
 | `all` | `true` for respawns and for modes without teams, else `false` | Use every point of the map |
 | `teamBonus` | `true` when the active mode has teams (FFA: `false`) | Reward nearby teammates |
 | `sample` | `PW.Spawns.Budget.sample` (8) | Number of candidates to evaluate |
+| `spawns` | `PW.Map.GetSpawns(firstTeam)` | Explicit spawn table by team index; bypasses the map spawn layers for this pick |
 | `enemies`, `mates` | the living players of the match | Lists of `{ pos, eye?, dir? }` actors instead of the living enemies and teammates (measurement, tests) |
 
 Candidates (lane agent decision, T-2.9):
 
-- the pool comes from `PW.Map.GetSpawns()`. With `all = false` (the first spawn of a team mode): the points of
+- the pool comes from `opts.spawns` when supplied, otherwise `PW.Map.GetSpawns(firstTeam)`. `firstTeam` is
+  `ply:Team()` only when `first` is true, the active mode has teams and `all` is false; otherwise it is `nil`.
+  With `all = false` (the first spawn of a team mode): the points of
   `ply:Team()` plus the `AnyTeam` points; when the team has no points, every point. With `all = true` (respawns, FFA):
   every point of every team, including `AnyTeam`;
 - a random sample of `sample` distinct points is drawn from the pool;
 - a respawn therefore uses the whole map, and a map without data uses the points of the layers above.
+
+S&D overrides `PW_SelectSpawn` and passes its authored `state.map.spawns` with `first = true, all = false` on every
+pick. It therefore bypasses both map fallback paths and keeps its authored side pools. If no hull-clear authored
+point is picked, S&D raises an error rather than silently falling back to map or base-gamemode spawns.
 
 Candidates (`03-mapdata.md` d.7):
 
