@@ -190,6 +190,11 @@ local group = {
                 local ctx = must(PW.BotBrain).NewState().ctx
                 local bot = { IsValid = function() return false end } --[[@as Player]]
                 ctx.bot, ctx.board, ctx.state = bot, { bot = bot }, {}
+                -- This is a pure dispatch fixture, not an engine player for the gatherer to inspect.
+                ctx._api.facts = function()
+                    return { pos = Vector(), objectives = { target }, authoritative = true, mates = {}, deaths = {},
+                        candidates = {}, stationary = false, teamwork = 1 }
+                end
                 expect(must(PW.BotObjectives).RunAction(ctx, target).kind).to.equal("continue")
                 expect(#must(PW.BotCommander).Sanitize({ target })).to.equal(1)
                 must(PW.BotObjectives).EndAction(ctx)

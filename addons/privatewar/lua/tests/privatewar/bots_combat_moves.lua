@@ -152,6 +152,50 @@ local function has(mask, flag)
 end
 
 local smokeHook = "PW.BotsCombatMovesTest"
+local smokeModeId = "pwt_combat_moves"
+local smokeStarted = false
+---@type Entity?
+local smokeProp
+---@type number?
+local previousFill
+---@type table<string, string>
+local previousVars = {}
+local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
+
+---@param bot Player
+local function startSmokeScene(bot)
+    local match = must(PW.Match)
+    assert(match.GetPhase() == "LOBBY", "combat smoke requires a clean lobby")
+    previousFill = tonumber(PW.Setting("bots.fill"))
+    assert(PW.Settings.Set("bots.fill", 0))
+    for _, name in ipairs({ "pw_prematch_timeout", "pw_countdown" }) do
+        local convar = must(GetConVar(name))
+        previousVars[name] = convar:GetString()
+        convar:SetString("0")
+    end
+    must(PW.Modes).Register({ Name = "Combat movement fixture", Base = "ffa", Teams = 0,
+        PW_IsEnemy = function(_, a, b)
+            if not IsValid(smokeProp) then return false end
+            return (a == bot and b == smokeProp) or (a == smokeProp and b == bot)
+        end,
+        PW_CanTakeDamage = function() return false end }, smokeModeId)
+    assert(match.Start(must(must(PW.Modes).Get(smokeModeId))))
+    smokeStarted = true
+end
+
+local function stopSmokeScene()
+    if smokeStarted then
+        local mode = PW.ActiveMode
+        if mode ~= nil and mode.ClassName == smokeModeId then must(PW.Match).Abort("combat smoke complete") end
+        must(PW.Modes).Register({ Name = "Combat movement fixture", Base = "ffa", Abstract = true }, smokeModeId)
+        smokeStarted = false
+    end
+    if IsValid(smokeProp) then must(smokeProp):Remove() end
+    smokeProp = nil
+    if previousFill ~= nil then assert(PW.Settings.Set("bots.fill", previousFill)) previousFill = nil end
+    for name, value in pairs(previousVars) do must(GetConVar(name)):SetString(value) end
+    previousVars = {}
+end
 
 ---A threat point 500-900 units from the spot on about one level, or nil.
 ---@param spot Vector
@@ -196,6 +240,7 @@ return {
         local bot = state.bot --[[@as Player?]]
         timer.Remove(smokeHook)
         hook.Remove("PW_IsEnemy", smokeHook)
+        stopSmokeScene()
         if IsValid(state.prop) then (state.prop --[[@as Entity]]):Remove() end
         if bot ~= nil and IsValid(bot) then
             PW._BotsManager.boards[bot] = nil
@@ -209,6 +254,7 @@ return {
         rawset(PW._Call, "log", function() end)
     end,
     afterEach = function(state)
+        stopSmokeScene()
         rawset(PW._Call, "log", state.log)
     end,
     cases = {
@@ -449,6 +495,7 @@ return {
         {
             name = "Mandatory (T-11.6), smoke on gm_construct: a bot under fire reaches a cover point",
             async = true,
+            coroutine = true,
             timeout = 90,
             func = function(state)
                 local bot = state.bot --[[@as Player?]]
@@ -459,13 +506,28 @@ return {
                     return
                 end
                 ---@cast bot Player
+                startSmokeScene(bot)
+                local readyBy = CurTime() + 3
+                while must(PW.Match).GetPhase() ~= "LIVE" do
+                    if CurTime() >= readyBy then fail("combat smoke did not enter LIVE") return end
+                    resources.Yield(timer.Simple)
+                end
                 if not bot:Alive() then bot:Spawn() end
+                -- Lobby bodies are spectators. Exercise real walking, not observer flight across cover coordinates.
+                bot:UnSpectate()
+                bot:SetMoveType(MOVETYPE_WALK)
+                expect(bot:GetObserverMode()).to.equal(OBS_MODE_NONE)
+                expect(bot:GetMoveType()).to.equal(MOVETYPE_WALK)
+                expect(bot:IsFrozen()).to.beFalse()
+                print(string.format("[PW] combat smoke scene: phase=%s moveType=%d observer=%d",
+                    must(PW.Match).GetPhase(), bot:GetMoveType(), bot:GetObserverMode()))
                 bot:GodEnable()
                 local prop = ents.Create("prop_physics")
                 prop:SetModel("models/props_junk/wood_crate001a.mdl")
                 prop:Spawn()
                 prop:SetMoveType(MOVETYPE_NONE)
                 state.prop = prop
+                smokeProp = prop
                 hook.Add("PW_IsEnemy", smokeHook, function(a, b)
                     if (a == bot and b == prop) or (a == prop and b == bot) then return true end
                 end)
@@ -511,6 +573,9 @@ return {
                         tostring(reached), CurTime() - started, attempt, #covers, behavior and behavior.id or "none"))
                     bot:GodDisable()
                     PW._BotsManager.boards[bot] = nil
+                    expect(must(PW.Match).GetPhase()).to.equal("LIVE")
+                    expect(bot:GetMoveType()).to.equal(MOVETYPE_WALK)
+                    expect(bot:GetObserverMode()).to.equal(OBS_MODE_NONE)
                     expect(reached).to.beTrue()
                     done()
                 end)
