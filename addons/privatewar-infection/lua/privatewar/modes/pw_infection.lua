@@ -14,7 +14,7 @@ MODE.Settings = {
 
 local lib = PW.Infection --[[@as PW.InfectionLib]]
 local rules = PW.InfectionRules --[[@as PW.InfectionRulesLib]]
-local allowed = { pw_infection_pursuit = true, hunt = true, search = true, retaliate = true, idle = true }
+local allowed = { pw_infection_pursuit = true, hunt = true, search = true, idle = true }
 
 function MODE:Start()
     if lib == nil or lib.Start == nil then
