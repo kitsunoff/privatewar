@@ -18,16 +18,16 @@ local previousMode
 
 ---@return PW.Mode
 local function sceneMode()
-    return { Name = "Support native fixture", Base = "ffa", Teams = 0,
+    return { Name = "Support native fixture", Base = "tdm", Teams = 2,
         Dependencies = { objective_actions = { "hold" }, modules = { "bots_objectives" } },
-        -- The device-only scene has exactly two participants; ordinary FFA remains unchanged outside this mode.
+        -- The device-only scene has two opponent teams; other players remain neutral to this fixture.
         PW_IsEnemy = function(_, a, b)
             return a ~= b and ((a == actors[1] and b == actors[2]) or (a == actors[2] and b == actors[1]))
         end,
         PW_CanTakeDamage = function(_, target)
             if target ~= actors[1] and target ~= actors[2] then return false end
         end,
-        -- A deployed owner's ordinary FFA respawn would introduce a second, living combat target.
+        -- A deployed owner's ordinary respawn would introduce a second, living combat target.
         PW_CanRespawn = function(_, ply) if ply == actors[1] then return false end end,
         BotObjectives = function() return guardObjectives end }
 end
@@ -37,13 +37,22 @@ local function devices() return assert(PW.Devices) end
 
 ---@param bot Player
 ---@param point Vector
-local function place(bot, point)
-    bot:SetTeam(assert(PW.MatchRules).FreeTeam)
+---@param teamId integer
+local function place(bot, point, teamId)
+    bot:SetTeam(teamId)
     if not bot:Alive() then bot:Spawn() end
     bot:UnSpectate()
     bot:SetMoveType(MOVETYPE_WALK)
     bot:SetPos(point + Vector(0, 0, 2))
     bot:SetEyeAngles(Angle())
+end
+
+---@param bot Player
+---@return PW.BotBoard
+local function fixtureBoard(bot)
+    local profiles = assert(PW.BotProfiles)
+    return { bot = bot, team = bot:Team(), contacts = {}, memory = {}, intent = { buttons = 0 },
+        difficulty = profiles.Snapshot(profiles.Tier("regular")) }
 end
 
 ---@return Player, PW.SupportDevice
@@ -53,7 +62,7 @@ local function fixture()
     actors[#actors + 1] = owner
     for _, area in ipairs(navmesh.GetAllNavAreas() --[[@as CNavArea[] ]]) do
         if area:GetSizeX() >= 600 and area:GetSizeY() >= 160 then
-            place(owner, area:GetCenter())
+            place(owner, area:GetCenter(), 1)
             if devices().Prepare(owner, "ground_sensor") ~= nil then
                 assert(assert(PW.Streaks).Give)(owner, "ground_sensor")
                 assert(assert(assert(PW.Streaks).Use)(owner, "ground_sensor"))
@@ -85,7 +94,7 @@ return {
         devices().Clear()
         if matchStarted then
             assert(PW.Match).Abort("native support fixture complete")
-            assert(PW.Modes).Register({ Name = "Support native fixture", Base = "ffa", Abstract = true }, modeId)
+            assert(PW.Modes).Register({ Name = "Support native fixture", Base = "tdm", Abstract = true }, modeId)
             matchStarted = false
         end
         if previousFill ~= nil then assert(PW.Settings.Set("bots.fill", previousFill)) previousFill = nil end
@@ -115,7 +124,7 @@ return {
                     assert(IsValid(bot), "native device smoke needs a second free slot")
                     actors[#actors + 1] = bot
                     -- The owner's corpse is behind the device, not between the attacker and its sight line.
-                    place(bot, origin + Vector(256, 0, 0))
+                    place(bot, origin + Vector(256, 0, 0), 2)
                     expect(PW.IsEnemy(bot, owner)).to.beTrue()
                     for _, other in ipairs(player.GetAll()) do
                         if other ~= bot and other ~= owner then
@@ -129,10 +138,8 @@ return {
                     bot:SetAmmo(225, "SMG1")
                     bot:SelectWeapon("weapon_smg1")
                     bot:SetEyeAngles((record.entity:WorldSpaceCenter() - bot:EyePos()):Angle())
-                    local profiles = assert(PW.BotProfiles)
                     ---@type PW.BotBoard
-                    local board = { bot = bot, contacts = {}, memory = {}, intent = { buttons = 0 },
-                        difficulty = profiles.Snapshot(profiles.Tier("regular")) }
+                    local board = fixtureBoard(bot)
                     board.order = { id = "support_fixture_guard", type = "hold", priority = 1, since = CurTime(),
                         objective = { id = "support_fixture_guard", pos = bot:GetPos(), radius = 8,
                             action = "hold", weight = 1, want = 1 } }
@@ -224,13 +231,44 @@ return {
             end
         },
         {
+            name = "Device native fixture: real commander clears a teamless guard but preserves the fixture team guard",
+            func = function()
+                local bot = player.CreateNextBot("PW native commander fixture")
+                assert(IsValid(bot), "commander fixture needs a free listen-server slot")
+                actors[#actors + 1] = bot
+                place(bot, assert(navmesh.GetAllNavAreas()[1]):GetCenter(), 2)
+                local board = fixtureBoard(bot)
+                local bots = assert(PW.Bot)
+                stub(bots, "Get").with(function(who) if who == bot then return board end end)
+                PW.ActiveMode = sceneMode()
+                local objective = { id = "support_fixture_guard", pos = bot:GetPos(), radius = 8,
+                    action = "hold", weight = 1, want = 1 } --[[@as PW.BotObjective]]
+                guardObjectives[1] = objective
+                local order = { id = objective.id, type = "hold", priority = 1, since = CurTime(),
+                    objective = objective } --[[@as PW.BotOrder]]
+                local teamId = board.team
+                board.team, board.order = nil, order
+                assert(PW.BotCommander).Step(CurTime())
+                expect(board.order).to.beNil()
+                board.team, board.order = teamId, order
+                assert(PW.BotCommander).Step(CurTime() + 1)
+                expect(board.order ~= nil).to.beTrue()
+                expect(assert(board.order).id).to.equal(objective.id)
+                expect(board.team).to.equal(bot:Team())
+                expect(board.team).to.equal(2)
+                expect(sceneMode().Teams).to.equal(2)
+                print("[PW] support commander control: teamless cleared; fixture team guard retained")
+            end
+        },
+        {
             name = "Device native fixture: host is neutral, device owner is hostile, ordinary FFA is unchanged",
             func = function()
                 local host = assert(player.GetHumans()[1], "native fixture requires a listen host")
-                local function actor()
-                    return { Team = function() return assert(PW.MatchRules).FreeTeam end } --[[@as Player]]
+                ---@param teamId integer
+                local function actor(teamId)
+                    return { Team = function() return teamId end } --[[@as Player]]
                 end
-                local owner, guard, outsider = actor(), actor(), actor()
+                local owner, guard, outsider = actor(1), actor(2), actor(2)
                 actors = { owner, guard }
                 PW.ActiveMode = sceneMode()
                 expect(PW.IsEnemy(guard, owner)).to.beTrue()

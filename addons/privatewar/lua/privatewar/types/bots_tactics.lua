@@ -147,6 +147,10 @@
 ---@field MeleeWanted fun(dist: number, f: PW.BotCombatFacts): boolean
 ---Pure (T-11.6): whether to slide for "peek", "dodge" or "close".
 ---@field SlideWanted fun(kind: string, s: PW.BotSlideFacts): boolean
+---Existing slide eligibility and chance roll without changing intent or cooldown (for a safety-checked proposal).
+---@field SlideReady fun(ctx: PW.BotBrainCtx, kind: string, dist?: number): boolean
+---Commit an approved request through the existing slideAt channel and shared tactics.slide cooldown.
+---@field CommitSlide fun(ctx: PW.BotBrainCtx)
 ---T-11.6: slides when SlideWanted agrees (writes intent.slideAt, starts the cooldown); true when it did.
 ---@field Slide fun(ctx: PW.BotBrainCtx, kind: string, dist: number?): boolean
 ---T-11.6: sprint on or off (intent.sprint); sprinting drops the aim target so the view follows the path.

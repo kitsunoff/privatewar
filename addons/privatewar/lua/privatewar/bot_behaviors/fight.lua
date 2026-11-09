@@ -66,6 +66,50 @@ local function stopMoving(ctx, st)
     end
 end
 
+---The frame owns only its exact direct-drive and slide request, never another writer's replacement.
+---@param ctx PW.BotBrainCtx
+---@param st table<string, any>
+local function releaseMovement(ctx, st)
+    local plan = st.combatMove --[[@as PW.CombatMovePlan?]]
+    if plan == nil then return end
+    st.combatMove = nil
+    if ctx.board._behaviorOwner ~= ctx.state then return end
+    local intent = ctx:Intent()
+    if plan.drive ~= nil and rawequal(intent.drive, plan.drive) then intent.drive = nil end
+    if plan.slideAt ~= nil and intent.slideAt == plan.slideAt then intent.slideAt = nil end
+end
+
+---An optional, protected planner, called only by the active Action. Nil means the unchanged legacy path.
+---@param ctx PW.BotBrainCtx
+---@param st table<string, any>
+---@param c PW.BotContact
+---@return boolean
+local function refinedStrafe(ctx, st, c)
+    local registry = PW.Registries.modules
+    local def = registry ~= nil and registry.Get("bots_combat_movement") or nil
+    local previous = st.combatMove
+    local owner = ctx.board._behaviorOwner
+    local plan = def ~= nil and PW.Call(def, "Plan", ctx.bot, ctx, previous, c) or nil
+    releaseMovement(ctx, st)
+    if ctx.board._behaviorOwner ~= owner then return true end
+    if plan == nil then return false end
+    if plan.releaseGoal ~= nil and ctx.board.goal == plan.releaseGoal and plan.releaseGoal.priority == "hunt" then
+        ctx:ClearGoal()
+    end
+    if ctx.board._behaviorOwner ~= owner then return true end
+    st.combatMove, st.leg = plan, plan.untilAt
+    if plan.drive ~= nil then ctx:Intent().drive = plan.drive end
+    if plan.slideAt ~= nil then
+        if previous == nil or previous.slideAt ~= plan.slideAt then
+            local lib = tactics()
+            if lib ~= nil then lib.CommitSlide(ctx) end
+        else
+            ctx:Intent().slideAt = plan.slideAt
+        end
+    end
+    return true
+end
+
 ---Seconds the aim has been settled on the target with the line of fire blocked; 0 when it is not.
 ---@param ctx PW.BotBrainCtx
 ---@return number
@@ -84,6 +128,7 @@ end
 ---@param c PW.BotContact
 ---@return boolean strafing
 local function strafe(lib, ctx, st, f, c)
+    if refinedStrafe(ctx, st, c) then return true end
     local dist = strafeMin + lib.Random() * strafeSpread
     for _ = 1, 2 do
         st.side = -st.side
@@ -104,6 +149,7 @@ end
 ---@return PW.BotTransition?
 local function newLeg(lib, ctx, st, f, c)
     local intent = ctx:Intent()
+    releaseMovement(ctx, st)
     st.leg = ctx.now + lib.LegLength(f.profile, lib.Random())
     stopMoving(ctx, st)
     lib.Run(ctx, false)
@@ -126,6 +172,7 @@ end
 ---@param f PW.BotCombatFacts
 ---@param c PW.BotContact
 local function approach(lib, ctx, st, f, c)
+    releaseMovement(ctx, st)
     st.leg = ctx.now + lib.LegLength(f.profile, lib.Random())
     ctx:Intent().stance = "stand"
     lib.Drive(ctx, 0, 0)
@@ -145,7 +192,8 @@ local function reflexes(lib, ctx, st, f, c)
         st.bashAt = ctx.now + bashEvery
         lib.Bash(ctx)
     end
-    if ctx:Intent().drive ~= nil then lib.Slide(ctx, "dodge") end
+    -- The refinement returns a checked request; legacy movement keeps its existing dodge path.
+    if st.combatMove == nil and ctx:Intent().drive ~= nil then lib.Slide(ctx, "dodge") end
 end
 
 ---@param ctx PW.BotBrainCtx
@@ -153,12 +201,20 @@ end
 function BEHAVIOR:Update(_, ctx)
     local lib = tactics()
     local c = lib ~= nil and engaged(lib, ctx) or nil
-    if lib == nil or c == nil then return PW.BotBrain.Done("lost sight") end
     local st = ctx.state --[[@as table<string, any>]]
+    local owner = ctx.board._behaviorOwner
+    if lib == nil or c == nil then
+        releaseMovement(ctx, st)
+        return PW.BotBrain.Done("lost sight")
+    end
+    if st.combatMove ~= nil and ctx.now < st.leg and not refinedStrafe(ctx, st, c) then st.leg = 0 end
+    if ctx.board._behaviorOwner ~= owner then return PW.BotBrain.Continue() end
     if ctx.now >= st.leg then st.sprinting = false end
     if not st.sprinting and ctx.target ~= c.ent then ctx:SetTarget(c.ent) end
     local f = lib.FactsOf(ctx)
-    if blockedFor(ctx) >= lib.Config.blockedFlank and ctx.now >= (st.repositionAt or 0) then
+    local sliding = st.combatMove ~= nil and st.combatMove.slideAt ~= nil
+    if not sliding and blockedFor(ctx) >= lib.Config.blockedFlank and ctx.now >= (st.repositionAt or 0) then
+        releaseMovement(ctx, st)
         st.side = -st.side
         st.repositionAt, st.leg = ctx.now + repositionPause, ctx.now + repositionPause
         ctx:Intent().stance = "stand"
@@ -170,12 +226,13 @@ function BEHAVIOR:Update(_, ctx)
         local handOver = newLeg(lib, ctx, st, f, c)
         if handOver ~= nil then return handOver end
     end
-    reflexes(lib, ctx, st, f, c)
+    if ctx.board._behaviorOwner == owner then reflexes(lib, ctx, st, f, c) end
     return PW.BotBrain.Continue()
 end
 
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnSuspend(_, ctx)
+    releaseMovement(ctx, ctx.state --[[@as table<string, any>]])
     ctx:Intent().stance = "stand"
 end
 
@@ -188,6 +245,7 @@ end
 ---@param ctx PW.BotBrainCtx
 function BEHAVIOR:OnEnd(_, ctx)
     local st = ctx.state --[[@as table<string, any>]]
+    releaseMovement(ctx, st)
     if st.moving then ctx:ClearGoal() end
     ctx:Intent().stance = "stand"
     ctx:SetTarget(nil)
