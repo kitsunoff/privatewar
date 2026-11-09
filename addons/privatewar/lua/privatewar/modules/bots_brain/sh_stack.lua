@@ -267,6 +267,7 @@ end
 ---@param reason string
 ---@param now number
 local function switchTo(state, env, def, cur, reason, now)
+    local mode = PW.ActiveMode
     local stack, id = state.stack, def.ClassName
     for i = #stack - 1, 1, -1 do
         if stack[i].id == id then
@@ -285,6 +286,7 @@ local function switchTo(state, env, def, cur, reason, now)
     elseif top ~= nil then
         callFrame(state, env, top, "OnSuspend")
     end
+    if PW.ActiveMode ~= mode then return end
     push(state, env, def, score, "select", reason, now)
 end
 

@@ -12,7 +12,7 @@ local function api() return match() --[[@as table<string, any>]] end
 
 local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
 
-return {
+local group = {
     groupName = "PW objective mode dependencies",
     beforeEach = function(state)
         state.match, state.mode, state.enable, state.settings = PW._Match, PW.ActiveMode, PW._Enable, PW._Settings
@@ -34,6 +34,7 @@ return {
             Cleanup = function() state.ends = state.ends + 1 end }
     end,
     afterEach = function(state)
+        hook.Remove("PW_MatchEnd", "PW.Test.ObjectiveDependencyStop")
         PW._Match, PW.ActiveMode, PW._Enable, PW._Settings = state.match, state.mode, state.enable, state.settings
         PW.Registries, PW._Call = state.registries, state.call
         state.reg._Release()
@@ -137,6 +138,41 @@ return {
             end
         },
         {
+            name = "Dependencies: cleanup failure during suspension cannot start a new behavior after abort",
+            func = function(state)
+                local brain = must(PW.BotBrain)
+                local running = brain.NewState()
+                local bot = { IsValid = function() return true end, Alive = function() return true end,
+                    UserID = function() return 7 end } --[[@as Player]]
+                ---@type PW.BotBoard
+                local board = { bot = bot, intent = { buttons = 0 } }
+                local target = { id = "visit", action = "test_required", pos = Vector(), radius = 10,
+                    weight = 1, want = 1 }
+                local combat = false
+                local fight = { ClassName = "combat_fixture", Rank = function() return combat and "combat" or false end,
+                    Weight = function() return 1 end, Update = function() return brain.Continue() end }
+                local facade = must(must(PW.BotBehaviors).Get("objective")) --[[@as PW.BotBehavior]]
+                local env = { bot = bot, board = board, behaviors = { facade, fight }, mode = "test",
+                    random = function() return 0 end, api = { clearGoal = function() board.goal = nil end,
+                        facts = function() return { pos = Vector(), objectives = { target }, mates = {}, deaths = {},
+                            candidates = {}, stationary = false, teamwork = 1 } end } }
+                local required = state.reg.Get("test_required") --[[@as PW.Entity]]
+                required.OnEnd = function() error("cleanup failed during suspension") end
+                hook.Add("PW_MatchEnd", "PW.Test.ObjectiveDependencyStop", function()
+                    brain.Stop(running, env, 1, "match ended")
+                end)
+                match().Start(state.definition)
+                match()._SetPhase("LIVE")
+                brain.Think(running, env, 0)
+                expect(must(running.stack[1]).id).to.equal("objective")
+                combat = true
+                brain.Think(running, env, 1)
+                expect(match().GetPhase()).to.equal("LOBBY")
+                expect(#running.stack).to.equal(0)
+                expect(must(facade):IsValid()).to.beTrue()
+            end
+        },
+        {
             name = "Dependencies: current match pins old definitions across reload; next match uses replacements",
             func = function(state)
                 match().Start(state.definition)
@@ -166,3 +202,7 @@ return {
         }
     }
 }
+
+-- The resource boundary runs in each case's coroutine, as in the core phase-machine fixtures.
+for _, case in ipairs(group.cases) do case.coroutine = true end
+return group
