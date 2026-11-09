@@ -44,6 +44,7 @@ local function fixture()
     local function addHook(name, _, fn) hooks[name] = fn end
     local env = setmetatable({ PW = api, LocalPlayer = function() return me end, IsValid = valid,
         RealTime = function() return f.now end, IsFirstTimePredicted = function() return true end,
+        ScrW = function() return 1280 end, ScrH = function() return 800 end,
         GetConVar = function() return nil end, GetGlobal2Int = function(key, default)
             if key == "pw_teams" then return 2 end
             if key == "pw_dom_score_1" then return 123 end
