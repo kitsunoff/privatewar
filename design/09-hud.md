@@ -17,7 +17,7 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
    | Health, ammo | Vanilla GMod HUD or the weapon base's own HUD (ARC9, TFA) |
    | Crosshair | Vanilla or the weapon base's |
    | Killfeed | Vanilla `DeathNotice` of the base gamemode |
-   | Scoreboard (Tab) | Vanilla base gamemode scoreboard |
+   | Scoreboard (Tab) | Vanilla base gamemode scoreboard (superseded by the 2026-11-10 revision below) |
 
 2. **Our overlay elements.**
    - Effects: hitmarker (red on kill); score popups ("+100", "+50 Headshot") from `PW_ScoreEvent` (`06-progression.md` decision 3); medals (icon, name, sound) for events with `Medal = true`.
@@ -52,6 +52,12 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
   - Bottom right: only the active weapon's localized name and magazine / reserve primary ammo. A clipless weapon shows `- / reserve`, never a fabricated magazine; a weapon without primary ammo shows its name only. Long names fit without splitting UTF-8.
   - These elements appear only for the living local player during `LIVE`, never an observed player. Hide the corresponding native health/battery or ammo panels only while their custom replacement is enabled, visible and successfully drawing; disabling the HUD or a replacement, or an error/missing module, restores vanilla.
   - Preserve grenade equipment above the weapon and the bottom XP strip. Use the existing palette and font families. No changes to health/armor maxima, damage, loadouts or balance; crosshair, killfeed, Tab, radar, XP, streaks and other elements keep their existing decisions.
+
+- **Revision 2026-11-10 (user-approved custom in-match scoreboard; overrides decision 1 for Tab only):**
+  - Hold the standard `+showscores` binding (Tab by default) during `LIVE` to show a custom table in the current match-result style. Reuse its table component, palette, fonts and own-player highlight. Releasing closes it; no movement or mouse capture.
+  - Team modes group by the public current teams, own team first, with the published mode-specific team totals; FFA ranks by kills. Show public kills, deaths and score, distinguish bots and separate spectators/JIP holdouts. Never show hidden positions, targets, equipment, bomb possession or inferred living/dead state.
+  - Keep the result/vote/lobby and pause flows intact. Close on phase exit, module disable, lost focus or an open pause/native menu; a death class picker may remain underneath. Native controller View also holds the board; arrows/d-pad scroll and Page Up/Down page without borrowing movement keys.
+  - Use existing replication only. Optional mode presentation may use already published public or own-player data; Infection shows own round wins, not an invented live leaderboard. No new assets or dependencies. Cache text/layout outside Paint, refresh data at most four times per second only while visible, cull offscreen rows, and retain UI scaling and native fallback on disable/build failure.
 
 3. **One `HUDPaint` iterating the `HUDELEMENT` registry (kind `hud/`).**
    - An element is a `Draw` function plus subscriptions to events; modes and modules bring their own elements (Domination: points; streaks module: radar).

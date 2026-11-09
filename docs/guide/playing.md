@@ -57,6 +57,12 @@ match menus, saved on your computer), Host settings (host only) and a link to En
 
 ## Controls
 
+During a match, hold **Tab** (or your rebound `+showscores` key) for the result-style scoreboard. Release to close.
+The native controller **View/Back** button also holds it; Steam Input can map a button to Tab. Use **Up/Down** or
+the **d-pad** to scroll, **Page Up/Down** to page. Movement and aiming remain available. The table shows public
+stats only, not enemy locations or tactical state. Infection shows your own round wins; full personal standings
+remain on the match-result screen. Personal settings can disable the custom in-match scoreboard.
+
 | Action | Keyboard | Steam Deck gamepad |
 | --- | --- | --- |
 | Move in menus | Arrow keys or WASD | D-pad or left stick |

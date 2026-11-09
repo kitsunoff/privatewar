@@ -362,6 +362,11 @@ end
 function rootClass:OnKeyCodePressed(code)
     -- Shift+Escape is the GMod menu (cl_match.lua), never Back.
     if code == KEY_ESCAPE and engineInput.IsShiftDown() then return true end
+    -- Popup keyboard capture bypasses engine binds. Tab must still work while choosing the next-life class.
+    local board = lib.Scoreboard
+    if self.rootId == "class" and board ~= nil and board.HandleKey ~= nil and board.HandleKey(code) then
+        return true
+    end
     local action = input.Press(self.input, code)
     if action ~= nil then self:Act(action) end
     return true

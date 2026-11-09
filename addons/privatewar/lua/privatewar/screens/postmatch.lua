@@ -14,24 +14,11 @@ SCREEN.Hints = {
     { action = "settings", label = "Match menu" }, { action = "back", label = "Close" }
 }
 
----One painted line of the scoreboard (texts built once at Build time).
----@class PWPostmatchLine
----@field header boolean
----@field title string
----@field score string
----@field place string
----@field kills string
----@field deaths string
----@field me boolean
----@field bot boolean
----@field relation PW.UIBoardRelation
-
 ---@class PWPostmatchView : Panel
 ---@field data PW.UIPostmatchData
----@field lines PWPostmatchLine[]
 ---@field banner Panel
 ---@field scroll DScrollPanel
----@field board Panel
+---@field board PWMatchBoard
 ---@field xp Panel
 ---@field weaponsCard PWInfoCard
 ---@field medalsCard PWInfoCard
@@ -45,7 +32,7 @@ SCREEN.Hints = {
 ---@field OnAction fun(self: PWPostmatchView, action: string)
 
 local timing = { stepTime = 0.9, maxTime = 5, delay = 0.6 }
-local headerH, rowH, sectionGap, columnsH = 48, 40, 12, 36
+local rowH = 40
 local maxRows = 5
 
 ---@return PW.UILib
@@ -62,120 +49,6 @@ end
 ---@return integer
 local function px(design)
     return kit().Draw.Px(design)
-end
-
----@param relation PW.UIBoardRelation
----@return Color
-local function relationColour(relation)
-    local s = style()
-    if relation == "friendly" then return s.team_friendly end
-    if relation == "enemy" then return s.team_enemy end
-    return s.text
-end
-
----@param sections PW.UIBoardSection[]
----@return PWPostmatchLine[]
-local function boardLines(sections)
-    ---@type PWPostmatchLine[]
-    local lines = {}
-    for _, section in ipairs(sections) do
-        lines[#lines + 1] = {
-            header = true, title = section.title, relation = section.relation, me = false, bot = false,
-            score = section.score ~= nil and tostring(section.score) or "", place = "", kills = "", deaths = ""
-        }
-        for _, entry in ipairs(section.rows) do
-            lines[#lines + 1] = {
-                header = false, title = entry.name, relation = section.relation, me = entry.me, bot = entry.bot,
-                score = tostring(entry.score), place = tostring(entry.place or ""), kills = tostring(entry.kills),
-                deaths = tostring(entry.deaths)
-            }
-        end
-    end
-    return lines
-end
-
----@param lines PWPostmatchLine[]
----@return integer design units
-local function boardHeight(lines)
-    local height = columnsH
-    for index, line in ipairs(lines) do
-        if line.header then
-            height = height + headerH + (index > 1 and sectionGap or 0)
-        else
-            height = height + rowH
-        end
-    end
-    return height
-end
-
----@param w number
----@param scoreLabel string
-local function paintColumns(w, scoreLabel)
-    local s, font = style(), kit().FontName("small")
-    local pad, y = px(20), px(columnsH) / 2
-    draw.SimpleText("PLAYER", font, pad + px(56), y, s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    draw.SimpleText("K", font, w - px(320), y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText("D", font, w - px(200), y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(scoreLabel, font, w - pad, y, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-end
-
----@param line PWPostmatchLine
----@param y number
----@param w number
-local function paintHeader(line, y, w)
-    local s, h = style(), px(headerH)
-    local tint = relationColour(line.relation)
-    kit().Draw.Rect(0, y, w, h, s.bg_raised)
-    kit().Draw.Rect(0, y, px(4), h, tint)
-    local font = kit().FontName("h2")
-    draw.SimpleText(line.title, font, px(20), y + h / 2, tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(line.score, font, w - px(20), y + h / 2, tint, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-end
-
----@param line PWPostmatchLine
----@param y number
----@param w number
-local function paintRow(line, y, w)
-    local s, h, pad = style(), px(rowH), px(20)
-    local font, small = kit().FontName("body"), kit().FontName("small")
-    if line.me then
-        kit().Draw.Rect(0, y, w, h, s.bg_selected)
-        kit().Draw.Rect(0, y, px(4), h, s.accent)
-    end
-    local cy = y + h / 2
-    local ink = line.me and s.accent or s.text
-    draw.SimpleText(line.place, small, pad, cy, s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    local nameX = pad + px(56)
-    local name = kit().Draw.Fit(line.title, font, w - nameX - px(420))
-    draw.SimpleText(name, font, nameX, cy, ink, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    if line.bot then
-        surface.SetFont(font)
-        local nameW = surface.GetTextSize(name)
-        draw.SimpleText("BOT", small, nameX + nameW + px(12), cy, s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    end
-    draw.SimpleText(line.kills, font, w - px(320), cy, s.text, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(line.deaths, font, w - px(200), cy, s.text, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(line.score, font, w - pad, cy, ink, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-end
-
----@param view PWPostmatchView
----@param w number
----@param h number
-local function paintBoard(view, w, h)
-    local s = style()
-    kit().Draw.Rect(0, 0, w, h, s.bg_panel)
-    paintColumns(w, view.scoreLabel)
-    local y = px(columnsH)
-    for index, line in ipairs(view.lines) do
-        if line.header then
-            if index > 1 then y = y + px(sectionGap) end
-            paintHeader(line, y, w)
-            y = y + px(headerH)
-        else
-            paintRow(line, y, w)
-            y = y + px(rowH)
-        end
-    end
 end
 
 ---@param view PWPostmatchView
@@ -269,8 +142,7 @@ end
 local function fill(view)
     local data = view.data
     view.scoreLabel = data.scoreLabel or "SCORE"
-    view.lines = boardLines(data.sections)
-    view.board:SetTall(px(boardHeight(view.lines)))
+    view.board:SetSections(data.sections, view.scoreLabel)
     local summary = data.summary
     view.xpText = "+" .. kit().Postmatch.Number(summary ~= nil and summary.xp or 0) .. " XP"
     view.started, view.shownLevel, view.levelText = RealTime(), -1, ""
@@ -344,7 +216,8 @@ function SCREEN:Build(ctx)
     view.data = gather()
     view.banner = painted(view, "PWPostmatchBanner", paintBanner)
     view.scroll = vgui.Create("DScrollPanel", view) --[[@as DScrollPanel]]
-    view.board = painted(view, "PWPostmatchBoard", paintBoard, view.scroll)
+    view.board = vgui.Create("PWMatchBoard", view.scroll) --[[@as PWMatchBoard]]
+    view.board:SetViewport(view.scroll)
     view.board:Dock(TOP)
     view.xp = painted(view, "PWPostmatchXp", paintXp)
     view.weaponsCard = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
