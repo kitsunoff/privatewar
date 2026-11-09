@@ -19,6 +19,16 @@ OBJECTIVEACTION = nil
 ---@field handler PW.ObjectiveAction
 ---@field target PW.BotObjective
 ---@field state table<string, any>
+---@field owner PW.ObjectiveFrameState frame ownership token
+---@field intent PW.BotIntent exact intent table used by this visit
+---@field baseline table<string, any>
+---@field values table<string, any>
+---@field owned table<string, boolean>
+---@field goal? PW.BotGoal exact goal created by this visit
+---@field look? Vector exact objective look target
+---@field initialGoal? PW.BotGoal inherited goal, never adopted merely by cleanup
+---@field initialLook? any inherited aim target
+---@field ending? boolean recursive cleanup guard
 
 ---@class PW.ObjectiveFrameState
 ---@field visit? PW.ObjectiveVisit
@@ -33,3 +43,6 @@ OBJECTIVEACTION = nil
 
 ---@class PW
 ---@field ObjectiveActions? PW.Registry
+
+---@class PW.BotBoard
+---@field _behaviorOwner? table internal output ownership token, changed on active frame callbacks

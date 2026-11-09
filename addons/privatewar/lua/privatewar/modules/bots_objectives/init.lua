@@ -135,7 +135,8 @@ function lib.Gather(ctx)
     ---@type PW.BotFacts
     return {
         pos = bot:GetPos(), team = team, mode = modeId, objectives = objectivesFor(modeId, team), mates = mates,
-        authoritative = active ~= nil and active.ClassName == modeId,
+        authoritative = active ~= nil and active.ClassName == modeId and team ~= nil
+            and isfunction(active.BotObjectives),
         deaths = deaths, candidates = candidates(), stationary = personality.type == "stationary",
         teamwork = PW.BotProfiles.Pick({ "teamwork" }, board.difficulty).teamwork, streak = lib.ReadyStreak(bot)
     }

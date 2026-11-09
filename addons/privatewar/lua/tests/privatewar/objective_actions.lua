@@ -18,7 +18,7 @@ end
 local function context()
     local ctx = must(PW.BotBrain).NewState().ctx
     ctx.bot = { IsValid = function() return true end, Alive = function() return true end,
-        UserID = function() return 7 end } --[[@as Player]]
+        UserID = function() return 7 end, GetPos = function() return Vector() end } --[[@as Player]]
     ctx.board, ctx.state, ctx.now = { bot = ctx.bot, intent = { buttons = 0 } }, {}, 10
     ctx._api = { random = function() return 0.5 end,
         facts = function() return { pos = Vector(), objectives = {}, mates = {}, deaths = {}, candidates = {},
@@ -37,6 +37,7 @@ return {
     beforeEach = function(state)
         state.registry = rawget(PW, "ObjectiveActions")
         state.match = PW._Match
+        state.mode = PW.ActiveMode
         state.call = PW._Call
         PW._Call = { log = function() end, failed = {}, profile = {} }
         PW._Match = must(PW.Match)._NewStore({ log = function() end })
@@ -44,6 +45,7 @@ return {
     afterEach = function(state)
         rawset(PW, "ObjectiveActions", state.registry)
         PW._Match, PW._Call = state.match, state.call
+        PW.ActiveMode = state.mode
     end,
     cases = {
         {
@@ -258,6 +260,242 @@ return {
                 brain.Stop(state, env, 11, "dead")
                 expect(#state.stack).to.equal(0)
                 expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
+            end
+        },
+        {
+            name = "Actions: late cleanup preserves a newer behavior's identical intent values and new goal",
+            func = function()
+                local brain, ctx = must(PW.BotBrain), context()
+                local reg = PW.Registry.New("objective_actions", { preRegister = function() end, log = function() end })
+                local drive, look = Vector(200, 0, 0), Vector(600, 0, 50)
+                reg.Register({ Update = function(_, _, current)
+                    ---@cast current PW.BotBrainCtx
+                    current:Intent().buttons = IN_USE
+                    current:Intent().drive, current:Intent().sprint, current:Intent().stance = drive, true, "crouch"
+                    current:SetTarget(look --[[@as any]])
+                    current:SetGoal(Vector(500, 0, 0), 10, "objective")
+                    return brain.Continue()
+                end }, "owned")
+                reg.ResolveAll()
+                rawset(PW, "ObjectiveActions", reg)
+                actions().RunAction(ctx, objective("owned"))
+                local oldState = must(ctx.state)
+                local newer = brain.NewState()
+                local def = { ClassName = "newer_fixture", Rank = function() return "survival" end,
+                    Weight = function() return 1 end, Update = function(_, _, current)
+                        ---@cast current PW.BotBrainCtx
+                        current:Intent().buttons = IN_USE
+                        current:Intent().drive, current:Intent().sprint = drive, true
+                        current:Intent().stance = "crouch"
+                        current:SetTarget(look --[[@as any]])
+                        current:SetGoal(Vector(900, 0, 0), 20, "critical")
+                        return brain.Continue()
+                    end }
+                local env = { bot = ctx.bot, board = ctx.board, behaviors = { def }, mode = "test",
+                    random = function() return 0 end, api = ctx._api }
+                brain.Think(newer, env, 11)
+                local goal = ctx.board.goal
+                ctx.state = oldState
+                actions().EndAction(ctx)
+                expect(ctx.board.goal).to.equal(goal)
+                expect(ctx:Intent().drive).to.equal(drive)
+                expect(ctx:Intent().sprint).to.beTrue()
+                expect(ctx:Intent().stance).to.equal("crouch")
+                expect(ctx.board.target).to.equal(look)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(IN_USE)
+            end
+        },
+        {
+            name = "Actions: reentrant OnEnd handoff survives cleanup success and cleanup failure",
+            func = function()
+                local brain = must(PW.BotBrain)
+                for _, fails in ipairs({ false, true }) do
+                    local ctx, newer = context(), brain.NewState()
+                    local drive, look = Vector(200, 0, 0), Vector(700, 0, 50)
+                    local def = { ClassName = "handoff_fixture", Rank = function() return "survival" end,
+                        Weight = function() return 1 end, Update = function(_, _, current)
+                            ---@cast current PW.BotBrainCtx
+                            current:Intent().drive, current:Intent().sprint = drive, true
+                            current:Intent().stance = "crouch"
+                            current:SetTarget(look --[[@as any]])
+                            current:SetGoal(Vector(900, 0, 0), 20, "critical")
+                            return brain.Continue()
+                        end }
+                    local env = { bot = ctx.bot, board = ctx.board, behaviors = { def }, mode = "test",
+                        random = function() return 0 end, api = ctx._api }
+                    local reg = PW.Registry.New("objective_actions", {
+                        preRegister = function() end, log = function() end })
+                    reg.Register({ Update = function(_, _, current)
+                        ---@cast current PW.BotBrainCtx
+                        current:Intent().buttons = IN_USE
+                        current:SetGoal(Vector(500, 0, 0), 10, "objective")
+                        return brain.Continue()
+                    end, OnEnd = function()
+                        brain.Think(newer, env, 11)
+                        if fails then error("cleanup failed after newer behavior started") end
+                    end }, "handoff")
+                    reg.ResolveAll()
+                    rawset(PW, "ObjectiveActions", reg)
+                    actions().RunAction(ctx, objective("handoff"))
+                    actions().EndAction(ctx)
+                    expect(must(ctx.board.goal).priority).to.equal("critical")
+                    expect(ctx:Intent().drive).to.equal(drive)
+                    expect(ctx:Intent().sprint).to.beTrue()
+                    expect(ctx:Intent().stance).to.equal("crouch")
+                    expect(ctx.board.target).to.equal(look)
+                    expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
+                end
+            end
+        },
+        {
+            name = "Actions: a reentrant suspension handoff cannot be reclaimed by the older brain tick",
+            func = function()
+                local brain, ctx = must(PW.BotBrain), context()
+                local running, newer = brain.NewState(), brain.NewState()
+                local combat, updates = false, 0
+                local drive, look = Vector(200, 0, 0), Vector(700, 0, 50)
+                local nextDef = { ClassName = "newer_fixture", Rank = function() return "survival" end,
+                    Weight = function() return 1 end, Update = function(_, _, current)
+                        ---@cast current PW.BotBrainCtx
+                        current:Intent().drive, current:Intent().sprint = drive, true
+                        current:Intent().stance = "crouch"
+                        current:SetTarget(look --[[@as any]])
+                        current:SetGoal(Vector(900, 0, 0), 20, "critical")
+                        return brain.Continue()
+                    end }
+                local nextEnv = { bot = ctx.bot, board = ctx.board, behaviors = { nextDef }, mode = "test",
+                    random = function() return 0 end, api = ctx._api }
+                local reg = PW.Registry.New("objective_actions", { preRegister = function() end, log = function() end })
+                reg.Register({ Update = function()
+                    updates = updates + 1
+                    return brain.Continue()
+                end, OnEnd = function() brain.Think(newer, nextEnv, 11) end }, "handoff")
+                reg.ResolveAll()
+                rawset(PW, "ObjectiveActions", reg)
+                local facts = actions().Facts(ctx) --[[@as PW.BotFacts]]
+                facts.objectives = { objective("handoff") }
+                ctx._api.facts = function() return facts end
+                local competitor = { ClassName = "competitor_fixture",
+                    Rank = function() return combat and "combat" or false end, Weight = function() return 1 end,
+                    Update = function() error("older selector reclaimed control after handoff") end }
+                local facade = must(must(PW.BotBehaviors).Get("objective")) --[[@as PW.BotBehavior]]
+                local env = { bot = ctx.bot, board = ctx.board, behaviors = { facade, competitor }, mode = "test",
+                    random = function() return 0 end, api = ctx._api }
+                brain.Think(running, env, 10)
+                expect(must(running.stack[1]).id).to.equal("objective")
+                combat = true
+                brain.Think(running, env, 11)
+                expect(updates).to.equal(1)
+                expect(PW._Call.failed[competitor]).to.beNil()
+                expect(must(ctx.board.goal).priority).to.equal("critical")
+                expect(ctx:Intent().drive).to.equal(drive)
+                expect(ctx:Intent().sprint).to.beTrue()
+                expect(ctx:Intent().stance).to.equal("crouch")
+                expect(ctx.board.target).to.equal(look)
+            end
+        },
+        {
+            name = "Actions: ending invalidating or stopping an old objective preserves a reentrant handoff",
+            func = function()
+                ---@param ending string
+                local function verify(ending)
+                    local brain, ctx = must(PW.BotBrain), context()
+                    local running, newer = brain.NewState(), brain.NewState()
+                    local nextDef = { ClassName = "newer_fixture", Rank = function() return "survival" end,
+                        Weight = function() return 1 end, Update = function(_, _, current)
+                            ---@cast current PW.BotBrainCtx
+                            current:SetGoal(Vector(900, 0, 0), 20, "critical")
+                            current:Intent().sprint = true
+                            return brain.Continue()
+                        end }
+                    local nextEnv = { bot = ctx.bot, board = ctx.board, behaviors = { nextDef }, mode = "test",
+                        random = function() return 0 end, api = ctx._api }
+                    local reg = PW.Registry.New("objective_actions", {
+                        preRegister = function() end, log = function() end })
+                    reg.Register({ Update = function() return brain.Continue() end,
+                        OnEnd = function() brain.Think(newer, nextEnv, 11) end }, "handoff")
+                    reg.ResolveAll()
+                    rawset(PW, "ObjectiveActions", reg)
+                    actions().RunAction(ctx, objective("handoff"))
+                    local def = { ClassName = "objective", Rank = function() return false end,
+                        Weight = function() return 1 end, Update = function() return brain.Done("finished") end }
+                    local below = { ClassName = "below_fixture", Rank = function() return false end,
+                        Weight = function() return 1 end, Update = function() return brain.Continue() end,
+                        OnResume = function() error("resumed an older frame after handoff") end }
+                    running.ctx = ctx
+                    running.stack = { { id = "below_fixture", def = below, state = {}, since = 0,
+                        rank = 10, weight = 1, via = "select", reason = "test" },
+                        { id = "objective", def = def, state = must(ctx.state), since = 0,
+                            rank = 20, weight = 1, via = "select", reason = "test" } }
+                    local env = { bot = ctx.bot, board = ctx.board, behaviors = { def, below }, mode = "test",
+                        random = function() return 0 end, api = ctx._api }
+                    if ending == "think" then brain.Think(running, env, 11)
+                    elseif ending == "invalidate" then brain._InvalidateObjective(running, env, 11, "test_zone", 1)
+                    else brain.Stop(running, env, 11, "reset") end
+                    expect(PW._Call.failed[below]).to.beNil()
+                    expect(must(ctx.board.goal).priority).to.equal("critical")
+                    expect(ctx:Intent().sprint).to.beTrue()
+                    expect(must(ctx.board.behavior).id).to.equal("newer_fixture")
+                end
+                for _, ending in ipairs({ "think", "invalidate", "stop" }) do verify(ending) end
+            end
+        },
+        {
+            name = "Actions: an authoritative custom required action omitted from dependencies never executes",
+            func = function()
+                local reg = PW.Registry.New("objective_actions", { preRegister = function() end, log = function() end })
+                local calls, aborts = 0, 0
+                reg.Register({ Update = function()
+                    calls = calls + 1
+                    return must(PW.BotBrain).Continue()
+                end }, "custom")
+                reg.ResolveAll()
+                rawset(PW, "ObjectiveActions", reg)
+                stub(must(PW.Match), "Abort").with(function() aborts = aborts + 1 return true end)
+                for _, snapshot in ipairs({ {}, { objective_actions = {} } }) do
+                    PW._Match.dependencies = snapshot
+                    local ctx = context()
+                    local facts = actions().Facts(ctx) --[[@as PW.BotFacts]]
+                    facts.authoritative = true
+                    expect(actions().RunAction(ctx, objective("custom")).kind).to.equal("done")
+                end
+                expect(calls).to.equal(0)
+                expect(aborts).to.equal(2)
+            end
+        },
+        {
+            name = "Actions: gathered facts only invalidate orders when a mode catalog was actually queried",
+            func = function()
+                local lib, ctx, target = must(PW.BotObjectives), context(), objective("hold")
+                local now, calls = 6000, 0
+                ---@type table<string, any>
+                local mode = { ClassName = "authority_fixture", BotObjectives = function()
+                    calls = calls + 1
+                    return { target }
+                end }
+                PW.ActiveMode = mode
+                stub(_G, "CurTime").with(function() return now end)
+                stub(player, "GetAll").returns({})
+                stub(lib, "ReadyStreak").with(function() end)
+                ctx.order = { id = target.id, type = target.action, objective = target, since = 0, priority = 1 }
+                ctx._api.mode = mode.ClassName
+                local gather = must(lib.Gather)
+                -- The existing gatherer deliberately does not call BotObjectives(nil) in FFA.
+                local ffa = gather(ctx)
+                expect(calls).to.equal(0)
+                expect(ffa.authoritative == true).to.beFalse()
+                local _, _, ordered = lib.Resolve(ctx, ffa)
+                expect(ordered).to.beTrue()
+                now, ctx.board.team = 6001, 1
+                local team = gather(ctx)
+                expect(calls).to.equal(1)
+                expect(team.authoritative).to.beTrue()
+                mode.BotObjectives, now = nil, 6002
+                local absent = gather(ctx)
+                expect(calls).to.equal(1)
+                expect(absent.authoritative == true).to.beFalse()
+                local _, _, legacy = lib.Resolve(ctx, absent)
+                expect(legacy).to.beTrue()
             end
         },
         {

@@ -19,6 +19,7 @@ local previousMode
 ---@return PW.Mode
 local function sceneMode()
     return { Name = "Support native fixture", Base = "ffa", Teams = 0,
+        Dependencies = { objective_actions = { "hold" }, modules = { "bots_objectives" } },
         -- The device-only scene has exactly two participants; ordinary FFA remains unchanged outside this mode.
         PW_IsEnemy = function(_, a, b)
             return a ~= b and ((a == actors[1] and b == actors[2]) or (a == actors[2] and b == actors[1]))

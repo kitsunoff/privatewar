@@ -118,6 +118,11 @@ DOM `capture/defend`; KC `collect/deny`; Hardpoint `hold`; S&D `collect/hold/pla
 S&D also explicitly requires `snd` and `lobby`; Hardpoint requires `hardpoint`; DOM requires `dom_flags` and
 KC requires `kc_tags`. Other bot layers remain optional, rather than acquiring an implicit dependency graph.
 
+Custom modes must declare every potential required action, including conditionally emitted custom ids. Preflight
+can only check that explicit set, not infer future `BotObjectives` results. If an authoritative bot dispatch
+encounters an undeclared action, the runtime backstop aborts without invoking the handler. A human-only match
+does not dispatch bot actions, so an omitted dependency is an author contract error, not a preflight guarantee.
+
 `PW.Match.Dependency(kind, id)` reads an exact pinned dependency during a match, or the current registry outside
 it. The loader preserves these definitions across reload. Reloaded definitions and enable flag edits take effect
 at the next match (`01-extensibility.md` d.11–12); they do not replace a running visit's handler.

@@ -773,19 +773,28 @@ They run through `PW.Call` on the shared definition. `state` is mutable per bot 
 on the definition; `Update` returns `PW.BotBrain.Continue()` or `Done(reason)`. No return or an invalid transition
 fails the handler. Actions only produce ordinary input/goal intents: the mode alone owns progress and verdicts.
 
-`PW.BotObjectives.RunAction(ctx, target)` dispatches the handler. `EndAction(ctx)` is idempotent: it detaches the
-visit, attempts handler cleanup when callable, and independently releases use, look, movement and goal resources.
-Cleanup therefore still works after a failed handler or disabled facade. Suspension ends the visit; resume starts
+`PW.BotObjectives.RunAction(ctx, target)` dispatches the handler. `EndAction(ctx)` is idempotent: it marks the visit
+closing, releases owned outputs before calling optional cleanup, then releases any remaining owned cleanup writes.
+The brain changes an internal frame ownership token on active callbacks; cleanup does not reclaim that token.
+Release requires the original frame token and intent-table identity, and checks exact goal/look references and
+owned intent fields. A newer frame or a replaced intent table therefore survives late/reentrant cleanup, even
+when its scalar intent values equal the old visit's values. Only goals created by the visit are released.
+Cleanup still works after a failed handler or disabled facade. Suspension ends the visit; resume starts
 a fresh, revalidated visit. Invalidation also removes suspended frames without clearing another behavior's new
 resources. Death, team/round reset and match end use the same cleanup boundary.
 
-Live gathered facts are authoritative: a commander order must still match current objective id, action, revision
-and eligibility. The handler rechecks actor life/eligibility before dispatch and authoritative projected/actual
+Live gathered mode catalogs are authoritative only when queried for a team: a commander order must still match
+current objective id, action, revision and eligibility. FFA (`BotObjectives(nil)` is not queried) and modes without
+an objective catalog retain independent commander orders instead of treating an unqueried empty list as a veto.
+The handler rechecks actor life/eligibility before dispatch and authoritative projected/actual
 containment before use. Fixture callers may still supply independent local facts/orders as before.
 
 Built-ins preserve capture/hold approach and drift, defend guard timing/outward look, collect/deny touch goals,
 and plant/defuse held-use input. There is no bomb weapon or new gameplay in this contract.
 Modes declare their required actions and runner explicitly; see `modes.md` "Required dependencies".
+An undeclared action encountered in authoritative live facts aborts without executing it, including a registered
+custom handler. This is a runtime backstop, not inference of a mode's future objectives: authors must declare the
+complete required set for human-only preflight. Standalone injected contexts are not authoritative mode facts.
 Automated tests are in `objective_actions.lua` and `objective_dependencies.lua`, alongside the unchanged legacy
 behavior, commander, Hardpoint pressure and S&D input suites. Human gameplay acceptance remains separate.
 
