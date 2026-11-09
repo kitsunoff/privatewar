@@ -184,6 +184,7 @@ local function startSmokeScene(bot)
 end
 
 local function stopSmokeScene()
+    hook.Remove("EntityTakeDamage", smokeHook)
     if smokeStarted then
         local mode = PW.ActiveMode
         if mode ~= nil and mode.ClassName == smokeModeId then must(PW.Match).Abort("combat smoke complete") end
@@ -528,6 +529,12 @@ return {
                 prop:SetMoveType(MOVETYPE_NONE)
                 state.prop = prop
                 smokeProp = prop
+                -- PW_CanTakeDamage only gates players; protect this owned wooden sight target from bot fire too.
+                hook.Add("EntityTakeDamage", smokeHook, function(target)
+                    if target == prop then return true end
+                end)
+                prop:TakeDamage(1000, bot, bot)
+                expect(IsValid(prop)).to.beTrue()
                 hook.Add("PW_IsEnemy", smokeHook, function(a, b)
                     if (a == bot and b == prop) or (a == prop and b == bot) then return true end
                 end)

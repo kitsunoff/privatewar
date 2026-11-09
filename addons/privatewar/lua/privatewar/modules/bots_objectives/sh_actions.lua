@@ -158,11 +158,11 @@ function lib.RunAction(ctx, target)
     local mode = PW.ActiveMode
     if st == nil then return assert(PW.BotBrain).Done("objective state unavailable") end
     if st.visit ~= nil and st.visit.ending then return assert(PW.BotBrain).Done("objective visit closing") end
-    if not declared(ctx, target) then return assert(PW.BotBrain).Done("undeclared objective action") end
     if not eligible(ctx, target) then
         lib.EndAction(ctx)
         return assert(PW.BotBrain).Done("objective ineligible")
     end
+    if not declared(ctx, target) then return assert(PW.BotBrain).Done("undeclared objective action") end
     local handler = definition(ctx, target)
     if not available(handler) then
         lib.EndAction(ctx)

@@ -173,6 +173,30 @@ return {
             end
         },
         {
+            name = "Actions: a removed engine actor releases its visit before any facts gather",
+            func = function()
+                local ctx, target = context(), objective("plant")
+                local facts = actions().Facts(ctx) --[[@as PW.BotFacts]]
+                facts.pos = target.pos
+                actions().RunAction(ctx, target)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(IN_USE)
+                ctx.bot = NULL --[[@as Player]]
+                ctx.facts, ctx.factsAt = nil, nil
+                local gathers = 0
+                ctx._api.facts = function()
+                    gathers = gathers + 1
+                    error("removed actor must not reach the facts gatherer")
+                end
+                PW._Match.dependencies = {}
+                expect(actions().RunAction(ctx, target).kind).to.equal("done")
+                expect(gathers).to.equal(0)
+                expect(bit.band(ctx:Intent().buttons, IN_USE)).to.equal(0)
+                expect(ctx.board.goal).to.beNil()
+                expect(ctx.board.target).to.beNil()
+                expect(must(ctx.state).visit).to.beNil()
+            end
+        },
+        {
             name = "Actions: failed OnEnd cannot retain runner-owned input, look or movement",
             func = function()
                 local reg = PW.Registry.New("objective_actions", { preRegister = function() end, log = function() end })
