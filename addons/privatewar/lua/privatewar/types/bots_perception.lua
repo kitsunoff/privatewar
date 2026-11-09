@@ -17,7 +17,8 @@
 ---@field dir? Vector direction to the attacker, damage contacts only
 ---@field sourceToken? table server-only radar provenance, never an entity position source
 ---@field expiresAt? number absolute radar lifetime
----@field observed? PW.BotContact independent non-radar observation, without nested provenance
+---@field observed? PW.BotContact private independent nonvisual observation, without nested provenance
+---@field sight? PW.BotContact private reaction-matured sight, independent of nonvisual timestamps
 ---@field radar? PW.BotContact[] bounded snapshots of independent radar contributions
 
 ---Perception writes contacts and memory (docs/api/bots-blackboard.md "Blackboard").
@@ -77,8 +78,10 @@
 ---Per-bot perception state (plain data).
 ---@class PW.BotPerceptionState
 ---@field queue PW.BotReactionQueue
----@field memory table<any, PW.BotContact>
+---@field memory table<any, PW.BotContact> private recognized evidence, including late glimpses
 ---@field contacts PW.BotContact[]
+---@field publicMemory table<any, PW.BotContact> copied newest-evidence board memory; visibility requires current sight
+---@field currentSight PW.BotSnapshotSet latest legal FOV/LOS/enemy/flash result, used only as a visibility gate
 ---@field pending PW.BotPending[]
 ---@field sharedAt table<any, number> when a sighting of an enemy was last shared
 ---@field delay? number the reaction delay in force

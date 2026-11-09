@@ -30,6 +30,11 @@ for _, kind in ipairs({ "gunfire", "damage", "shared", "radar" }) do
             expect(contact.time).to.equal(11.1)
             expect(contact.dir).to.beNil()
             expect(contact.sourceToken).to.beNil()
+            expect(state.memory.enemy.source).to.equal(kind)
+            expect(state.memory.enemy.time).to.equal(11.115)
+            expect(state.memory.enemy.visible).to.beFalse()
+            expect(state.publicMemory.enemy.visible).to.beFalse()
+            expect(state.publicMemory.enemy.source).to.equal(kind)
             -- Losing LOS immediately removes fire permission, but keeps independently timestamped evidence.
             ctx.seen = {}
             lib().Think(state, ctx, 11.2)
@@ -55,6 +60,20 @@ for _, kind in ipairs({ "gunfire", "damage", "shared", "radar" }) do
 end
 
 cases[#cases + 1] = {
+    name = "Memory publication: a new stimulus immediately updates newest-evidence memory without hiding contacts",
+    func = function()
+        local state = fixture()
+        local memory = state.publicMemory
+        lib().AddStimulus(state, "damage", { ent = "enemy", pos = Vector(800, 0, 0), time = 11.015 })
+        expect(memory.enemy.source).to.equal("damage")
+        expect(memory.enemy.visible).to.beFalse()
+        expect(memory.enemy.sight).to.beNil()
+        expect(state.contacts[1].source).to.equal("sight")
+        expect(state.contacts[1].visible).to.beTrue()
+    end
+}
+
+cases[#cases + 1] = {
     name = "Control: ordinary past gunfire retains recognized sight",
     func = function()
         local state, ctx = fixture()
@@ -77,6 +96,30 @@ cases[#cases + 1] = {
         expect(state.memory.enemy.source).to.equal("sight")
         expect(state.memory.enemy.pos).to.equal(Vector(700, -1500, -107))
         expect(state.contacts[1].visible).to.beFalse()
+        expect(state.publicMemory.enemy.visible).to.beFalse()
+        expect(state.publicMemory.enemy.sight).to.beNil()
+    end
+}
+
+cases[#cases + 1] = {
+    name = "Lifecycle: team role round and match resets synchronously clear both evidence and published memory",
+    func = function()
+        local p = lib()
+        local owner = assert(PW.Modules.Get("bots_perception"))
+        ---@type table<string, any>
+        local board = {}
+        stub(assert(PW.Bot), "Get").with(function() return board end)
+        for _, event in ipairs({ "PW_PlayerTeamChanged", "PW_RoundPrepared", "PW_MatchEnd" }) do
+            local state = fixture()
+            p.States.arbitration = state
+            p.AddStimulus(state, "gunfire", { ent = "enemy", pos = Vector(900, 0, 0), time = 11.115 })
+            PW.Call(owner, event)
+            expect(next(state.memory)).to.beNil()
+            expect(next(state.publicMemory)).to.beNil()
+            expect(#state.queue.snaps).to.equal(0)
+            expect(#state.contacts).to.equal(0)
+            expect(next(board.memory)).to.beNil()
+        end
     end
 }
 
@@ -155,4 +198,12 @@ cases[#cases + 1] = {
     end
 }
 
-return { groupName = "PW perception sight evidence arbitration", cases = cases }
+return {
+    groupName = "PW perception sight evidence arbitration",
+    beforeEach = function(state)
+        state.originalStates = lib().States
+        rawset(lib(), "States", {})
+    end,
+    afterEach = function(state) rawset(lib(), "States", state.originalStates) end,
+    cases = cases
+}
