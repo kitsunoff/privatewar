@@ -119,7 +119,8 @@ XP, unlocks, persistence.
    - Default: the player's own GMod `cl_playermodel` when it is valid, else a stock model. The choice is a client setting (`operators.model`, Personal settings); the picker with a model preview is LOADOUT > OPERATOR.
    - The client sends the choice on join and on change through one small validated net message; the server checks it (a valid player model; an economy model must be unlocked or bought) and applies it in `PlayerSetModel` at spawn, with the player colour set to the team colour in team modes.
    - Bots get a random valid player model when they join (economy models included, ownership ignored) and keep it for the session; no team-based split. In team modes their player colour is the team colour too.
-   - Bots get human-like names from a built-in, editable pool of about 100 original first names, surnames and callsigns (no real people, no copyrighted characters), unique among the current players; never "Bot01".
+   - Bots have an editable built-in pool of about 100 original first names, surnames and callsigns as a fallback; never "Bot01". Names must be unique among the current players.
+   - User-approved extension (2026-11-11): an optional Lambda integration may also use names from locally installed Lambda content and personal profiles, including joke names that do not meet the original human-like-only restriction. The original exclusion of real people and copyrighted characters applies to the built-in pool, not as a blanket restriction on externally installed lists. This does not authorize redistributing third-party content. Exact source selection, filtering and fallback behavior remain to be designed.
    - Details taken by recommendation (economy model wins over a stock model with the same path, fallback order, FFA colours): the local manual checklist (not published) section 7, item 68.
 
 ## Interfaces
