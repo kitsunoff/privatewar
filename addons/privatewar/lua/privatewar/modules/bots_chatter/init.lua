@@ -7,6 +7,7 @@ util.AddNetworkString("pw_bot_voice_stop")
 local states = setmetatable({}, { __mode = "k" })
 local nextGlobal, nextTick = 0, 0
 local roundActive = true
+local playbackPending = false
 local definition = MODULE
 
 ---@return boolean
@@ -58,6 +59,7 @@ local function speak(ply, event, target)
     if voice ~= nil and PW.Setting("bots_chatter.voice") == true and file.Exists("sound/" .. voice, "GAME") then
         -- No duration feedback from clients. Both realms enforce a hard 12-second playback lease.
         state.speaking = now + 12
+        playbackPending = true
         net.Start("pw_bot_voice")
         net.WriteEntity(ply)
         net.WriteString(voice)
@@ -101,6 +103,7 @@ PW.HookFor(MODULE, "PlayerSpawn", function(_, ply)
 end)
 
 local function stop()
+    playbackPending = false
     nextGlobal = 0
     for _, state in pairs(states) do state.speaking, state.seen = 0, false end
     net.Start("pw_bot_voice_stop")
@@ -126,6 +129,8 @@ hook.Add("PW_EntityDisabled", "PW.BotChatter.Cleanup", function(kind, id)
 end)
 
 PW.HookFor(MODULE, "Think", function()
+    -- Setting changes must retire playing and opening client streams before the low-rate chatter scan.
+    if playbackPending and not enabled() then stop() end
     local now = CurTime()
     if now < nextTick then return end
     nextTick = now + 1
