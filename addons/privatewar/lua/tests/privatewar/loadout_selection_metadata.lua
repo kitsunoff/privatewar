@@ -105,6 +105,8 @@ local cases = {
         end,
         func = function(test)
             local arc, lib = must(ARC9), must(PW.Arc9)
+            local arcAdapter = must(PW.WeaponAdapters.Get("arc9")) --[[@as PW.Adapter]]
+            stub(PW.Adapters, "For").with(function() return arcAdapter end)
             test.blacklist, test.memo = arc.Blacklist, must(PW._Arc9).memo
             local slotCategory = { "fixture" }
             ---@type PW.Arc9SlotTable[]
@@ -126,6 +128,8 @@ local cases = {
             local loadout = must(PW.Loadout)
             local check = must(loadout._LiveContext(loadout._RegistryLookup).isCosmetic)
             local function compare(id, option, expected)
+                -- Ask before refreshing the reference memo: same-count mutations must be seen immediately.
+                expect(check("fixture", id, option)).to.equal(expected)
                 must(PW._Arc9).memo = { values = {} }
                 local old = legacy("fixture", id, option)
                 expect(old).to.equal(expected)
