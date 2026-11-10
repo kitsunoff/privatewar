@@ -105,6 +105,9 @@
 
 ---The map module (03-mapdata.md d.2, d.3, d.6). Shared, except the spawn functions (server).
 ---@class PW.MapLib
+---@field _ModeDataSource fun(modeId: string): string, boolean effective authored id or generated S&D source
+---@field _ReadinessKey fun(field: "state"|"reason"|"source", id: string): string collision-free metadata key
+---@field _ClearReadinessKeys fun(id: string) server: clear all metadata fields without aliasing mode ids
 ---@field _ReadModeReadiness fun(modeId: string): PW.MapModeReadiness shared authoritative current-map metadata
 ---@field _ProvisionalMode fun(mode: table, mapName: string): boolean approved S&D Base-chain exception only
 ---@field _DropGeneratedReadiness fun(sourceId: string) server: invalidate shared generated-source certifications

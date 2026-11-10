@@ -1,9 +1,10 @@
 -- Fixed-shape, server-authoritative S&D state. No enemy lookup, client request or locally inferred bomb facts.
 local lib = PW.SND --[[@as PW.SNDLib]]
-local phases = { "carried", "dropped", "planted", "resolved" }
 ---@type PW.SNDSnapshot?
 local current
 local generation, serial = -1, -1
+---@type PW.SNDSitesPacket?
+local latestSites
 ---@type PW.SNDDisplay
 local display = { title = "", line = "", progress = 0, markers = {} }
 local nextDisplay = 0
@@ -50,39 +51,34 @@ PW.HookFor(MODULE, "Think", function()
 end)
 
 net.Receive("pw_snd_state", function(length)
-    if length < 67 or length > 2048 then return end
-    local nextGeneration, nextSerial, phase = net.ReadUInt(32), net.ReadUInt(32), net.ReadUInt(3)
+    local packet = lib._ReadState(net --[[@as PW.SNDWire]], length)
+    if packet == nil then return end
+    local nextGeneration, nextSerial = packet.generation, packet.serial
     if nextGeneration < generation or (nextGeneration == generation and nextSerial <= serial) then return end
-    if phase == 0 then
+    local view = packet.view
+    if view == nil then
         generation, serial, current = nextGeneration, nextSerial, nil
+        latestSites = nil
         return
     end
-    if phases[phase] == nil or length < 166 then return end
-    ---@type PW.SNDSnapshot
-    local view = { generation = nextGeneration, phase = phases[phase], deadline = net.ReadFloat(),
-        fuse = net.ReadFloat(), site = net.ReadString(), carrier = net.ReadUInt(16), progress = 0 }
-    if #assert(view.site) > 32 or view.deadline ~= view.deadline or view.fuse ~= view.fuse
-        or view.deadline < 0 or view.fuse < 0 or view.deadline >= math.huge or view.fuse >= math.huge then return end
-    if view.site == "" then view.site = nil end
-    if view.carrier == 0 then view.carrier = nil end
-    if net.ReadBool() then
-        local pos = net.ReadVector()
-        if pos.x ~= pos.x or pos.y ~= pos.y or pos.z ~= pos.z or math.abs(pos.x) >= math.huge
-            or math.abs(pos.y) >= math.huge or math.abs(pos.z) >= math.huge then return end
-        view.pos = pos
-    end
-    local action = net.ReadUInt(2)
-    view.action = action == 1 and "plant" or (action == 2 and "defuse" or nil)
-    view.progress = net.ReadUInt(8) / 255
-    ---@type PW.SNDPublicSite[]
-    local sites = {}
-    for _ = 1, 2 do sites[#sites + 1] = { id = net.ReadString(), pos = net.ReadVector() } end
-    view.sites = lib.PublicSites(sites)
-    if view.sites == nil then return end
+    view.sites = lib._SitesFor(latestSites, nextGeneration, nextSerial)
+    -- A legacy server has no optional sites packet. Keep its state usable without guessing site geometry.
     generation, serial, current = nextGeneration, nextSerial, view
+end)
+
+net.Receive("pw_snd_sites", function(length)
+    local packet = lib._ReadSites(net --[[@as PW.SNDWire]], length)
+    if packet == nil or packet.generation < generation
+        or (packet.generation == generation and packet.serial < serial) then return end
+    if latestSites ~= nil and (packet.generation < latestSites.generation
+        or (packet.generation == latestSites.generation and packet.serial <= latestSites.serial)) then return end
+    latestSites = packet
+    if current ~= nil and packet.generation == generation and packet.serial == serial then
+        current.sites = lib._SitesFor(packet, generation, serial)
+    end
 end)
 
 ---@param phase PW.PhaseName
 function MODULE:PW_PhaseChanged(phase)
-    if phase ~= "LIVE" then current = nil end
+    if phase ~= "LIVE" then current, latestSites = nil, nil end
 end

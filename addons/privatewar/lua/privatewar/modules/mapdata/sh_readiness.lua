@@ -1,17 +1,41 @@
 -- Opaque, current-map readiness. Only the detector certifies generated geometry.
 local lib = PW.Map --[[@as PW.MapLib]]
 
+---@param field "state"|"reason"|"source"
+---@param id string
+---@return string
+function lib._ReadinessKey(field, id)
+    -- Colons cannot occur in registry ids. Field names never share an id namespace.
+    return "pw_map_ready:" .. field .. ":" .. id
+end
+
+---@param modeId string
+---@return string, boolean
+function lib._ModeDataSource(modeId)
+    local modes = rawget(PW, "Modes") --[[@as PW.Registry?]]
+    local mode = modes ~= nil and modes.Get(modeId) or nil
+    local chain = lib._ModeChain(mode, modeId)
+    local entry = lib.Get()
+    local authored = entry ~= nil and entry.Modes or nil
+    if istable(authored) then
+        for _, id in ipairs(chain) do
+            if (authored --[[@as table<string, any>]])[id] ~= nil then return id, true end
+        end
+    end
+    if table.HasValue(chain, "snd") then return "snd", false end
+    return modeId, false
+end
+
 ---@param id string
 ---@return PW.MapModeReadiness?
 local function record(id)
     if SERVER then return PW._Map.readiness ~= nil and PW._Map.readiness[id] or nil end
-    local prefix = "pw_map_ready_" .. id
-    local state = GetGlobal2String(prefix, "")
+    local state = GetGlobal2String(lib._ReadinessKey("state", id), "")
     if state ~= "pending" and state ~= "ready" and state ~= "rejected" then return nil end
-    local reason = GetGlobal2String(prefix .. "_reason", "")
+    local reason = GetGlobal2String(lib._ReadinessKey("reason", id), "")
     if state == "rejected" and reason == "" then reason = "Map layout was rejected" end
     return { state = state, reason = reason ~= "" and reason or nil,
-        source = GetGlobal2String(prefix .. "_source", "") }
+        source = GetGlobal2String(lib._ReadinessKey("source", id), "") }
 end
 
 ---@param sourceId string
@@ -20,40 +44,24 @@ function lib._DropGeneratedReadiness(sourceId)
         local mode = PW.Modes.Get(id)
         if value.source == "generated" and table.HasValue(lib._ModeChain(mode, id), sourceId) then
             PW._Map.readiness[id] = nil
-            if PW._Map.entitiesReady then
-                local prefix = "pw_map_ready_" .. id
-                SetGlobal2String(prefix, "")
-                SetGlobal2String(prefix .. "_reason", "")
-                SetGlobal2String(prefix .. "_source", "")
-            end
+            if PW._Map.entitiesReady then lib._ClearReadinessKeys(id) end
         end
     end
+end
+
+---@param id string
+function lib._ClearReadinessKeys(id)
+    SetGlobal2String(lib._ReadinessKey("state", id), "")
+    SetGlobal2String(lib._ReadinessKey("reason", id), "")
+    SetGlobal2String(lib._ReadinessKey("source", id), "")
 end
 
 ---@param modeId string
 ---@return PW.MapModeReadiness
 function lib._ReadModeReadiness(modeId)
-    local modes = rawget(PW, "Modes") --[[@as PW.Registry?]]
-    local mode = modes ~= nil and modes.Get(modeId) or nil
-    local chain = lib._ModeChain(mode, modeId)
-    local entry = lib.Get()
-    local authored = entry ~= nil and entry.Modes or nil
-    local current = record(modeId)
-    if current == nil then
-        for _, id in ipairs(chain) do
-            if istable(authored) and (authored --[[@as table<string, any>]])[id] ~= nil then
-                current = record(id)
-                break -- Authored child data never borrows a base layout's certification.
-            end
-        end
-    end
-    local _, present = lib._ResolveModeData(authored, nil, chain)
-    if current == nil and not present then
-        for _, id in ipairs(chain) do
-            current = record(id)
-            if current ~= nil then break end
-        end
-    end
+    -- Certification belongs to the actual data source, not every consumer's reset placeholder.
+    local source = lib._ModeDataSource(modeId)
+    local current = record(source)
     local navReady = SERVER and lib.IsNavReady() or (CLIENT and GetGlobal2Bool("pw_map_nav_ready", false))
     if not navReady then return { state = "pending" } end
     return current or { state = "pending" }
@@ -71,11 +79,10 @@ function lib.SetModeReadiness(modeId, state, reason, source)
     PW._Map.readiness = PW._Map.readiness or {}
     PW._Map.readiness[modeId] = { state = state, reason = reason, source = source }
     if not PW._Map.entitiesReady then return end
-    local prefix = "pw_map_ready_" .. modeId
-    SetGlobal2String(prefix, "pending")
-    SetGlobal2String(prefix .. "_reason", reason or "")
-    SetGlobal2String(prefix .. "_source", source or "")
-    SetGlobal2String(prefix, state)
+    SetGlobal2String(lib._ReadinessKey("state", modeId), "pending")
+    SetGlobal2String(lib._ReadinessKey("reason", modeId), reason or "")
+    SetGlobal2String(lib._ReadinessKey("source", modeId), source or "")
+    SetGlobal2String(lib._ReadinessKey("state", modeId), state)
 end
 
 ---@param modeId string

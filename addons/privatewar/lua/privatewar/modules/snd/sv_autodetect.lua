@@ -66,16 +66,14 @@ end
 
 function lib.PrepareMap(modeId)
     local map = assert(PW.Map)
-    map.SetModeReadiness(modeId, "pending")
-    map.SetGeneratedModeData("snd", nil)
+    local mode = PW.Modes.Get(modeId)
+    if mode == nil then return nil, "S&D mode is unavailable" end
+    local source, authored = map._ModeDataSource(modeId)
+    map.SetModeReadiness(source, "pending")
+    if not authored then map.SetGeneratedModeData(source, nil) end
     if not map.IsNavReady() then return nil, "S&D is waiting for map entities and navmesh" end
     PW._SND.mapChecked = true -- Any completed attempt, including rejection, requires an explicit retry or reset.
     local data = map.GetModeData(modeId)
-    local mode = PW.Modes.Get(modeId)
-    if mode == nil then return nil, "S&D mode is unavailable" end
-    local entry = map.Get()
-    local _, authored = map._ResolveModeData(entry ~= nil and entry.Modes or nil, nil,
-        map._ModeChain(mode, modeId))
     if not authored then
         if not map._ProvisionalMode(mode, game.GetMap()) then return nil, "No S&D map data" end
         local ok, detected, reason = pcall(lib.Detect)
@@ -86,24 +84,24 @@ function lib.PrepareMap(modeId)
         data = detected
         if data == nil then
             reason = isstring(reason) and #reason > 0 and reason or "S&D detection rejected this map"
-            map.SetModeReadiness(modeId, "rejected", reason)
+            map.SetModeReadiness(source, "rejected", reason)
             return nil, reason
         end
     end
     local valid, reason = lib.Validate(data)
     if not valid then
-        map.SetModeReadiness(modeId, "rejected", reason)
+        map.SetModeReadiness(source, "rejected", reason)
         return nil, reason
     end
     local ok, failure = pcall(lib.Activate, data --[[@as PW.SNDMapData]])
     if not ok then
         print("[PW] S&D activation failed: " .. tostring(failure))
         reason = "S&D layout has blocked or unreachable objective points"
-        map.SetModeReadiness(modeId, "rejected", reason)
+        map.SetModeReadiness(source, "rejected", reason)
         return nil, reason
     end
-    if not authored then map.SetGeneratedModeData("snd", data) end
-    map.SetModeReadiness(modeId, "ready", nil, authored and "authored" or "generated")
+    if not authored then map.SetGeneratedModeData(source, data) end
+    map.SetModeReadiness(source, "ready", nil, authored and "authored" or "generated")
     PW._SND.mapChecked = true
     return data --[[@as PW.SNDMapData]]
 end
@@ -119,13 +117,29 @@ function MODULE:PW_MapDataInvalidated(reason)
 end
 
 function lib._ReadinessThink()
-    if PW._SND.mapChecked or not assert(PW.Map).IsNavReady() then return end
+    local map = assert(PW.Map)
+    if PW._SND.mapChecked or not map.IsNavReady() then return end
     PW._SND.mapChecked = true
-    local mode = PW.Modes.Get("snd")
-    if mode == nil or not mode:IsValid() then return end
-    local data = assert(PW.Map).GetModeData("snd")
-    if data == nil and not assert(PW.Map)._ProvisionalMode(mode, game.GetMap()) then return end
-    lib.PrepareMap("snd")
+    ---@type PW.Entity[]
+    local modes = {}
+    for _, mode in ipairs(PW.Modes.GetEnabledList()) do
+        if mode.MapReadiness == true and table.HasValue(map._ModeChain(mode, mode.ClassName), "snd") then
+            modes[#modes + 1] = mode
+        end
+    end
+    table.sort(modes, function(a, b)
+        local ad, bd = #map._ModeChain(a, a.ClassName), #map._ModeChain(b, b.ClassName)
+        return ad < bd or (ad == bd and a.ClassName < b.ClassName)
+    end)
+    ---@type table<string, true>
+    local checked = {}
+    for _, mode in ipairs(modes) do
+        local source, authored = map._ModeDataSource(mode.ClassName)
+        if not checked[source] and (authored or map._ProvisionalMode(mode, game.GetMap())) then
+            checked[source] = true
+            lib.PrepareMap(mode.ClassName)
+        end
+    end
 end
 
 PW.HookFor(MODULE, "Think", function() lib._ReadinessThink() end)

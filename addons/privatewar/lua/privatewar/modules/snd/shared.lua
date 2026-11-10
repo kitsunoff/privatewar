@@ -115,3 +115,5 @@ if SERVER then AddCSLuaFile("privatewar/modules/snd/sh_objectives.lua") end
 include("privatewar/modules/snd/sh_objectives.lua")
 if SERVER then AddCSLuaFile("privatewar/modules/snd/sh_autodetect.lua") end
 include("privatewar/modules/snd/sh_autodetect.lua")
+if SERVER then AddCSLuaFile("privatewar/modules/snd/sh_wire.lua") end
+include("privatewar/modules/snd/sh_wire.lua")

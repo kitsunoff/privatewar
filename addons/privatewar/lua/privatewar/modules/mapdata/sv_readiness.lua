@@ -7,7 +7,7 @@ function lib._ResetGenerated(reason)
     for id in pairs(store.readiness or {}) do ids[id] = true end
     local modes = rawget(PW, "Modes") --[[@as PW.Registry?]]
     for _, mode in ipairs(modes ~= nil and modes.GetList() or {}) do
-        if mode.MapReadiness == true then ids[mode.ClassName] = true end
+        if mode.MapReadiness == true then ids[lib._ModeDataSource(mode.ClassName)] = true end
     end
     store.generated, store.readiness = nil, nil
     store.nav, store.detected = nil, nil
