@@ -29,7 +29,7 @@ local function identity(ply)
     local state = states[ply]
     if state ~= nil then return state end
     local data = getContent()
-    return lib._Identity(states, ply, data.voiceIds, data.textIds, math.random(), CurTime())
+    return lib._Identity(states, ply, data.voiceIds, data.textIds, math.random, CurTime())
 end
 
 ---@param now number

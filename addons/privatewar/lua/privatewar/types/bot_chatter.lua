@@ -27,9 +27,10 @@
 ---@field _CanSpeak fun(s: PW.ChatterState, now: number, globalAt: number, active: integer, limit: integer): boolean
 ---@field _Line fun(profile: PW.ChatterLines?, common: PW.ChatterLines, event: string, roll: number): string?
 ---@field _Visible fun(contacts: table[]): boolean
----@field _Identity fun(s: table, bot: any, v: string[], t: string[], roll: number, now: number): PW.ChatterState
+---@field _Identity fun(s: table, bot: any, v: string[], t: string[], rng: PW.ChatterRNG, now: number): PW.ChatterState
 
 ---@alias PW.ChatterLines table<string, string[]>
+---@alias PW.ChatterRNG fun(): number
 
 ---@class PW
 ---@field BotChatter PW.BotChatterLib?

@@ -101,15 +101,16 @@ end
 ---@param bot any
 ---@param voices string[]
 ---@param texts string[]
----@param roll number
+---@param rng fun(): number
 ---@param now number
 ---@return PW.ChatterState
-function lib._Identity(states, bot, voices, texts, roll, now)
+function lib._Identity(states, bot, voices, texts, rng, now)
     if states[bot] ~= nil then return states[bot] end
     ---@param list string[]
     ---@return string?
-    local index = function(list) return list[math.Clamp(math.floor(roll * #list) + 1, 1, math.max(1, #list))] end
-    local state = { next = now + 5 + roll * 15, speaking = 0, voice = index(voices), text = index(texts) }
+    local index = function(list) return list[math.Clamp(math.floor(rng() * #list) + 1, 1, math.max(1, #list))] end
+    local voice, text = index(voices), index(texts)
+    local state = { next = now + 5 + rng() * 15, speaking = 0, voice = voice, text = text }
     states[bot] = state
     return state
 end

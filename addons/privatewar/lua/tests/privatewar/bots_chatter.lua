@@ -116,17 +116,43 @@ return {
             end
         },
         {
+            name = "Chatter identity: separate RNG draws allow every voice and text combination",
+            func = function()
+                for _, voiceRoll in ipairs({ 0, 0.75 }) do
+                    for _, textRoll in ipairs({ 0, 0.75 }) do
+                        local draws, calls = { voiceRoll, textRoll, 0.5 }, 0
+                        local function rng()
+                            calls = calls + 1
+                            assert(draws[calls] ~= nil, "unexpected identity RNG draw")
+                            return draws[calls]
+                        end
+                        local state = lib()._Identity({}, "bot", { "v1", "v2" }, { "t1", "t2" }, rng, 100)
+                        expect(state.voice).to.equal(voiceRoll == 0 and "v1" or "v2")
+                        expect(state.text).to.equal(textRoll == 0 and "t1" or "t2")
+                        expect(state.next).to.equal(112.5)
+                        expect(calls).to.equal(3)
+                    end
+                end
+            end
+        },
+        {
             name = "Chatter identity: respawn retains voice and text without changing combat personality",
             func = function()
                 local states = {}
-                local original = lib()._Identity(states, "bot", { "voice" }, { "text" }, 0, 0)
+                local calls = 0
+                local function rng()
+                    calls = calls + 1
+                    return calls == 2 and 0.75 or 0
+                end
+                local original = lib()._Identity(states, "bot", { "voice", "other" }, { "other", "text" }, rng, 0)
                 original.death = true
                 original.death, original.seen = false, false
-                local again = lib()._Identity(states, "bot", { "other" }, { "other" }, 1, 200)
+                local again = lib()._Identity(states, "bot", { "other" }, { "other" }, rng, 200)
                 expect(again).to.equal(original)
                 expect(again.voice).to.equal("voice")
                 expect(again.text).to.equal("text")
-                expect(lib()._Identity({}, "bot", {}, {}, 0, 0).voice).to.equal(nil)
+                expect(calls).to.equal(3)
+                expect(lib()._Identity({}, "bot", {}, {}, function() return 0 end, 0).voice).to.equal(nil)
             end
         },
         {
