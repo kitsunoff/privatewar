@@ -48,6 +48,7 @@ Kind `modes` (`core.md` "Built-in kind `modes`"): folder `modes/`, class table `
 | `Settings` | table | no | Setting declarations, scope `match` only; merged along the `Base` chain (`01-extensibility.md` d.17; `core.md` "Settings") |
 | `SettingDefaults` | table | no | `{ [fullId] = value }`: overrides defaults of module `match` settings for this mode (`01-extensibility.md` d.17) |
 | `MapData` | boolean | no | `true`: the mode needs `MAP.Modes.<mode id>` on the map (`03-mapdata.md` d.6; see `map.md`) |
+| `Dependencies` | `table<string, string[]>` | no | Required entity ids by kind; see the dependency contract below |
 | `RoundsToWin` | integer | no | Only on modes with `Base = "round_base"`: rounds a team needs to win the match. Default 6; floored, at least 1 (`00-core.md` d.4 example; `TASKS.md` T-2.3). See "`round_base`" |
 | `SwapSidesEvery` | integer | no | Only on modes with `Base = "round_base"`: swap the sides after every N completed rounds; default and `0` = never; the last round of the match is never followed by a swap (`TASKS.md` T-2.3). See "`round_base`" |
 
@@ -88,7 +89,7 @@ error; an error in the active mode aborts the match (`01-extensibility.md` d.15;
 | `id` | string | Stable id of the objective, for example `"flag_B"` |
 | `pos` | `Vector` | Position |
 | `radius` | number | Radius around `pos`, for example `160` |
-| `action` | string | `"capture"`, `"defend"`, `"collect"`, `"deny"` or `"hold"`. S&D adds `"plant"` and `"defuse"` later |
+| `action` | string | Registered `objective_actions` id; built-ins: `capture`, `defend`, `collect`, `deny`, `hold`, `plant`, `defuse` |
 | `weight` | number | `0..1`, importance for this team now |
 | `want` | integer | Desired number of bots |
 
@@ -102,6 +103,29 @@ error; an error in the active mode aborts the match (`01-extensibility.md` d.15;
 - `dom` and `kc` implement `BotObjectives` (T-5.11): `dom` returns `PW.BotObjectives.DomObjectives` over the flags of the
   running match, `kc` returns `PW.BotObjectives.KCObjectives` over the tags on the ground, both for the given team (the
   rules above). `tdm` and `ffa` do not define it; the commander does not ask a mode for a bot without a team (FFA).
+
+### Required dependencies
+
+`Dependencies` declares required entity ids by kind. It is checked after the next-match enable snapshot, before
+PREMATCH consumers. Missing, disabled or failed required entries abort to LOBBY, including human-only matches.
+Runtime disable/failure of an exact required definition immediately aborts through the core safety path, not a
+bot callback. Failure details go only to the server log; there is no new UI message. Unrelated disabled modules
+remain optional. Cleanup runs through the ordinary match lifecycle.
+
+Declare every required action in `Dependencies.objective_actions` and the runner in
+`Dependencies.modules = { "bots_objectives", ... }`. Built-in lists follow actual objectives, not HUD wording:
+DOM `capture/defend`; KC `collect/deny`; Hardpoint `hold`; S&D `collect/hold/plant/defuse`.
+S&D also explicitly requires `snd` and `lobby`; Hardpoint requires `hardpoint`; DOM requires `dom_flags` and
+KC requires `kc_tags`. Other bot layers remain optional, rather than acquiring an implicit dependency graph.
+
+Custom modes must declare every potential required action, including conditionally emitted custom ids. Preflight
+can only check that explicit set, not infer future `BotObjectives` results. If an authoritative bot dispatch
+encounters an undeclared action, the runtime backstop aborts without invoking the handler. A human-only match
+does not dispatch bot actions, so an omitted dependency is an author contract error, not a preflight guarantee.
+
+`PW.Match.Dependency(kind, id)` reads an exact pinned dependency during a match, or the current registry outside
+it. The loader preserves these definitions across reload. Reloaded definitions and enable flag edits take effect
+at the next match (`01-extensibility.md` d.11–12); they do not replace a running visit's handler.
 
 ### Hooks a mode may answer
 

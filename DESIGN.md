@@ -51,6 +51,7 @@ Separate Workshop addons (integrations), same layout:
 5. **Everything is typed with annotations** (EmmyLua / LuaCATS: `---@class`, `---@field`, `---@param`, `---@return`, `---@meta`) so the language server gives completion and type errors. Every public function, hook, class table (`MODE`, `PERK`, ...), settings schema and blackboard field is annotated. Type definitions for the `PW` API and every kind ship in `lua/privatewar/types/` (`---@meta` files) so addon authors get the same completion. Tooling: LuaLS with GMod annotations (`TASKS.md`, "Toolchain").
 6. **Linters and the type checker are mandatory gates** (`glualint`, `lua-language-server --check` with warnings as errors, `markdownlint-cli2` for docs), provided by `flake.nix` and enforced by git hooks and an agent hook; rules are never disabled to get a change through.
 7. **Optimisation first** (user decision 2026-11-07). The Steam Deck is the target hardware: the gamemode is designed to be playable on the Steam Deck. Every integration and every costly option defaults to performance; visual or simulation quality is opt-in through a setting the host can change. First instance: the ARC9 performance profile (`design/04-weapons.md` d.7).
+   - Narrow user-approved exception (2026-11-10): the optional combat-movement layer defaults on, with its enable switch applied at the next match. Its hull/ground traces must be bounded and its cost measured on the Deck. This exception does not change the performance-first defaults of other features.
 
 ## Performance rules
 

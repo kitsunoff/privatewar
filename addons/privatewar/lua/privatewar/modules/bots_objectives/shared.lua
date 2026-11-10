@@ -134,14 +134,30 @@ function lib.PickObjective(objectives, pos, mates, currentId, botId)
     return best, bestScore
 end
 
+---@param facts PW.BotFacts
+---@param ordered PW.BotObjective
+---@return PW.BotObjective?
+local function currentObjective(facts, ordered)
+    if not facts.authoritative then return ordered end
+    for _, obj in ipairs(facts.objectives) do
+        if obj.id == ordered.id and obj.revision == ordered.revision and obj.action == ordered.action then
+            return obj
+        end
+    end
+end
+
 function lib.Resolve(ctx, facts, currentId, botId)
     botId = botId or (IsValid(ctx.bot) and ctx.bot:UserID() or 0)
     local order = ctx.order
     local commander = PW.BotCommander
     if order ~= nil and istable(order.objective) and commander ~= nil then
         local obj = order.objective --[[@as PW.BotObjective]]
-        local copy = commander.Sanitize({ obj })[1]
-        if copy ~= nil then copy.action = order.type or copy.action end
+        local current = currentObjective(facts, obj)
+        local copy = current ~= nil and commander.Sanitize({ current })[1] or nil
+        if copy ~= nil then
+            if facts.authoritative and order.type ~= nil and order.type ~= copy.action then copy = nil
+            else copy.action = order.type or copy.action end
+        end
         if copy ~= nil and commander.Eligible(copy, botId) then
             return copy, copy.weight, true
         end
@@ -187,3 +203,5 @@ end
 
 if SERVER then AddCSLuaFile("privatewar/modules/bots_objectives/sh_roam.lua") end
 include("privatewar/modules/bots_objectives/sh_roam.lua")
+if SERVER then AddCSLuaFile("privatewar/modules/bots_objectives/sh_actions.lua") end
+include("privatewar/modules/bots_objectives/sh_actions.lua")

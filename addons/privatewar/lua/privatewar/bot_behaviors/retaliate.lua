@@ -12,6 +12,18 @@ local function tactics()
     return rawget(PW, "BotTactics")
 end
 
+-- Memory may already hold a newer sound/damage observation. Published contacts own recognized sight,
+-- just as they do for aim: a nonvisual update cannot make an already recognized attacker unseen here.
+---@param ctx PW.BotBrainCtx
+---@param attacker Entity
+---@return boolean
+local function visibleAttacker(ctx, attacker)
+    for _, contact in ipairs(ctx.contacts or {}) do
+        if contact.ent == attacker and contact.visible then return true end
+    end
+    return false
+end
+
 ---@param ctx PW.BotBrainCtx
 ---@return boolean
 local function wanted(ctx)
@@ -19,8 +31,7 @@ local function wanted(ctx)
     if lib == nil then return false end
     local attacker = lib.FactsOf(ctx).attacker
     if attacker == nil or not lib.Hurt(ctx, lib.Config.hurtWindow) then return false end
-    local c = ctx:Contact(attacker)
-    return c == nil or not c.visible
+    return not visibleAttacker(ctx, attacker)
 end
 
 ---@param ctx PW.BotBrainCtx
@@ -50,8 +61,7 @@ function BEHAVIOR:Update(_, ctx)
     local attacker = lib.FactsOf(ctx).attacker
     if attacker == nil then return PW.BotBrain.Done("no attacker") end
     if ctx.target ~= attacker then ctx:SetTarget(attacker) end
-    local c = ctx:Contact(attacker)
-    if c ~= nil and c.visible then return PW.BotBrain.Done("attacker in sight") end
+    if visibleAttacker(ctx, attacker) then return PW.BotBrain.Done("attacker in sight") end
     if not lib.Hurt(ctx, giveUp) then return PW.BotBrain.Done("attacker not found") end
     return PW.BotBrain.Continue()
 end

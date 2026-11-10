@@ -3,6 +3,7 @@
 ---@alias PW.LoadoutKindPolicy fun(ply: Player, kind: string): boolean?
 ---@alias PW.JoinInProgressPolicy fun(ply: Player): boolean?
 ---@alias PW.BotInputPolicy fun(bot: Player): boolean?
+---@alias PW.BotCoverSearchPolicy fun(bot: Player): boolean?
 
 ---@class PW.BotsManagerLib
 ---@field IsLeaving? fun(ply: Player): boolean manager-owned pending departure, excludes quota-kicked roster entries
@@ -28,6 +29,7 @@
 
 ---@class PW.Mode
 ---@field BotQuotaPolicy? "continuous"|"rounds" nil: managed teams use rounds; other modes continuous
+---@field PW_CanSearchBotCover? fun(self: PW.Mode, bot: Player): boolean? exactly false skips cover search only
 
 ---@class PW.RevealStoreOptions
 ---@field reset? fun(recipients: any[]) clear derived client radar before replaying still-active sources

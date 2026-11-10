@@ -86,10 +86,18 @@ end
 function lib.Weight(entry, weights, categoryOf)
     if weights == nil then return 1 end
     local primary = firstItem(entry.loadout.primary)
-    local category = primary ~= nil and categoryOf(primary) or nil
+    local category = entry.category or (primary ~= nil and categoryOf(primary) or nil)
     local weight = category ~= nil and weights[category] or nil
     if not isnumber(weight) then return 1 end
     return math.max(0, weight --[[@as number]])
+end
+
+function lib.AppendCandidates(pool, candidates, check)
+    for _, entry in ipairs(candidates) do
+        -- Providers never lend their cached data to validation hooks or the live spawn repair path.
+        local copy = table.Copy(entry) --[[@as PW.BotClassEntry]]
+        if check(copy.loadout) then pool[#pool + 1] = copy end
+    end
 end
 
 ---@param pool PW.BotClassEntry[]

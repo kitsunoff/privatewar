@@ -67,7 +67,7 @@ end
 -- settings forms (T-7.2) build on BuildForm above.
 for _, name in ipairs({
     "layout", "focus", "input", "router", "models", "players", "operator", "match", "store", "progress", "forms",
-    "postmatch", "gamepad"
+    "postmatch", "board", "scoreboard", "gamepad"
 }) do
     local path = "privatewar/modules/ui_kit/sh_" .. name .. ".lua"
     if SERVER then AddCSLuaFile(path) end
@@ -79,7 +79,7 @@ end
 if SERVER then
     for _, name in ipairs({
         "root", "paint", "components", "cards", "players", "form", "settings", "operator", "vote", "match", "store",
-        "postmatch", "gamepad"
+        "postmatch", "board", "scoreboard_view", "scoreboard", "gamepad"
     }) do
         AddCSLuaFile("privatewar/modules/ui_kit/cl_" .. name .. ".lua")
     end

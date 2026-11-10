@@ -22,6 +22,19 @@ local function finite(pos)
         and math.max(math.abs(pos.x), math.abs(pos.y), math.abs(pos.z)) < math.huge
 end
 
+---@param a PW.NavSpawnCandidate
+---@param b PW.NavSpawnCandidate
+---@return boolean
+local function candidateBefore(a, b)
+    if a.area ~= b.area then return a.area < b.area end
+    ---@type Vector
+    local x, y = a.point.pos, b.point.pos
+    if x.x ~= y.x then return x.x < y.x end
+    if x.y ~= y.y then return x.y < y.y end
+    if x.z ~= y.z then return x.z < y.z end
+    return a.point.yaw < b.point.yaw
+end
+
 ---@param detected PW.MapSpawns
 ---@param limit integer
 ---@return PW.MapSpawn[]?
@@ -129,14 +142,7 @@ function lib._SpawnSupplements(detected, candidates, checks)
     for _, candidate in ipairs(candidates) do
         if finite(candidate.point.pos) then sorted[#sorted + 1] = candidate end
     end
-    table.sort(sorted, function(a, b)
-        if a.area ~= b.area then return a.area < b.area end
-        local x, y = a.point.pos, b.point.pos
-        if x.x ~= y.x then return x.x < y.x end
-        if x.y ~= y.y then return x.y < y.y end
-        if x.z ~= y.z then return x.z < y.z end
-        return a.point.yaw < b.point.yaw
-    end)
+    table.sort(sorted, candidateBefore)
     ---@type PW.MapSpawn[]
     local out = {}
     for _, candidate in ipairs(sorted) do

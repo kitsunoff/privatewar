@@ -345,7 +345,7 @@ end
 function lib._IsCosmetic(tbl, cosmetic)
     if tbl.CosmeticOnly == true then return true end
     for _, category in ipairs(listOf(tbl.Category)) do
-        if cosmetic[category] then return true end
+        if cosmetic[category] or category == "universal_camo" then return true end
     end
     return false
 end

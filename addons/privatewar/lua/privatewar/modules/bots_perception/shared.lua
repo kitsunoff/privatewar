@@ -10,7 +10,7 @@
 --      perception tick, the bot acts on the latest snapshot that is at least `delay` seconds old. The delay is the
 --      difficulty's reaction time with a log-normal style jitter, re-rolled once a second, never below the floor.
 --   3. Memory is 12 s fixed (07 d.7), whatever contact_memory of a difficulty says; time is the last sighting or
---      stimulus. A newer entry replaces an older one, an older one never replaces a newer one.
+--      stimulus. Timestamps arbitrate within independent evidence channels, never visibility across sources.
 --   4. A damage stimulus reveals the direction and a bounded distance (at most 800 units) toward the attacker, not
 --      the exact position of a distant attacker.
 --   5. A heard position has an error of 10 percent of the distance.
@@ -144,7 +144,13 @@ end
 ---@param seen PW.BotSnapshotSet
 function lib.QueuePush(queue, now, seen)
     local snaps = queue.snaps
-    snaps[#snaps + 1] = { time = now, seen = seen }
+    ---@type PW.BotSnapshotSet
+    local copy = {}
+    for ent, data in pairs(seen) do
+        copy[ent] = { pos = Vector(data.pos.x, data.pos.y, data.pos.z),
+            vel = Vector(data.vel.x, data.vel.y, data.vel.z) }
+    end
+    snaps[#snaps + 1] = { time = now, seen = copy }
     local oldest = now - lib.Config.queueSeconds
     local first = 1
     while first < #snaps and snaps[first].time < oldest do first = first + 1 end
@@ -168,8 +174,7 @@ function lib.QueueRecognised(queue, now, delay)
     return {}
 end
 
----Stores or refreshes a contact. An older entry never replaces a newer one; the velocity is kept when the new one
----has none.
+---One observation; velocity inheritance is confined to its evidence channel by Remember.
 ---@param ent any
 ---@param c table pos, time, source, and optionally vel, visible, dir
 ---@param old PW.BotContact?
@@ -201,34 +206,34 @@ end
 ---@param now number
 ---@param seconds number
 ---@return PW.BotContact?
-local function radarView(memory, ent, view, now, seconds)
-    local radar, observed = assert(view.radar), view.observed
+local function evidenceView(memory, ent, view, now, seconds)
+    local radar, observed, sight = view.radar or {}, view.observed, view.sight
     if observed ~= nil and now - observed.time > seconds then observed = nil end
+    if sight ~= nil and now - sight.time > seconds then sight = nil end
     local best = observed
+    -- Private memory keeps newest-evidence semantics; publication independently selects legal matured sight.
+    if sight ~= nil and (best == nil or sight.time >= best.time) then best = sight end
     for i = #radar, 1, -1 do
         local c = radar[i]
         if now - c.time > seconds or (c.expiresAt ~= nil and c.expiresAt <= now)
             or (c.sourceToken ~= nil and lib._RetiredRadarSources[c.sourceToken]) then table.remove(radar, i)
         elseif best == nil or c.time > best.time then best = c end
     end
-    if #radar == 0 then memory[ent] = observed return observed end
     if best == nil then memory[ent] = nil return nil end
-    view.pos, view.vel, view.time, view.visible = best.pos, best.vel, best.time, best.visible
-    view.source, view.dir = best.source, best.dir
-    view.sourceToken, view.expiresAt, view.observed = best.sourceToken, best.expiresAt, observed
+    local selected = snapshot(ent, best, nil)
+    view.pos, view.vel, view.time, view.visible = selected.pos, selected.vel, selected.time, selected.visible
+    view.source, view.dir = selected.source, selected.dir
+    view.sourceToken, view.expiresAt, view.observed, view.sight = best.sourceToken, best.expiresAt, observed, sight
     return view
 end
 
----@param memory table<any, PW.BotContact>
+---@param view PW.BotContact
 ---@param ent any
 ---@param c table
----@return PW.BotContact
-local function rememberRadar(memory, ent, c)
-    local old = memory[ent]
-    local view = old ~= nil and old.radar ~= nil and old or observation(ent, c, old)
-    if view.radar == nil then view.radar, view.observed = {}, old ~= nil and snapshot(ent, old, nil) or nil end
+local function rememberRadar(view, ent, c)
+    view.radar = view.radar or {}
     local radar = assert(view.radar)
-    local entry = snapshot(ent, c, old)
+    local entry = snapshot(ent, c, nil)
     local replaced = false
     for i, previous in ipairs(radar) do
         if rawequal(previous.sourceToken, c.sourceToken) then
@@ -241,8 +246,6 @@ local function rememberRadar(memory, ent, c)
         if #radar >= 128 then table.remove(radar, 1) end
         radar[#radar + 1] = entry
     end
-    memory[ent] = view
-    return radarView(memory, ent, view, c.now or c.time, lib.Config.memorySeconds) or entry
 end
 
 ---@param memory table<any, PW.BotContact>
@@ -250,16 +253,16 @@ end
 ---@param c table
 ---@return PW.BotContact
 function lib.Remember(memory, ent, c)
-    if c.source == "radar" then return rememberRadar(memory, ent, c) end
-    local old = memory[ent]
-    if old ~= nil and old.radar ~= nil then
-        if old.observed == nil or old.observed.time <= c.time then old.observed = snapshot(ent, c, old.observed) end
-        return radarView(memory, ent, old, c.now or c.time, lib.Config.memorySeconds) or observation(ent, c, nil)
+    local view = memory[ent] or observation(ent, c, nil)
+    if c.source == "radar" then
+        rememberRadar(view, ent, c)
+    elseif c.source == "sight" then
+        if view.sight == nil or view.sight.time <= c.time then view.sight = snapshot(ent, c, view.sight) end
+    elseif view.observed == nil or view.observed.time <= c.time then
+        view.observed = snapshot(ent, c, view.observed)
     end
-    if old ~= nil and old.time > c.time then return old end
-    local entry = observation(ent, c, old)
-    memory[ent] = entry
-    return entry
+    memory[ent] = view
+    return evidenceView(memory, ent, view, c.now or c.time, lib.Config.memorySeconds) or snapshot(ent, c, nil)
 end
 
 ---Forgets contacts older than seconds (default 12) and those whose entity is no longer valid; returns the count.
@@ -275,8 +278,8 @@ function lib.Decay(memory, now, seconds, valid)
         if valid ~= nil and not valid(ent) then
             memory[ent] = nil
             removed = removed + 1
-        elseif contact.radar ~= nil then
-            if radarView(memory, ent, contact, now, limit) == nil then removed = removed + 1 end
+        elseif contact.radar ~= nil or contact.sight ~= nil or contact.observed ~= nil then
+            if evidenceView(memory, ent, contact, now, limit) == nil then removed = removed + 1 end
         elseif now - contact.time > limit then
             memory[ent], removed = nil, removed + 1
         end

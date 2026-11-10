@@ -59,6 +59,7 @@
 ---@field team? integer the bot's team (nil in FFA)
 ---@field mode? string id of the active mode
 ---@field objectives PW.BotObjective[] MODE:BotObjectives(team), else derived from flags (dom) or tags (kc)
+---@field authoritative? boolean engine facts: orders must still match this current objective list
 ---@field mates Vector[] positions of the alive teammates (the bot itself excluded)
 ---@field deaths PW.BotDeathInfo[] the teammates' recent deaths
 ---@field candidates Vector[] random navmesh points around the map (roam and camp choose among them)

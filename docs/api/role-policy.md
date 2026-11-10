@@ -47,6 +47,12 @@ Types: `lua/privatewar/types/role_policy.lua`. Regression tests: `role_policy.lu
 - `PW_CanRunBotInput(bot) -> boolean?`: exactly false makes the sole input writer emit a neutral command,
   even for a live bot with stale/scripted movement, attack, weapon selection or slide intent. Missing policy
   leaves ordinary inputs unchanged. The writer also discards its old translation state at that boundary.
+- `PW_CanSearchBotCover(bot) -> boolean?`: exactly false opts out of the tactics owner's expensive cover
+  **search**, independently of behavior eligibility. Asked before enqueue and again before live execution;
+  absent/nil/true preserves the legacy search. It does not suppress ordinary non-cover combat/movement facts,
+  change goals/paths/intents, grant knowledge, remove queued jobs or alter FIFO/A* scheduling. Only the matching
+  request token may be consumed; relationship/life resets still invalidate stale callbacks as before.
+  Infection answers false only for infected, leaving survivors and unbound players on the legacy fallback.
 
 See [teams](teams.md), [player overrides](player-overrides.md) and [operators](operators.md) for synchronous
 relationship resets, post-base new-life stats and temporary appearance.

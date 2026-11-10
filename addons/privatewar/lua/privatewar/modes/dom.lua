@@ -17,6 +17,7 @@ MODE.Base = "tdm"
 MODE.Name = "Domination"
 MODE.Short = "DOM"
 MODE.Teams = 2
+MODE.Dependencies = { objective_actions = { "capture", "defend" }, modules = { "bots_objectives", "dom_flags" } }
 MODE.MapData = true
 MODE.Description = "Two teams. Capture and hold the flags: every held flag scores for your team. "
     .. "First to the score limit wins."

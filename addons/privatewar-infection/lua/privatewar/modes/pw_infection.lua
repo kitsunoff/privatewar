@@ -14,7 +14,7 @@ MODE.Settings = {
 
 local lib = PW.Infection --[[@as PW.InfectionLib]]
 local rules = PW.InfectionRules --[[@as PW.InfectionRulesLib]]
-local allowed = { pw_infection_pursuit = true, hunt = true, search = true, retaliate = true, idle = true }
+local allowed = { pw_infection_pursuit = true, hunt = true, search = true, idle = true }
 
 function MODE:Start()
     if lib == nil or lib.Start == nil then
@@ -118,6 +118,10 @@ function MODE:PW_CanRunBotBehavior(ply, id)
     if lib.Role(ply) == "infected" then return allowed[id] == true end
     if id == "pw_infection_pursuit" or id == "melee" or id == "fight" or id == "retaliate"
         or id == "take_cover" or id == "reload_cover" then return false end
+end
+
+function MODE:PW_CanSearchBotCover(ply)
+    if lib.Role(ply) == "infected" then return false end
 end
 
 function MODE:PW_CanRunBotInput(ply)

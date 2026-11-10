@@ -31,6 +31,15 @@ end
 local ctxMethods = {}
 local ctxMeta = { __index = ctxMethods }
 
+---@param ctx PW.BotBrainCtx
+---@return PW.ObjectiveVisit?
+local function objectiveVisit(ctx)
+    local state = ctx.state --[[@as PW.ObjectiveFrameState?]]
+    if state == nil then return end
+    local visit = state ~= nil and state.visit or nil
+    if visit ~= nil and istable(visit) and visit.owner == state then return visit end
+end
+
 ---@param self PW.BotBrainCtx
 function ctxMethods.Intent(self)
     local board = self.board
@@ -49,13 +58,19 @@ end
 function ctxMethods.SetGoal(self, point, radius, priority)
     local fn = self._api.setGoal or (rawget(PW, "Bot") or {}).SetGoal
     if fn == nil then return false, nil end
-    return fn(self.bot, point, radius, priority)
+    local before = self.board.goal
+    local ok, status = fn(self.bot, point, radius, priority)
+    local visit = objectiveVisit(self)
+    if visit ~= nil and self.board.goal ~= before then visit.goal = self.board.goal end
+    return ok, status
 end
 
 ---@param self PW.BotBrainCtx
 function ctxMethods.ClearGoal(self)
     local fn = self._api.clearGoal or (rawget(PW, "Bot") or {}).ClearGoal
     if fn ~= nil then fn(self.bot) end
+    local visit = objectiveVisit(self)
+    if visit ~= nil and self.board.goal == nil then visit.goal = nil end
 end
 
 ---@param self PW.BotBrainCtx
@@ -70,6 +85,8 @@ function ctxMethods.SetTarget(self, ent)
     self.board.target = ent
     self.target = ent
     self:Intent().target = ent
+    local visit = objectiveVisit(self)
+    if visit ~= nil then visit.look = isvector(ent) and ent --[[@as Vector]] or nil end
 end
 
 ---@param self PW.BotBrainCtx
@@ -142,7 +159,15 @@ end
 local function callFrame(state, env, frame, method)
     local ctx = state.ctx
     ctx.state = frame.state
+    if method == "OnStart" or method == "OnResume" or method == "Update" then
+        ctx.board._behaviorOwner = frame.state
+    end
     local result = PW.Call(frame.def, method, env.bot, ctx)
+    -- The facade or handler may already be disabled: runner-owned resources must still be released.
+    if frame.id == "objective" and (method == "OnEnd" or method == "OnSuspend") then
+        local objectives = PW.BotObjectives
+        if objectives ~= nil then objectives.EndAction(ctx) end
+    end
     ctx.state = nil
     return result
 end
@@ -225,6 +250,7 @@ local function endTop(state, env, now)
     local stack = state.stack
     local frame = stack[#stack]
     callFrame(state, env, frame, "OnEnd")
+    if stack[#stack] ~= frame then return end -- synchronous dependency abort may already have stopped this stack
     stack[#stack] = nil
     state.evals[frame.id] = nil
     local cooldown = tonumber(frame.def.Cooldown) or 0
@@ -253,6 +279,22 @@ local function push(state, env, def, score, via, reason, now)
     callFrame(state, env, frame, "OnStart")
 end
 
+---@param state PW.BotBrainState
+---@param env PW.BotBrainEnv
+---@param index integer
+---@param now number
+---@return boolean
+local function popAbove(state, env, index, now)
+    local mode, owner, below = PW.ActiveMode, env.board._behaviorOwner, state.stack[index]
+    while #state.stack > index do
+        endTop(state, env, now)
+        if PW.ActiveMode ~= mode or env.board._behaviorOwner ~= owner or state.stack[index] ~= below then
+            return false
+        end
+    end
+    return true
+end
+
 ---Pops to a suspended frame, or suspends the top for a higher bucket, or replaces the top.
 ---@param state PW.BotBrainState
 ---@param env PW.BotBrainEnv
@@ -261,10 +303,12 @@ end
 ---@param reason string
 ---@param now number
 local function switchTo(state, env, def, cur, reason, now)
+    local mode = PW.ActiveMode
+    local owner = env.board._behaviorOwner
     local stack, id = state.stack, def.ClassName
     for i = #stack - 1, 1, -1 do
         if stack[i].id == id then
-            while #stack > i do endTop(state, env, now) end
+            if not popAbove(state, env, i, now) then return end
             stack[i].reason = reason
             state.ctx.running = id
             callFrame(state, env, stack[i], "OnResume")
@@ -279,6 +323,7 @@ local function switchTo(state, env, def, cur, reason, now)
     elseif top ~= nil then
         callFrame(state, env, top, "OnSuspend")
     end
+    if PW.ActiveMode ~= mode or env.board._behaviorOwner ~= owner then return end
     push(state, env, def, score, "select", reason, now)
 end
 
@@ -287,10 +332,13 @@ end
 ---@param env PW.BotBrainEnv
 ---@param now number
 local function finishTop(state, env, now)
+    local mode, owner = PW.ActiveMode, env.board._behaviorOwner
     endTop(state, env, now)
+    if PW.ActiveMode ~= mode or env.board._behaviorOwner ~= owner then return end
     local below = state.stack[#state.stack]
     while below ~= nil and not admitted(env, below.def) do
         endTop(state, env, now)
+        if PW.ActiveMode ~= mode or env.board._behaviorOwner ~= owner then return end
         below = state.stack[#state.stack]
     end
     state.ctx.running = below and below.id or nil
@@ -383,20 +431,28 @@ end
 ---@param now number
 function lib.Think(state, env, now)
     refreshCtx(state, env, now)
+    local mode, owner = PW.ActiveMode, env.board._behaviorOwner
     -- Restrictions apply to suspended frames too, before cached/minimum-run selection or resumption.
     for i = #state.stack, 1, -1 do
         local frame = state.stack[i]
-        if not admitted(env, frame.def) then
+        if frame ~= nil and not admitted(env, frame.def) then
             callFrame(state, env, frame, "OnEnd")
-            table.remove(state.stack, i)
+            if state.stack[i] == frame then table.remove(state.stack, i) end
             state.evals[frame.id], state.cooldowns[frame.id] = nil, nil
         end
     end
+    if PW.ActiveMode ~= mode or env.board._behaviorOwner ~= owner then return end
     nudgeOnSight(state, state.ctx.contacts)
     local byId = selectTop(state, env, now)
-    releaseLegs(state, env.board)
     local top = state.stack[#state.stack]
-    if top ~= nil then apply(state, env, callFrame(state, env, top, "Update"), byId, now) end
+    if top ~= nil and env.board._behaviorOwner ~= nil and env.board._behaviorOwner ~= top.state then return end
+    if top == nil and env.board._behaviorOwner ~= owner then return end
+    releaseLegs(state, env.board)
+    if top ~= nil then
+        local result = callFrame(state, env, top, "Update")
+        if env.board._behaviorOwner ~= top.state then return end
+        if state.stack[#state.stack] == top then apply(state, env, result, byId, now) end
+    end
     writeDebug(state, env)
 end
 
@@ -406,9 +462,11 @@ end
 ---@param reason string
 function lib.Stop(state, env, now, reason)
     refreshCtx(state, env, now)
+    local owner = env.board._behaviorOwner
     while #state.stack > 0 do
         state.stack[#state.stack].reason = reason
         endTop(state, env, now)
+        if env.board._behaviorOwner ~= owner then return end
     end
     state.ctx.running = nil
     writeDebug(state, env)
@@ -421,16 +479,17 @@ end
 ---@param revision integer
 function lib._InvalidateObjective(state, env, now, id, revision)
     refreshCtx(state, env, now)
-    local changed = false
+    local owner, changed = env.board._behaviorOwner, false
     for i = #state.stack, 1, -1 do
         local frame = state.stack[i]
-        if frame.id == "objective" and frame.state.id == id and frame.state.revision == revision then
+        if frame ~= nil and frame.id == "objective" and frame.state.id == id and frame.state.revision == revision then
             callFrame(state, env, frame, "OnEnd")
-            table.remove(state.stack, i)
+            if state.stack[i] == frame then table.remove(state.stack, i) end
             state.evals[frame.id], state.cooldowns[frame.id] = nil, nil
             changed = true
         end
     end
+    if env.board._behaviorOwner ~= owner then return end
     if changed then
         state.ctx.lastObjective, state.ctx.facts, state.ctx.factsAt = nil, nil, nil
         refreshCtx(state, env, now)

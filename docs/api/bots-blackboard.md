@@ -100,6 +100,14 @@ consume a newer pending request or write to a replaced board/facts generation. O
 request writes its owner's `tactics.cover`. This is not a bot teleport or an alternative damage path.
 Tests: `bots_tactics_reset.lua`; no optional addon is required for these cases.
 
+Cover search separately asks `PW_CanSearchBotCover(bot)` before enqueue and before execution. Exactly false
+opts out; absent/nil/true retains legacy behavior. This does not infer eligibility from a mode id, role,
+weapon or behavior filter. All non-cover facts continue refreshing. A denied live callback consumes only
+its matching pending token, performs no navmesh search/traces and leaves cached cover untouched; the
+existing relationship reset owns cache invalidation. Stale callbacks cannot clear newer pending work.
+The global FIFO and time-sliced A* are unchanged. Tests: `bots_cover_policy.lua`, plus existing scheduler,
+navigation and tactics-reset suites. See [role policy](role-policy.md).
+
 Types (the field lists of the rows marked "contract"; names the design does not give are in "Open in design"):
 
 ```lua
@@ -759,6 +767,44 @@ the local fallback. Their optional bot-id parameter and copied metadata must pre
 Without that serialized grant, commander-only changes would leave a bypass and lose the interaction fields.
 This narrow ownership and the unified team/round notifications are now approved. Commander also clears all
 its orders/hunt/retained state on `PW_RoundPrepared`; it never accesses another layer's private stores.
+
+### Registered objective handlers
+
+Kind `objective_actions`, folder `objective_actions/`, class table `OBJECTIVEACTION`; required `Update` function,
+`Subscribe = "never"`. Ordinary registry inheritance, `PW_PreRegister`, validation and enable ConVars apply
+(`pw_objectiveaction_<id>_enabled`). The existing `objective` behavior remains the utility/urgency facade.
+The commander still owns assignment, eligibility, revisions, defender caps and capture/hold anti-dither.
+Its sanitizer accepts registered action ids; `plant`/`defuse` retain their stricter eligibility/revision rules.
+
+Handler methods are `Update(bot, ctx, target, state)` and optional `OnStart` / `OnEnd` with the same arguments.
+They run through `PW.Call` on the shared definition. `state` is mutable per bot and objective visit, never stored
+on the definition; `Update` returns `PW.BotBrain.Continue()` or `Done(reason)`. No return or an invalid transition
+fails the handler. Actions only produce ordinary input/goal intents: the mode alone owns progress and verdicts.
+
+`PW.BotObjectives.RunAction(ctx, target)` dispatches the handler. `EndAction(ctx)` is idempotent: it marks the visit
+closing, releases owned outputs before calling optional cleanup, then releases any remaining owned cleanup writes.
+The brain changes an internal frame ownership token on active callbacks; cleanup does not reclaim that token.
+Release requires the original frame token and intent-table identity, and checks exact goal/look references and
+owned intent fields. A newer frame or a replaced intent table therefore survives late/reentrant cleanup, even
+when its scalar intent values equal the old visit's values. Only goals created by the visit are released.
+Cleanup still works after a failed handler or disabled facade. Suspension ends the visit; resume starts
+a fresh, revalidated visit. Invalidation also removes suspended frames without clearing another behavior's new
+resources. Death, team/round reset and match end use the same cleanup boundary.
+
+Live gathered mode catalogs are authoritative only when queried for a team: a commander order must still match
+current objective id, action, revision and eligibility. FFA (`BotObjectives(nil)` is not queried) and modes without
+an objective catalog retain independent commander orders instead of treating an unqueried empty list as a veto.
+The handler rechecks actor life/eligibility before dispatch and authoritative projected/actual
+containment before use. Fixture callers may still supply independent local facts/orders as before.
+
+Built-ins preserve capture/hold approach and drift, defend guard timing/outward look, collect/deny touch goals,
+and plant/defuse held-use input. There is no bomb weapon or new gameplay in this contract.
+Modes declare their required actions and runner explicitly; see `modes.md` "Required dependencies".
+An undeclared action encountered in authoritative live facts aborts without executing it, including a registered
+custom handler. This is a runtime backstop, not inference of a mode's future objectives: authors must declare the
+complete required set for human-only preflight. Standalone injected contexts are not authoritative mode facts.
+Automated tests are in `objective_actions.lua` and `objective_dependencies.lua`, alongside the unchanged legacy
+behavior, commander, Hardpoint pressure and S&D input suites. Human gameplay acceptance remains separate.
 
 ## Commander
 

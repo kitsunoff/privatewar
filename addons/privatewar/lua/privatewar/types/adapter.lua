@@ -78,6 +78,9 @@
 ---@field GetIcon? fun(self: PW.Adapter, class: string): IMaterial?
 ---@field GetSlots? fun(self: PW.Adapter, class: string, build: PW.Build?): PW.Slot[]
 ---@field GetOptions? fun(self: PW.Adapter, class: string, slot: PW.SlotId): PW.Option[]
+---Exact selected metadata, equivalent to a cosmetic GetSlots(class, nil) slot OR a cosmetic offered GetOptions entry.
+---Nil delegates to legacy discovery. This is not membership validation, ownership, cost or a player permission.
+---@field IsSelectionCosmetic? fun(self: PW.Adapter, class: string, slot: PW.SlotId, option: PW.OptionId): boolean?
 ---@field GetOptionStats? fun(self: PW.Adapter, class: string, slot: PW.SlotId, option: PW.OptionId): PW.OptionStats?
 ---@field GetOptionSetKey? fun(self: PW.Adapter): string
 ---@field Validate? fun(self: PW.Adapter, class: string, build: PW.Build): PW.Build, table<PW.SlotId, string>

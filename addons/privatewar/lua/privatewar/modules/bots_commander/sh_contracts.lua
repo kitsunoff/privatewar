@@ -1,7 +1,5 @@
 -- Shared objective whitelist. No enemy metadata crosses this boundary.
 local lib = PW.BotCommander --[[@as PW.BotCommanderLib]]
-local actions = { capture = true, hold = true, defend = true, collect = true, deny = true,
-    plant = true, defuse = true }
 
 ---@param value any
 ---@return boolean
@@ -29,7 +27,14 @@ end
 ---@return PW.BotObjective?
 local function clean(raw)
     if not isstring(raw.id) or #raw.id < 1 or #raw.id > 64 or not vector(raw.pos)
-        or not isstring(raw.action) or not actions[raw.action] then return nil end
+        or not isstring(raw.action) then return nil end
+    local registry = rawget(PW, "ObjectiveActions") --[[@as PW.Registry?]]
+    local handler = registry ~= nil and registry.Get(raw.action) or nil
+    if SERVER and PW.Match ~= nil and PW._Match.dependencies ~= nil
+        and PW._Match.dependencies.objective_actions ~= nil then
+        handler = PW.Match.Dependency("objective_actions", raw.action)
+    end
+    if handler == nil then return nil end
     local radius, weight, want = tonumber(raw.radius) or 160, tonumber(raw.weight) or 0, tonumber(raw.want) or 1
     if not finite(radius) or radius <= 0 or not finite(weight) or not finite(want) then return nil end
     local revision = raw.revision

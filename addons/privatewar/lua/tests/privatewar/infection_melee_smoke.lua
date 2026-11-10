@@ -2,6 +2,7 @@
 -- SetPos is fixture placement only, before measurement; no scripted attack, forced target or injected damage.
 local smoke = "PW.InfectionMeleeSmoke"
 local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as PW.TestFixtureResources]]
+local survivorFixture = include("privatewar_fixtures/infection_survivor.lua") --[[@as PW.TestInfectionSurvivor]]
 
 ---@generic T
 ---@param value T?
@@ -254,6 +255,11 @@ return {
                 -- Stationary opponent is fixture setup; the measured survivor gets no scripted input or forced target.
                 must(PW.BotInput).SetScripted(seed, { buttons = 0, view = seed:EyeAngles() })
                 PW._BotsManager.boards[survivor] = board(survivor)
+                -- Setup only: a cold brain may hunt out of the close-range lane before its first scheduled sight.
+                -- Release neutral setup input only after genuine perception; all measured input stays autonomous.
+                survivorFixture.Acquire(survivor, seed, function() resources.Yield(timer.Simple) end)
+                expect(clearPair(seed:GetPos(), survivor:GetPos(), 220, 300)).to.beTrue()
+                expect(must(PW.BotInput).IntentFor(survivor)).to.equal(must(must(PW.Bot).Get(survivor)).intent)
                 local started, initial = CurTime(), seed:GetPos():Distance(survivor:GetPos())
                 local origin = survivor:GetPos()
                 local away = (origin - seed:GetPos()):GetNormalized()

@@ -37,7 +37,7 @@ local function clearAll()
         lib.Clear(state)
         state.team = IsValid(ply) and ply:Team() or nil
         local board = botLib.Get(ply)
-        if board ~= nil then board.contacts, board.memory = state.contacts, state.memory end
+        if board ~= nil then board.contacts, board.memory = state.contacts, state.publicMemory end
     end
 end
 
@@ -54,7 +54,7 @@ function botLib.RetireStimulusSource(token)
     if removed == 0 then return 0 end
     for bot, state in pairs(lib.States) do
         local board = botLib.Get(bot)
-        if board ~= nil then board.contacts, board.memory = state.contacts, state.memory end
+        if board ~= nil then board.contacts, board.memory = state.contacts, state.publicMemory end
     end
     return removed
 end
@@ -189,7 +189,7 @@ local function tickBot(ply, board, now)
         end
         writeDebug(board, candidates, traces)
     end
-    board.contacts, board.memory = state.contacts, state.memory
+    board.contacts, board.memory = state.contacts, state.publicMemory
 end
 
 ---@type table<Player, string>

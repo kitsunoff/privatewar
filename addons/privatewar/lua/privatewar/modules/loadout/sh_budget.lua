@@ -258,6 +258,8 @@ end
 local function adapterCosmetic(weaponId, buildSlot, option)
     local adapters = rawget(PW, "Adapters") --[[@as PW.AdaptersLib?]]
     if adapters == nil then return false end
+    local precise = adapters.CallFor(weaponId, "IsSelectionCosmetic", weaponId, buildSlot, option)
+    if isbool(precise) then return precise --[[@as boolean]] end
     local listed = adapters.CallFor(weaponId, "GetSlots", weaponId, nil) --[[@as PW.Slot[]?]]
     for _, slot in ipairs(listed or {}) do
         if slot.id == buildSlot and slot.cosmetic == true then return true end

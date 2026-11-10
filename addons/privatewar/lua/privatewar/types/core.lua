@@ -303,6 +303,7 @@
 ---@field matchStarted boolean PW_MatchStart fired and PW_MatchEnd is still due
 ---@field result any result given to PW.Match.Finish, passed to PW_MatchEnd
 ---@field abortReason? string reason of the last abort, kept for the host until the next PW.Match.Start
+---@field dependencies? PW.DependencySnapshot exact required definitions pinned for this match
 ---@field busy boolean a phase change is in progress; requests made meanwhile are queued
 ---@field queue fun(store: PW.MatchStore)[] requests made during a phase change
 ---@field log PW.LogFn

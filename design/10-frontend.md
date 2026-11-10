@@ -26,7 +26,7 @@ Menus: main menu, lobby screen, loadout, gunsmith, end of match; screen router a
    IN MATCH
    ├── class picker on death     (choose class for next spawn)
    ├── pause menu                (settings, leave)
-   └── scoreboard                (vanilla, Tab)
+   └── scoreboard                (custom result-style table, hold Tab; revision 2026-11-10)
 
    POSTMATCH
    ├── result + scoreboard
@@ -96,6 +96,7 @@ Menus: main menu, lobby screen, loadout, gunsmith, end of match; screen router a
 11. **Checkpoint CP-UI1** (decided with the user on 2026-11-07): after kit v1 (`U-1`..`U-4` in `../TASKS.md`) and before the screens are rewritten, the user looks at the kit on the Deck and at 1920×1080.
 12. **Rule: references give layout patterns only** (decided with the user on 2026-11-07). From the reference screenshots in `ui/` (commercial shooters) we take generic genre layout patterns only: title with a rule, tab bar, left card column, right information column, centre operator, selection summary, grouped player list, bottom hint bar. We never take a reference game's look, names, icons, fonts or exact colours.
 13. **Scaling** (rules from note 16 §2 Q6, adopted with the decisions above). Design units are 1920×1080; sizes use `PW.HUD.S` (`min(sx, sy)`), positions are anchored (left column to the left edge, right column to the right edge, the centre fills the rest; title, tabs and status at the top, hint bar at the bottom). The kit reuses `PW.HUD.S/X/Y/Font`; without the `hud` module it falls back to `min(ScrW() / 1920, ScrH() / 1080)`.
+14. **In-match scoreboard revision (user-approved 2026-11-10).** Replaces the vanilla Tab entry of d.1 with a held, input-transparent overlay using the same table component as POSTMATCH. Tab remains the default `+showscores` binding; remapping and Steam Input retain that path, with native controller View supported too. Use the existing widget kit, tokens and scale, no new dependencies/assets and no per-frame data gathering. The lifecycle, public-data allowlist and performance limits are specified in `09-hud.md`, revision 2026-11-10; all other screen-map decisions stand.
 
 ## Interfaces
 

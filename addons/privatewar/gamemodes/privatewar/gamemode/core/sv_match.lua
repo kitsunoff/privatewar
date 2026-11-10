@@ -116,6 +116,7 @@ end
 local function enterPhase(store, from, to)
     if to == "LOBBY" then
         store.mode = nil
+        store.dependencies = nil
         store.ready = {}
         PW.ActiveMode = nil
         local endMatch = PW.Settings._EndMatch
@@ -150,9 +151,11 @@ local function transition(store, from, to, duration, countdown)
     -- A new match reads the enable ConVars (01-extensibility.md d.11), then takes the match settings snapshot of
     -- its mode and the enabled modules (d.17), before anyone hears of PREMATCH.
     if to == "PREMATCH" and from ~= "PREMATCH" then
+        store.dependencies = nil
         if PW.Enable ~= nil then PW.Enable._NewMatch() end
         local newMatch = PW.Settings._NewMatch
         if newMatch ~= nil then newMatch(store.mode) end
+        if not match._BindDependencies(store) then return end
     end
     publish(store)
     -- A map change announced but not yet run belongs to the phase that asked for it (00-core.md d.9).

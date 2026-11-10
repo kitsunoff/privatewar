@@ -45,6 +45,7 @@ local function sees(bot, record, fov)
 end
 
 function lib.Step(bot)
+    if not IsValid(bot) then states[bot] = nil return end
     local board = PW.Bot ~= nil and PW.Bot.Get ~= nil and PW.Bot.Get(bot) or nil
     local devices = PW.Devices
     if not module:IsValid() or board == nil or not bot:Alive() or devices == nil then states[bot] = nil return end
@@ -78,8 +79,8 @@ end
 function lib.Contact(bot)
     local state = states[bot]
     local contact = state ~= nil and state.contact or nil
-    if not module:IsValid() or not bot:Alive() or contact == nil or not IsValid(contact.device.entity)
-        or contact.device.retired
+    if not module:IsValid() or not IsValid(bot) or not bot:Alive() or contact == nil
+        or not IsValid(contact.device.entity) or contact.device.retired
         or not contact.visible
         or not lib.CanObserve(bot, CurTime()) or not PW.IsEnemy(bot, contact.device.owner) then return nil end
     local board = PW.Bot ~= nil and PW.Bot.Get ~= nil and PW.Bot.Get(bot) or nil

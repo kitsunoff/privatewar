@@ -85,6 +85,10 @@ local function boardRows(me)
     return rows
 end
 
+function pm.Rows()
+    return boardRows(LocalPlayer())
+end
+
 ---@return integer teams, table<integer, integer> scores, table<integer, string> names
 local function teamFacts()
     local rules = rawget(PW, "MatchRules") --[[@as PW.MatchRulesLib?]]

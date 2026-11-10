@@ -24,12 +24,16 @@ function lib._AdapterOptions(weaponId, build)
     local adapter = adapterOf(weaponId)
     if adapter == nil then return offered end
     local slots = PW.Adapters.Call(adapter, "GetSlots", weaponId, build) --[[@as PW.Slot[]?]]
+    local selectedOnly = next(build) ~= nil
     for _, slot in ipairs(istable(slots) and slots or {}) do
-        ---@type table<string, boolean>
-        local set = {}
-        local options = PW.Adapters.Call(adapter, "GetOptions", weaponId, slot.id) --[[@as PW.Option[]?]]
-        for _, option in ipairs(istable(options) and options or {}) do set[option.id] = true end
-        offered[slot.id] = set
+        -- Repair checks only addresses present in this build. Preserve the legacy empty-build discovery query.
+        if not selectedOnly or build[slot.id] ~= nil then
+            ---@type table<string, boolean>
+            local set = {}
+            local options = PW.Adapters.Call(adapter, "GetOptions", weaponId, slot.id) --[[@as PW.Option[]?]]
+            for _, option in ipairs(istable(options) and options or {}) do set[option.id] = true end
+            offered[slot.id] = set
+        end
     end
     return offered
 end

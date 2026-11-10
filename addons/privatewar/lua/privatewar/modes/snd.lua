@@ -4,6 +4,8 @@ MODE.Short = "S&D"
 MODE.Description = "Plant or defuse one bomb. One life per round."
 MODE.Base = "round_base"
 MODE.Teams = 2
+MODE.Dependencies = { objective_actions = { "collect", "hold", "plant", "defuse" },
+    modules = { "bots_objectives", "snd", "lobby" } }
 MODE.TeamPolicy = "managed"
 MODE.BotQuotaPolicy = "rounds"
 MODE.MapData = true

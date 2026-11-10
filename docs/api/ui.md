@@ -488,7 +488,7 @@ Folder `hud/`, class table `HUDELEMENT`, one file per element in `lua/privatewar
 | `PW.HUD.S(value)` | Design units to pixels with the uniform scale (`min(sx, sy)`), for sizes that must stay square or keep the aspect |
 | `PW.HUD.Refresh() -> boolean` | Recomputes the scale and re-creates the fonts when `ScrW()` or `ScrH()` changed since the last call; returns `true` when it did. The paint loop calls it every frame |
 | `PW.HUD.Font(id, size, weight?) -> string` | The font name `"PW_HUD_<id>"` for a size in design units (the kit's body family, Roboto fallback, antialiased and extended for Cyrillic, default weight 500), created on the first call and re-created on a resolution change. The size of the first call is kept for a given `id` |
-| `PW.HUD.Hidden` | Legacy additional hide list, empty by default. Health/battery and ammo replacement is conditional, not stored here; crosshair, killfeed and Tab remain native (`09-hud.md` d.1 and revision 2026-11-08) |
+| `PW.HUD.Hidden` | Legacy additional hide list, empty by default. Health/battery and ammo replacement is conditional, not stored here; crosshair and killfeed remain native. The custom LIVE Tab scoreboard belongs to `ui_kit`, not this list (`09-hud.md` revisions 2026-11-08 and 2026-11-10) |
 
 The functions `X`, `Y`, `S`, `Refresh`, `Font` and `Hidden` exist on the client only.
 
@@ -496,7 +496,56 @@ The functions `X`, `Y`, `S`, `Refresh`, `Font` and `Hidden` exist on the client 
 
 Client ConVar, archived, default `1`, range 0..1, `Draw the Private War HUD overlay (0 hides it)`. At `0` the loop selects no
 element and restores native health/ammo. Conditional replacement also stops when the module or corresponding element is
-missing, disabled, not visible or has failed. No crosshair, killfeed or scoreboard replacement is introduced.
+missing, disabled, not visible or has failed. No crosshair or killfeed replacement is introduced. This ConVar does not
+control the custom in-match scoreboard: that is a separate `ui_kit` overlay, controlled by `pw_ui_kit_scoreboard`.
+
+### In-match scoreboard (revision 2026-11-10)
+
+User-approved `09-hud.md` revision 2026-11-10 and `10-frontend.md` d.14 replace the earlier vanilla Tab decision
+for `LIVE` only. Hold `+showscores` (Tab by default, including a rebound key or Steam Input mapping) to show the
+result-style table; release to close. Native controller View/Back also holds it. Up/Down and d-pad Up/Down scroll;
+Page Up/Down page. It does not call `MakePopup`, capture movement/aiming or replace a `PWRoot`. The death-picker
+root forwards captured keys to it, so the picker may remain underneath without receiving its scroll actions.
+
+Sources: `modules/ui_kit/sh_board.lua`, `sh_scoreboard.lua`, `cl_board.lua`, `cl_scoreboard_view.lua` and
+`cl_scoreboard.lua`; annotations: `types/ui_scoreboard.lua`. All paths are relative to `lua/privatewar/`.
+
+| API | Contract |
+| --- | --- |
+| `PW.UI.Board.Lines(sections)`, `Height(lines)` | Shared table model: preformatted result/live row strings and content height in design units |
+| `PW.UI.Board.Fit(text, width, measure)` | Shared UTF-8-safe ellipsis fitting and control-character stripping; layout time only |
+| `PWMatchBoard:SetSections(sections, label?)` | Client painted table used by both the LIVE overlay and `screens/postmatch.lua`; label defaults to `SCORE` |
+| `PWMatchBoard:SetViewport(panel)`, `GetContentHeight()` | Set the viewport for offscreen-row culling; read the model height converted to current-scale pixels |
+| `PW.UI.Scoreboard.Allowed(facts)` | Shared policy: valid player, enabled kit/setting, focused application, `LIVE`, no native menu/console or conflicting root; a class-picker root is permitted |
+| `PW.UI.Scoreboard.Sections(rows, opts)` | Shared, nonmutating public-field projection and ordering: own team first, other teams by published total; personal rows by score in team modes, kills in FFA, with deterministic tie-breaks and shared places; observers in a separate section with blank stats |
+| `PW.UI.Scoreboard.Layout(width, height, scale)`, `Scroll(code, viewport, scale)` | Shared overlay geometry and scroll delta, with `nil` for unrelated keys |
+| `PW.UI.Scoreboard.Gather()` | Client public roster, map and locally formatted mode timer; live team count from `pw_teams`, totals from the published mode score prefix, not terminal result team count |
+| `PW.UI.Scoreboard.Show()`, `Hide()`, `IsOpen()` | Client overlay lifecycle; `Show` returns true only when the custom board opens or is already open; `Hide` removes only this overlay |
+| `PW.UI.Scoreboard.HandleKey(code)` | Client key forwarding for the death-picker root and predicted player-button events; returns whether handled, deduplicating the same code within a frame |
+| `PW.UI.Postmatch.Rows()` | Client public roster with the death-counter baseline captured on entering `LIVE`; reused without gathering XP, currency or the terminal summary |
+
+Client setting `ui_kit.scoreboard` is a boolean, default true (`pw_ui_kit_scoreboard`). A disabled/invalid kit,
+disabled setting, disallowed phase or failed build does not suppress the base `ScoreboardShow` path. A build/update
+failure removes the overlay and disables further custom opens until this client glue reloads. Phase exit, lost
+application focus, native menu/console, a conflicting root, setting/module disable, reload and shutdown remove the
+overlay. The postmatch, vote, lobby and pause roots retain their existing flow; no custom board opens in those phases.
+
+The client notification `PW_ScoreboardGathered(data, ownId)` runs after each complete Gather. Presentation listeners
+may use already published public or own-player data, not add hidden tactical state. `data` contains `sections`, `map`,
+`timer`, optional `scoreLabel`/`note` and a native-controller invocation flag `gamepad` for auto hints. The optional
+Infection addon uses its accepted own-player snapshot for the round and personal-win note, labels the public teams
+SURVIVORS/INFECTED and removes misleading team totals; full personal standings remain on the result screen.
+
+No new network channel, assets or dependencies are introduced. The table shows public names, bot/own-player flags,
+kills, match-baselined deaths and score, with spectator/JIP holdouts separated. It does not gather positions, targets,
+equipment, bomb possession or living/dead state. Team totals use the current mode's published scoring prefix
+(including objective scores and round wins), never a sum of personal points. Data refreshes at most four times per
+second while open, with no closed-board Gather polling. Text fitting and row geometry are cached outside Paint;
+offscreen rows are culled. The overlay uses the existing palette, fonts and uniform UI scale, without blur passes.
+
+Automated policy, engine-boundary and renderer-boundary cases are in `lua/tests/privatewar/ui_scoreboard.lua`,
+`ui_scoreboard_client.lua` and `ui_scoreboard_render.lua` (relative to the addon root). Real GMod/GLuaTest execution,
+screenshots, human/controller, P2P and Deck performance acceptance remain pending; implementation is not a checkpoint pass.
 
 ### Player vitals and weapon (T-11.11)
 

@@ -34,7 +34,11 @@ end
 ---@param code integer
 ---@return PW.UIGamepadAction?
 local function actionOf(code)
-    return gamepad.Action(code, { phase = PW.Phase.GetPhase(), rootOpen = lib.RootOpen(), enabled = enabled() })
+    local board = lib.Scoreboard
+    local boardOpen = board ~= nil and board.IsOpen ~= nil and board.IsOpen()
+    return gamepad.Action(code, {
+        phase = PW.Phase.GetPhase(), rootOpen = lib.RootOpen() or boardOpen, enabled = enabled()
+    })
 end
 
 function gamepad.HudGlyph(action)

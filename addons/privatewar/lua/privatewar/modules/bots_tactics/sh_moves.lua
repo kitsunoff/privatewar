@@ -90,7 +90,7 @@ end
 
 local slideMark = "tactics.slide"
 
-function lib.Slide(ctx, kind, dist)
+function lib.SlideReady(ctx, kind, dist)
     local qs = quickSlide()
     local f = lib.FactsOf(ctx)
     ---@type PW.BotSlideFacts
@@ -100,9 +100,17 @@ function lib.Slide(ctx, kind, dist)
         runSpeed = f.runSpeed or 0, roll = lib.Random(), chance = f.profile.slide, dist = dist,
         hurtAge = f.hurtAt ~= nil and ctx.now - f.hurtAt or nil
     }
-    if not lib.SlideWanted(kind, s) then return false end
+    return lib.SlideWanted(kind, s)
+end
+
+function lib.CommitSlide(ctx)
     lib.Mark(ctx.board, slideMark, ctx.now + cfg.slideCooldown)
     ctx:Intent().slideAt = ctx.now
+end
+
+function lib.Slide(ctx, kind, dist)
+    if not lib.SlideReady(ctx, kind, dist) then return false end
+    lib.CommitSlide(ctx)
     return true
 end
 

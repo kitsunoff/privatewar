@@ -279,6 +279,74 @@ Side notes from the same runs (not penetration):
   was 51.2 ms; the runs are not an A/B pair (other camera, other fights), so this is a hint, not a measurement of the
   profile. A profile A/B with a fixed camera is the manual check in the local manual checklist (not published) section 40 item 11.7.
 
+## Infection cover-search opt-out (2026-11-10)
+
+The generic `PW_CanSearchBotCover` veto changes search admission only; Infection returns false only for
+infected. Goals, paths, intents, behavior eligibility and FIFO/A* scheduling are unchanged.
+This is a bounded diagnostic, **not evidence of a causal pursuit-speed improvement**.
+
+### Method and retained control
+
+- Steam Deck, Proton, `gm_construct`, one human survivor and 1/2/5/10 infected bots. Initial world-death
+  conversions and fixed navmesh-projected placement are fixture setup, before capture. Both arms have identical
+  measured starting positions. Measured actors receive no forced contact, target, goal, behavior, aim, input,
+  difficulty or teleport; human inputs are untouched. Capture stops at round completion or 20 seconds.
+- Sight-only control: `5e12641`, whose production addon code is identical to `9896b49` (on `05df8c1`).
+  Candidate: `ee9b4ea`. No unresolved tracking implementation is included. Passive dev instrumentation was
+  committed before deployment (`de22b90`, `77e151a`, corrected at `090df21` and retained in the control).
+- FIFO source classification and enqueue/dequeue timing are sampled without wrappers or extra traces.
+  Completed observed jobs reconcile exactly with scheduler `jobsRun` deltas in all six accepted captures.
+  Counts are **callbacks**, not proof each callback performed a search. FIFO waits are frame-sampled estimates,
+  not exact enqueue timestamps; low job counts make percentile comparisons particularly weak.
+- Zero movement is summed **bot-seconds**, from alive initial infected only: neutral movement commands in
+  `SetupMove`, and horizontal physical speed at most 1 unit/s, respectively. Path cancellations are navigation
+  service counter deltas. Native melee is the first observed positive native-fist enemy hit, not a range proxy.
+  Native-hit `CurTime` timestamps are consistently 0.045 s beyond the last Think-domain elapsed timestamp;
+  retain that hook-domain timing limitation. Other bots' time-to-hit is censored at round completion.
+- An earlier four-count control (`sight_only`) is retained but discarded for comparison: a post-placement pause
+  allowed bots to move before capture. The corrected captures start at the placement boundary. Personalities,
+  existing memory, phase offsets and random decisions are not paired, and there is one accepted capture per cell.
+
+### Accepted observations
+
+`A` is sight-only; `B` adds the opt-out. Durations are Think-domain simulation seconds. FIFO statistics cover
+all completed jobs; the one-job B sample at N=1 is not a latency distribution.
+
+| Infected / arm | Duration (s) | Cover / path callbacks | FIFO mean / p95 / max (ms) | Zero command / velocity (bot-s) | Path cancels | First native hit (s) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 / A | 9.030 | 14 / 1 | 14.700 / 16.940 / 29.387 | 0 / 0.015 | 0 | 9.075 |
+| 1 / B | 8.235 | 0 / 1 | 16.533 / 16.533 / 16.533 | 0 / 0.030 | 0 | 8.280 |
+| 2 / A | 8.010 | 33 / 4 | 16.870 / 17.483 / 32.717 | 0.135 / 0.030 | 0 | 8.055 |
+| 2 / B | 7.935 | 0 / 3 | 17.008 / 16.822 / 17.532 | 0.045 / 0.015 | 0 | 7.980 |
+| 5 / A | 7.830 | 82 / 56 | 30.213 / 65.767 / 82.734 | 2.580 / 0.030 | 2 | 7.875 |
+| 10 / A | 7.710 | 95 / 170 | 29.274 / 66.275 / 84.116 | 8.445 / 0.330 | 2 | 7.755 |
+
+B at N=2 required one retry because the human was selected as initial infected. At N=5 both permitted
+attempts selected the human, so the fixture rejected them **before measurement**. The matrix stopped at
+the two-attempt boundary: **B at N=5 is unavailable; B at N=10 was not attempted**. No seed, role or behavior
+was forced to bypass that stop. The earlier discarded N=1 control also needed one seed-selection retry.
+
+The accepted small-count runs show zero infected cover callbacks with the veto, versus 14 and 33 without it.
+They do not establish lower FIFO wait, less immobility or faster pursuit: the samples are small, durations and
+behavior histories differ, and the requested large-count A/B cells remain incomplete. No trace-time, CPU-time,
+framerate or gameplay-acceptance benefit is claimed. The remaining matrix is an incomplete verification item,
+not a passed checkpoint.
+
+### Regression evidence
+
+The tests-first full installed-game run was RED **1912/4/0** (passed/failed/skipped): exactly the new
+opt-out, execution, lifecycle and Infection-provider assertions failed. The first implementation run was
+**1915/1/0**: its only failure was the new equipment-count fixture using a callable-table stub where the
+runtime intentionally requires `isfunction`. The corrected fixture proves that a stale lethal count is
+refreshed to its real zero inventory; no production guard or inherited assertion was weakened.
+
+The completed unfiltered `gm_construct` regression passed **1916/0/0**, 187 groups, **191.431 seconds**;
+`make check` also passed. Generic enqueue/execution veto, absent/nil/true fallback, non-cover fact refresh,
+conversion/reset token ownership and failure isolation are covered by `bots_cover_policy.lua`; the
+Infection-only provider is covered by `infection_rush_policy.lua`. Existing tactics-reset, scheduler and
+actual A* slicing/cancellation/FIFO assertions remain intact. Temporary explicit-only capture probes are
+removed after measurement; their committed history and the sight-only control retain reproducibility.
+
 ## Manual checks
 
 For the local manual checklist (not published) (owned by the docs lane):

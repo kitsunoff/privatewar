@@ -188,7 +188,7 @@ end
 ---@param f PW.BotCombatFacts
 function lib._QueueCover(bot, board, f)
     local scheduler = rawget(PW, "BotScheduler") --[[@as PW.BotSchedulerLib?]]
-    if scheduler == nil or store.pending[bot] then return end
+    if scheduler == nil or store.pending[bot] or PW.Ask("PW_CanSearchBotCover", bot) == false then return end
     ---@type PW.BotContact?
     local threat = nil
     for _, c in ipairs(board.contacts or {}) do
@@ -210,7 +210,9 @@ function lib._QueueCover(bot, board, f)
         if not IsValid(bot) or not bot:Alive() then return end
         local current = boardOf(bot)
         local facts = current ~= nil and current.tactics or nil
-        if current == board and facts == f then f.cover = searchCover(bot:GetPos(), threatPos) end
+        if current == board and facts == f and PW.Ask("PW_CanSearchBotCover", bot) ~= false then
+            f.cover = searchCover(bot:GetPos(), threatPos)
+        end
     end)
 end
 

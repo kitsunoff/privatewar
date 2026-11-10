@@ -152,6 +152,8 @@
 ---@field Decide fun(event: PW.UIPostmatchEvent, facts: PW.UIPostmatchOpenFacts): PW.UIPostmatchAction?
 ---Client: everything the screen shows, read now.
 ---@field Gather? fun(): PW.UIPostmatchData
+---Client: public roster with the current match death baseline; also used by the LIVE board.
+---@field Rows? fun(): PW.UIBoardRow[]
 ---Client: the currency earned now (refreshed while the screen is open: the match bonus arrives with a later delta).
 ---@field EarnedNow? fun(): integer?
 ---Client: opens the pause menu over the summary; the summary comes back when the menu closes.

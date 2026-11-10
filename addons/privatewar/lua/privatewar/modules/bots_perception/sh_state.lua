@@ -27,9 +27,25 @@ local zero = Vector(0, 0, 0)
 ---@type table<any, PW.BotPerceptionState>
 lib.States = lib.States or setmetatable({}, { __mode = "k" })
 
+---A public contact contains copied evidence, never the private sight/nonvisual/radar sidecars.
+---@param contact PW.BotContact
+---@param current boolean
+---@return PW.BotContact
+local function publicContact(contact, current)
+    ---@type PW.BotContact
+    local copy = { ent = contact.ent, time = contact.time, source = contact.source,
+        pos = Vector(contact.pos.x, contact.pos.y, contact.pos.z),
+        vel = Vector(contact.vel.x, contact.vel.y, contact.vel.z),
+        visible = contact.source == "sight" and contact.visible and current,
+        sourceToken = contact.sourceToken, expiresAt = contact.expiresAt }
+    if contact.dir ~= nil then copy.dir = Vector(contact.dir.x, contact.dir.y, contact.dir.z) end
+    return copy
+end
+
 ---@return PW.BotPerceptionState
 function lib.NewState()
-    return { queue = lib.NewQueue(), memory = {}, contacts = {}, pending = {}, sharedAt = {}, delayAt = -math.huge }
+    return { queue = lib.NewQueue(), memory = {}, contacts = {}, publicMemory = {}, currentSight = {},
+        pending = {}, sharedAt = {}, delayAt = -math.huge }
 end
 
 ---Forgets everything (the bot died or the round restarted).
@@ -38,13 +54,19 @@ function lib.Clear(state)
     state.queue, state.memory, state.contacts = lib.NewQueue(), {}, {}
     state.pending, state.sharedAt, state.delay, state.delayAt = {}, {}, nil, -math.huge
     state.recognisedTo = nil
+    state.publicMemory, state.currentSight = {}, {}
 end
 
 function lib.HideSight(state)
     for _, contact in pairs(state.memory) do
         contact.visible = false
         if contact.observed ~= nil then contact.observed.visible = false end
+        if contact.sight ~= nil then contact.sight.visible = false end
     end
+    state.currentSight = {}
+    state.publicMemory = state.publicMemory or {}
+    for _, contact in ipairs(state.contacts) do contact.visible = false end
+    for _, contact in pairs(state.publicMemory) do contact.visible = false end
 end
 
 ---Puts a stimulus into the memory of a state; false when it lacks the entity or the position.
@@ -54,6 +76,7 @@ end
 ---@return boolean
 function lib.AddStimulus(state, kind, data)
     if not istable(data) or data.ent == nil or not isvector(data.pos) then return false end
+    state.publicMemory, state.currentSight = state.publicMemory or {}, state.currentSight or {}
     if kind == "radar" then
         local token, ends = data.sourceToken, data.expiresAt
         if token ~= nil and (not istable(token) or lib._RetiredRadarSources[token]) then return false end
@@ -73,6 +96,8 @@ function lib.AddStimulus(state, kind, data)
         expiresAt = kind == "radar" and data.expiresAt or nil,
         now = (data.sourceToken ~= nil or data.expiresAt ~= nil) and CurTime() or nil
     })
+    local contact = state.memory[data.ent]
+    state.publicMemory[data.ent] = contact ~= nil and publicContact(contact, state.currentSight[data.ent] ~= nil) or nil
     return true
 end
 
@@ -169,7 +194,9 @@ function lib.Share(sender, mates, contact, now)
             local pending = mate.state.pending
             if #pending >= pendingCap then table.remove(pending, 1) end
             pending[#pending + 1] = {
-                at = now + params.share_delay, ent = contact.ent, pos = contact.pos, vel = contact.vel,
+                at = now + params.share_delay, ent = contact.ent,
+                pos = Vector(contact.pos.x, contact.pos.y, contact.pos.z),
+                vel = Vector(contact.vel.x, contact.vel.y, contact.vel.z),
                 time = contact.time, radar = contact.source == "radar",
                 sourceToken = contact.sourceToken, expiresAt = contact.expiresAt
             }
@@ -249,13 +276,23 @@ local function recognise(state, now)
     return merged or seen
 end
 
----Contacts of memory: the seen first, then the newest.
----@param memory table<any, PW.BotContact>
+---Copied public projection: a late glimpse remains recognized in private memory, never currently visible through
+---a wall or outside the cone. Current sight gates permission only; coordinates always come from matured evidence.
+---@param state PW.BotPerceptionState
 ---@return PW.BotContact[]
-local function contactList(memory)
+local function contactList(state)
     ---@type PW.BotContact[]
     local list = {}
-    for _, contact in pairs(memory) do list[#list + 1] = contact end
+    local currentSight = state.currentSight or {}
+    state.publicMemory = {}
+    for ent, contact in pairs(state.memory) do
+        local sight = contact.sight
+        local current = currentSight[ent] ~= nil
+        local selected = sight ~= nil and sight.visible and current and sight or contact
+        local newest = publicContact(contact, current)
+        state.publicMemory[ent] = newest
+        list[#list + 1] = selected == contact and newest or publicContact(selected, current)
+    end
     table.sort(list, function(a, b)
         if a.visible ~= b.visible then return a.visible end
         return a.time > b.time
@@ -263,7 +300,7 @@ local function contactList(memory)
     return list
 end
 
-function lib.RefreshContacts(state) state.contacts = contactList(state.memory) end
+function lib.RefreshContacts(state) state.contacts = contactList(state) end
 
 ---@param contact PW.BotContact
 ---@param token table
@@ -325,6 +362,7 @@ function lib.Think(state, ctx, now)
     rollDelay(state, ctx, now)
     lib.QueuePush(state.queue, now, ctx.seen or {})
     lib.HideSight(state)
+    state.currentSight = state.queue.snaps[#state.queue.snaps].seen
     deliverPending(state, now)
     ---@type PW.BotSighting[]
     local fresh = {}
@@ -335,7 +373,8 @@ function lib.Think(state, ctx, now)
             local last = state.sharedAt[ent]
             if last == nil or now - last >= sharedEvery then
                 state.sharedAt[ent] = now
-                fresh[#fresh + 1] = { ent = ent, pos = snap.pos, vel = snap.vel, time = now }
+                fresh[#fresh + 1] = { ent = ent, pos = Vector(snap.pos.x, snap.pos.y, snap.pos.z),
+                    vel = Vector(snap.vel.x, snap.vel.y, snap.vel.z), time = now }
             end
         end
     end
@@ -343,6 +382,6 @@ function lib.Think(state, ctx, now)
     for ent, at in pairs(state.sharedAt) do
         if now - at > lib.Config.memorySeconds then state.sharedAt[ent] = nil end
     end
-    state.contacts = contactList(state.memory)
+    lib.RefreshContacts(state)
     return fresh
 end

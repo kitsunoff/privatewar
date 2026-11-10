@@ -117,7 +117,15 @@ end
 local function copyList(list)
     ---@type table[]
     local result = {}
-    for i, entry in ipairs(list) do result[i] = table.Copy(entry) end
+    -- These records contain only strings/booleans (see slotsOf/optionsOf); copy them directly while retaining
+    -- independent caller-owned rows. No recursive traversal is needed for this metadata.
+    for i, entry in ipairs(list) do
+        ---@type table<any, any>
+        local copy = {}
+        local fields = entry --[[@as table<any, any>]]
+        for key, value in pairs(fields) do copy[key] = value end
+        result[i] = copy
+    end
     return result
 end
 
@@ -156,11 +164,12 @@ end
 ---The slot table of an id; a nested id follows the class defaults installed above it.
 ---@param class string
 ---@param id PW.SlotId
+---@param top? PW.Arc9SlotTable[] live slots for a precise metadata read; legacy discovery retains its memo
 ---@return PW.Arc9SlotTable?
-local function slotTable(class, id)
+local function slotTable(class, id, top)
     local path = PW.Arc9._ParseAddress(id)
     if path == nil then return nil end
-    local list = PW.Arc9.ClassSlots(class)
+    local list = top or PW.Arc9.ClassSlots(class)
     local slot = nil
     for _, index in ipairs(path) do
         slot = list[index]
@@ -217,6 +226,35 @@ function ADAPTER:GetOptions(class, id)
     return copyList(lib._Memo(PW._Arc9.memo, lib.Revision(), "options:" .. class .. "|" .. tostring(id), function()
         return optionsOf(class, id)
     end) --[[@as PW.Option[] ]])
+end
+
+---Read only the selected metadata, not caller-owned copies of every slot and option. Mutable ARC9 fields are
+---read live: the discovery memo revision (identity/counts) cannot detect same-count blacklist swaps or edits.
+---@param class string
+---@param id PW.SlotId
+---@param option PW.OptionId
+---@return boolean?
+function ADAPTER:IsSelectionCosmetic(class, id, option)
+    if not self:IsAvailable() then return nil end
+    local swep = weapons.GetStored(class) --[[@as table<string, any>?]]
+    local top = swep ~= nil and swep.Attachments or nil
+    if not istable(top) then return nil end -- unknown/inherited shape: retain legacy discovery
+    local slots = top --[[@as PW.Arc9SlotTable[] ]]
+    local lib, cosmetic = PW.Arc9, arc9().CosmeticCategories or {}
+    -- GetSlots(class, nil) intentionally lists only visible top-level slots, with canonical address spelling.
+    for index, slot in ipairs(slots) do
+        if tostring(index) == id and slot.Hidden ~= true and lib._IsCosmetic(slot, cosmetic) then return true end
+    end
+    local att = lib.Offerable(option)
+    if att == nil or not lib._IsCosmetic(att, cosmetic) then return false end
+    local slot = slotTable(class, id, slots)
+    if slot == nil then return false end
+    -- Unusual cosmetic options in a noncosmetic slot still use ARC9's public category discovery verbatim,
+    -- including wildcard/anarchy and pack-specific behavior. Never infer membership from a cached false.
+    for _, name in ipairs(arc9().GetAttsForCats(slot.Category or "")) do
+        if name == option then return true end
+    end
+    return false
 end
 
 ---T-11.7: the raw base values of the stats an attachment may add to or override, read once per memo revision.

@@ -11,6 +11,7 @@ MODE.Base = "tdm"
 MODE.Name = "Kill Confirmed"
 MODE.Short = "KC"
 MODE.Teams = 2
+MODE.Dependencies = { objective_actions = { "collect", "deny" }, modules = { "bots_objectives", "kc_tags" } }
 MODE.Description = "Two teams. Pick up enemy tags to confirm kills, your team's tags to deny them. "
     .. "First to the confirm limit wins."
 MODE.Settings = {
