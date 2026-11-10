@@ -55,7 +55,7 @@ local function arrange()
             -1700 + ((n - 1) % 5) * 96, -144)))
         bot:SetEyeAngles(Angle(0, 0, 0))
     end
-    readyAt, arranged = CurTime() + 1, true
+    arranged = true
 end
 
 local function step()
@@ -70,7 +70,7 @@ local function step()
     if measured then return end
     if not staged then prepare() return end
     if CurTime() < readyAt then return end
-    if not arranged then arrange() return end
+    if not arranged then arrange() end
     measured = true
     for ply, value in pairs(frozen) do if IsValid(ply) then ply:Freeze(value) end end
     deadline = CurTime() + 20.2

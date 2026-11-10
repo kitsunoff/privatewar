@@ -82,7 +82,7 @@ end
 ---@param move CMoveData
 local function sampleMove(bot, move)
     local current = run
-    if current == nil or PW.Infection.Role(bot) ~= "infected" or not bot:IsBot() then return end
+    if current == nil or not bot:Alive() or PW.Infection.Role(bot) ~= "infected" or not bot:IsBot() then return end
     local row = current.bots[tostring(bot:UserID())]
     if row == nil then return end -- only the initially measured cohort
     row.commands = row.commands + 1
@@ -112,14 +112,17 @@ function probe.Start(tag, seconds)
     end
     run = current
     hook.Add("SetupMove", key, sampleMove)
-    hook.Add("PW_CanTakeDamage", key, function(_, attacker, damage)
+    hook.Add("PW_CanTakeDamage", key, function(victim, attacker, damage)
         ---@cast damage CTakeDamageInfo
+        if run ~= current or not IsValid(victim) or not victim:IsPlayer()
+            or PW.Infection.Role(victim) ~= "survivor" then return end
         if not IsValid(attacker) or not attacker:IsPlayer() then return end
         local row = current.bots[tostring(attacker:UserID())]
         if row == nil or row.firstMelee ~= nil then return end
         local wep = damage:GetInflictor()
         if IsValid(wep) and wep:IsWeapon() and wep:GetClass() == "weapon_fists"
-            and wep:GetOwner() == attacker and damage:GetDamage() > 0 then
+            and wep:GetOwner() == attacker and attacker:GetActiveWeapon() == wep
+            and PW.Infection.Role(attacker) == "infected" and damage:GetDamage() > 0 then
             row.firstMelee = CurTime() - current.started
         end
     end)
