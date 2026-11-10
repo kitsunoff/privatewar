@@ -26,7 +26,8 @@ Inherited from `01-extensibility.md`:
    - **Playlist:** the host picks a ready-made playlist curated by an addon author (for example "Shipment 24/7" from a map pack, "Hardcore" from a mode pack); nothing to configure.
    - Rationale: players get both "configure it yourself" and curated experiences from addon authors.
 
-2. **Playlists are a kind `playlists/` (data only).**
+2. **Playlists are a Lua kind `playlists/`.** Static data remains supported; optional playlist-local
+   availability and startup data resolvers follow decision 9. Methods are not auto-subscribed hooks.
 
    ```lua
    -- lua/privatewar/playlists/shipment_247.lua
@@ -42,7 +43,10 @@ Inherited from `01-extensibility.md`:
    - A "preset" is just a playlist with one mode (for example Hardcore TDM = `Modes = { tdm = 1 }`, `Settings = { ["health.hardcore"] = true }`). No separate preset concept.
    - In "rotation with vote" (core decision 2) the vote offers several map + mode pairs sampled from the active playlist by weight.
 
-3. **Host-saved playlists.** "Save as…" in the lobby stores the current Custom setup as a playlist in JSON under `data/privatewar/playlists/`. The loader reads them alongside Lua playlists; same fields, same validation.
+3. **Lua-only playlists (user-approved replacement, 2026-11-11).** Remove playlist JSON reading, writing,
+   conversion APIs and the proposed "Save as…" JSON flow. No migration or backward compatibility; do not delete,
+   rewrite or otherwise touch existing user playlist files. This changes only playlist storage, not other JSON
+   protocols such as `pending_match.json`. TASKS.md T-2.6 replaces its mandatory JSON assertions explicitly.
 
 4. **`maxplayers` cannot be changed from Lua** (`../notes/17-lobby-and-join-flow.md`, fact 5). A playlist's player count can only mean "fill with bots up to N". If the server was started with fewer slots, the lobby shows a warning ("playlist expects 24 players, server has 16").
 
@@ -147,6 +151,29 @@ Inherited from `01-extensibility.md`:
    Shared lifecycle/role APIs remain generic: two-phase round preparation, synchronous team transition,
    post-base spawn notification and optional terminal result transform. These interface approvals do not
    change existing ordinary modes or grant new XP/money events.
+
+9. **Playlist-local availability (user-approved, 2026-11-11; not yet implemented).**
+   - Optional `PLAYLIST:IsActive(nowUTC)` returns a boolean and optionally the next UTC Unix timestamp of change.
+     No method means always available. Unknown/invalid next-change time means unknown; exceptions fail closed
+     for that playlist only. Required-content checks belong to the author; ordinary content validation still applies.
+   - `Maps`, `Modes`, `Settings` may be static or startup Lua resolvers. Resolve once on the server per startup,
+     hold the validated result stable; no implicit content rescan or public reload promise.
+   - Evaluate at startup and within 60 seconds of changes outside a running match; never call availability
+     predicates during PREMATCH, LIVE or POSTMATCH. Reevaluate freshly after completion before rotation/vote.
+     UTC wall-clock time, not uptime; no replay of transitions missed while offline.
+   - A playlist selected while active remains visible after expiry and may start one match in that lobby.
+     Replacing the selection with another playlist or Custom clears that entitlement; restart clears it too.
+     Carry an accepted start across its pending map change, not an unlimited reusable entitlement.
+     An expired rotation returns to the lobby after its match; expiry during VOTE cancels the vote to lobby.
+   - Show concurrently active playlists, known upcoming starts within 48 hours, known end countdowns, retained
+     selections, and Custom last even when none is active. Exact visual order among playlists remains open.
+   - No shared schedule kind, event lifecycle, XP effect or approved shipped calendar/content list. Exact dates,
+     biweekly anchors and playlist compositions are deferred. Contract: `docs/api/feature-contracts.md`.
+
+10. **S&D automatic layouts (user-approved, 2026-11-11; not yet implemented).** Decision 8's gameplay remains
+    unchanged. In addition to authored maps, accept provisional installed `de_` candidates in Custom, playlists
+    and votes, then validate after load under `03-mapdata.md` d.10. Failure returns to lobby with a visible reason,
+    never to another mode or an automatic retry loop; no persistent failure cache.
 
 ## Interfaces
 

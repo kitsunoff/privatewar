@@ -271,7 +271,39 @@ Runner notes: select the gamemode and map (`--gamemode privatewar --map gm_const
 - **T-2.3 `round_base`**: round loop until `RoundsToWin`; side swap every `SwapSidesEvery`; `PW_RoundStart/End` order; abstract mode not in lists.
 - **T-2.4 Domination**: capture scalar moves by `rate × min(diff, 3)` and stops at ±100; contested point does not move; scoring per held point; `ValidateMapData` rejects < 2 flags; mode hidden on a map without data.
 - **T-2.5 Kill Confirmed**: tag spawns at victim; enemy pickup confirms and scores; teammate pickup denies; tag is removed after pickup.
-- **T-2.6 Playlists**: weighted sampling respects weights over many draws; host-saved JSON loads and validates like Lua playlists; invalid JSON is rejected with a message.
+- **T-2.6 Playlists**: weighted sampling respects weights over many draws; Lua-only startup resolution validates static and callable Modes/Maps/Settings with the same constraints; invalid definitions or resolver failures are rejected with a message and isolated to that playlist; playlist JSON is never read, written, migrated or deleted and existing user files remain byte-for-byte unchanged; removed JSON APIs are absent.
+  User-approved replacement on 2026-11-11: replaces only the former clauses "host-saved JSON loads and validates
+  like Lua playlists" and "invalid JSON is rejected with a message". Historical JSON implementation/tests are not
+  new-contract evidence; replace those cases with the cases above when implementing removal. Weighted sampling
+  and all other mandatory cases, including T-1.14 `pending_match.json`, remain unchanged.
+- **Scheduled playlist contract** (T-11.16; new mandatory GLuaTest cases, not yet implemented): absent predicate
+  is always active; boolean/next-boundary validation and isolated predicate error; retained entitlement cannot bypass
+  a failed predicate evaluation; stable startup resolver output;
+  UTC startup and forward/backward clock jumps without replay; updates within 60 seconds in LOBBY/VOTE including
+  unknown boundaries; zero predicate calls in PREMATCH/LIVE/POSTMATCH and fresh post-match check; concurrent active
+  entries, Custom last, known end countdown, inclusive 48-hour upcoming boundary and unknown start hidden; retained
+  selection and exactly one expired lobby start; replacement/reselection/restart cannot replenish entitlement;
+  pending start carries once with existing validity guards, rejected preflight preserves entitlement and failed
+  accepted activation does not refund it; expiry during vote prevents launch and returns to lobby; expired match
+  finishes then returns to lobby; authoritative snapshots/late join/stale rejection and privileged start/pick checks.
+  Exact calendar/composition tests are deferred until their author policy is approved, not claimed implemented.
+- **S&D automatic-map contract** (new mandatory GLuaTest cases, supplementing all T-11.12 cases): provisional
+  installed de_ eligibility agrees across Custom/playlists/votes and derived S&D only; authored Base priority and
+  present invalid data block fallback; readiness/reload and final start guard; navmesh mandatory for humans too;
+  one safe spawn per T/CT minimum, no cross-side fallback; named grouping first, unnamed AABB Euclidean gap at
+  128 inclusive, named disjoint brushes stay grouped, ambiguous/extra/unsafe stacked sites rejected,
+  deterministic A/B independent of enumeration;
+  finite bounded geometry and directed reachability, blocked/exhausted search rejection and safe bomb recovery;
+  foreign SENT ownership preserved; public site snapshots reset/reject stale data without leaking carrier/drop
+  information; direct/pending/playlist/vote failure returns usable lobby with visible reason, no retry/substitution
+  or persistent failure cache. Preserve T-2.4, T-2.7–T-2.13, pending-map, role and spectator regressions.
+- **Lambda chatter contract** (new mandatory GLuaTest cases for the approved boundary): installed content only,
+  no redistribution/download; absent addon/profile/asset built-in fallback; safe unique names across respawns;
+  idle/spotted/kill/death eligibility and once-only life identity; no hidden perception information; spatial voice
+  and common-chat recipient model; plain-text/path/template safety without semantic filtering; finite per-bot/global
+  rate and concurrency limits, bounded queues and cleanup on disconnect/match end/disable/reload. Exact source,
+  profile/template and limit/default-dependent assertions wait for the explicit open choices in
+  `docs/api/feature-contracts.md`; existing bot/name/fairness tests are not replaced.
 - **T-2.7 Map data**: entity class → team mapping for CS:S, HL2DM, TF2 spawn classes; `GetModeData` walks the `Base` chain.
 - **T-2.8 Navmesh fallback**: sampled points are on walkable areas and respect the size/water/slope filters (synthetic area data).
 - **T-2.9 Spawns**: scoring prefers far-from-enemy, penalises enemy line of sight, rewards nearby teammates only in team modes; a recently used point is penalised; hull-blocked point is never chosen.

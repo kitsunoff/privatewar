@@ -5,30 +5,34 @@ Status: `planned`
 Recorded: 2026-11-11
 
 The user-approved direction replaces shared schedules with optional playlist-local availability. This record is a
-checklist for future work, not a frozen API or authorization to implement runtime changes. Exact rotations, calendars,
-map names and content remain unapproved. Existing design and API decisions remain in force until separately changed.
+checklist for future work. The user explicitly approved the 2026-11-11 design/API revision and replacement of the
+mandatory playlist JSON tests: [contract](../../docs/api/feature-contracts.md#lua-playlists-and-availability),
+`02-modes.md` d.2–3, d.9 and TASKS.md T-2.6. No runtime implementation is claimed. Exact rotations, calendars,
+map names and content remain unapproved. No device/publication permission is implied.
 
 ## Scope and prerequisites
 
-- [ ] Obtain explicit implementation authorization and separate approval for the necessary changes to decided design
-  and frozen APIs before implementation. Reconcile `design/02-modes.md` d.2–3 and `docs/api/modes.md`, which currently
-  define data-only playlists and host-saved JSON, with the proposed Lua methods and any removal of JSON support.
-- [ ] Record the approved direction: no JSON playlists and no need for JSON backward compatibility. Existing support
+- [x] Design/API changes explicitly approved: playlist-local Lua predicates/startup resolvers, UTC, outside-match
+  evaluation, one expired selected start then lobby; no shared schedules or XP feature. Exact calendars deferred.
+- [x] Lua-only playlist storage and replacement mandatory tests approved. Remove all playlist JSON read/write and
+  conversion APIs without migration; never delete/rewrite user files. Other mandatory cases and JSON remain.
+- [ ] Implement the approved direction: no JSON playlists and no need for JSON backward compatibility. Existing support
   is real: `addons/privatewar/lua/privatewar/modules/playlists/shared.lua` implements JSON conversion and
-  `init.lua` loads and saves host JSON playlists. Removal or migration is future work subject to design/API approval;
+  `init.lua` loads and saves host JSON playlists. Removal is future work under the approved contract; no migration;
   do not claim it is already absent. The older note's JSON-retention proposal is superseded by this direction.
 - [ ] Keep the scope playlist-local: no shared schedule kind, event lifecycle or separate offer registry. XP events,
   multiplier stacking and progression effects remain separate future questions, not promised by this task. Preserve
   applicable mandatory test requirements and historical evidence in `TASKS.md`.
-- [ ] Decide calendar rules, exact dates and biweekly anchor, UTC boundary and leap-year semantics, clock jumps,
-  validation details, map-change failure recovery, and presentation/order of simultaneous and retained rotations
-  with the user; do not treat examples as approved calendars.
+- [ ] Obtain user decisions for exact calendars/content/anchors/annual leap-day policies and visual ordering.
+  UTC sampled-clock behavior, return validation and one-shot map-change recovery are technical contract rules,
+  not remaining product questions. Do not treat examples as approved calendars.
 
 ## Playlist API and data
 
-- [ ] Define the proposed optional Lua method `PLAYLIST:IsActive(nowUTC)`: host-supplied UTC timestamp in, boolean
+- [ ] Implement the approved optional Lua method `PLAYLIST:IsActive(nowUTC)`: host-supplied UTC timestamp in, boolean
   availability out, optionally followed by the next UTC change (end when active, start when inactive). No method
-  means always available; an omitted or invalid next change is unknown, never guessed. Final return validation is open.
+  means always available; an omitted or invalid next change is unknown, never guessed. Apply the API's finite,
+  strictly-future boundary validation and fail-closed nonboolean/error handling.
 - [ ] Make results deterministic for the same definition/version, UTC time and installed content, independent of
   uptime or selection; different host clocks or installed versions need not agree. Work offline without a service.
 - [ ] Isolate predicate exceptions: log and fail closed for that playlist while continuing to evaluate others.
@@ -38,8 +42,8 @@ map names and content remain unapproved. Existing design and API decisions remai
   public annotations and types. Reconcile selection, sampling, start validation and archived `pw_playlist_active`
   with the new availability and entitlement rules.
 - [ ] Support static or function-supplied playlist data for `Maps`, `Modes` and `Settings`. Resolve dynamic values
-  on the server at startup against installed content and hold them stable; the callable form and explicit reload or
-  reevaluation remain open.
+  on the server at startup against installed content and hold them stable; the callable form is fixed in the API.
+  Explicit hot-reload/reevaluation policy remains open; do not add a public reload promise implicitly.
 
 ## Timing, selection and votes
 
@@ -53,7 +57,7 @@ map names and content remain unapproved. Existing design and API decisions remai
   generally active. The entitlement lasts in the current lobby until another playlist or Custom Game is selected;
   it does not survive server restart. Preserve the ability to finish that match across a map change while starting.
 - [ ] Let a match running at expiry finish normally, then return to the lobby without continuing the expired rotation.
-  Specify map-change failure/recovery separately; do not invent the outcome.
+  Follow the API's one-shot pending-attempt failure handling; no expired automatic retry.
 - [ ] Keep votes outside running matches. Check availability within one minute during a vote and revalidate before
   launching the next match; if the playlist expires during the vote, return to the lobby without starting another match.
 
@@ -90,8 +94,9 @@ mode settings or schedule is approved. Confirm installed dependencies and feasib
 - [ ] Write GLuaTest cases first and retain all applicable mandatory `TASKS.md` cases. Cover absent predicate,
   active/end and inactive/start, unknown and invalid next change, predicate errors/logging and isolation, author-owned
   dependencies, ordinary validation, enabled content, and stable static/dynamic startup resolution.
-- [ ] Cover UTC boundaries, biweekly dates including before an anchor, annual/year-wrap and leap years, offline startup
-  without replay, repeat evaluation, clock-jump decisions once specified, and host/client authoritative agreement.
+- [ ] Cover UTC boundaries, offline startup without replay, repeat evaluation, forward/backward sampled clock jumps
+  and host/client authoritative agreement. Biweekly/annual/leap-day calendar fixtures wait for approved author policy;
+  use synthetic availability boundaries for the infrastructure tests, not invented shipped calendars.
 - [ ] Cover transition detection within one minute outside matches, including unknown next changes; assert zero
   predicate evaluations during a running match and a fresh evaluation before post-match flow or vote.
 - [ ] Cover concurrent active rotations, Custom Game last and the empty-active case, the 48-hour boundary, unknown
@@ -111,4 +116,6 @@ See the [draft and future tests](../../notes/26-scheduled-events.md); its JSON-r
 noted above, and its examples are not approved calendars. The
 [T-11.16 deliverable and status](../../TASKS.md#class-visibility-implementation-and-future-scheduling-request) are
 historical; their shared-schedule direction is superseded, but mandatory test requirements remain in `TASKS.md`.
-No runtime implementation or game-test result is claimed by this record.
+No runtime implementation or game-test result is claimed by this record. Design/contract evidence: the approved
+2026-11-11 revision and new mandatory clauses only; remaining checkboxes are future implementation/verification,
+not undecided alternatives to those contracts.

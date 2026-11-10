@@ -8,7 +8,8 @@ Per-map data: spawns, objective points, landing zones; generators from node grap
 
 ## Decisions
 
-1. **The game must work on any map.** Map-specific data is optional and improves a map; its absence never blocks play.
+1. **The game must work on any map.** Map-specific data is optional for ordinary modes. Individual objective
+   modes still require a valid layout (decisions 4, 6 and 10); this is not a promise that every mode fits every map.
 
 2. **Map data is a Lua file per map: the kind `maps/` (data only).**
 
@@ -32,7 +33,8 @@ Per-map data: spawns, objective points, landing zones; generators from node grap
    3. Fallback for maps without data: spawn points from random navmesh areas, choosing a point far from enemies (FFA-style dynamic spawn).
    - If a map has no navmesh, `nav_generate` can build one, but it is slow (minutes) and not always good. How the host is told about this is open.
 
-4. **Objective modes are hidden on maps without their data.** For example Domination is offered only on maps whose data provides flags. A generator of objective points comes after MVP; the layer model leaves room for it as a lowest-priority source.
+4. **Objective modes are hidden on maps without their data.** For example Domination is offered only on maps whose
+   data provides flags. Decision 10 is a narrow S&D exception; no other objective generator is approved.
 
 5. **Authoring tool instead of an editor:** a debug console command
 
@@ -61,7 +63,9 @@ Per-map data: spawns, objective points, landing zones; generators from node grap
    end
    ```
 
-   - With `MODE.MapData = true` the mode is offered on a map only if `MAP.Modes.<mode id>` exists and passes `ValidateMapData`: in Custom, in the vote and in playlists. TDM, FFA and Kill Confirmed do not set it: spawns exist on every map (decision 3).
+   - With `MODE.MapData = true` the mode is offered on a map only if `MAP.Modes.<mode id>` exists and passes
+     `ValidateMapData`, except provisional S&D candidates under decision 10: in Custom, votes and playlists.
+     TDM, FFA and Kill Confirmed do not set it: spawns exist on every map (decision 3).
    - The map module only stores the table; it does not know what a "Domination flag" is (same principle as the core not knowing mode rules).
    - Inheritance: a mode without its own entry uses the entry of its `Base` chain (`hardcore_dom` → `MAP.Modes.dom`).
    - A playlist with `Maps = nil` automatically uses only maps that fit its modes.
@@ -112,6 +116,23 @@ Per-map data: spawns, objective points, landing zones; generators from node grap
    - Custom has a "Show all maps" toggle: the host may pick any installed map for one match; it is not added to the list.
    - Obvious junk is never shown, even with "Show all": `background*`, `d1_*`, `d2_*`, `d3_*`, `ep1_*`, `ep2_*`.
    - Rationale: players have hundreds of maps (campaign, RP, build); an unfiltered list makes the vote and "all maps" playlists useless.
+
+10. **Automatic S&D on `de_` maps (user-approved, 2026-11-11; not yet implemented).**
+    - Installed, non-junk `de_` maps with enabled S&D (including derived modes) are provisional in Custom,
+      playlists and votes without parsing unloaded BSPs. Provisional is not validated or guaranteed playable.
+    - First existing authored mode entry along the Base chain wins. Invalid authored data blocks detection;
+      never skip it for a valid base entry or generated layout. Generated data never mutates authored registries.
+    - After entities/nav are ready, require navmesh even for humans, at least one safe T spawn and one safe CT
+      spawn, exactly two unambiguous bomb sites, a safe bomb recovery point and existing S&D activation checks.
+      T maps to side 1, CT to side 2; no generic/nav spawn supplementation may cross sides.
+    - Group targets by nonempty targetname first. For unnamed targets, use adjacent world AABBs with 128-unit
+      tolerance. Reject ambiguous groups rather than infer intent; exact bounded algorithm is in the API contract.
+      Deterministic A/B labels may differ from Counter-Strike. Approximate plant cylinders are acceptable.
+    - Validate ground, hull, world bounds, finite geometry, sight lines and mutual directed nav reachability before
+      playable rounds. Failure, including an accepted pending start, returns to usable lobby with a reason.
+      No persistent failure cache, automatic nav generation, automatic retry or unrelated-mode substitution.
+    - Detection owns only current-map generated state; clear/rebuild on map load, cleanup/reload as specified by
+      `docs/api/feature-contracts.md`. Inert brush support must not replace a foreign SENT registration.
 
 ## Interfaces
 

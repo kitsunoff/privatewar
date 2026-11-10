@@ -1,5 +1,10 @@
 # UI modules API: widget kit, HUD, lobby screen and vote screen
 
+Approved revision (2026-11-11), not implemented: [feature contracts](feature-contracts.md) supersede the affected
+legacy picker/list wire descriptions with server-authoritative S&D classification/reasons, public site data,
+playlist availability/retained selection, concurrent/upcoming cards and visible start-failure recovery. Clients
+must not evaluate predicates or disagree with server eligibility. Existing widget APIs and other UI remain unchanged.
+
 Status: added after T-1.19 (2026-11-06). Both are modules, not core: `lua/privatewar/modules/ui_kit/`
 (`shared.lua`, `cl_init.lua`) and `lua/privatewar/modules/lobby_ui/` (`shared.lua`, `init.lua`, `cl_init.lua`).
 Types: `lua/privatewar/types/ui.lua`, `lua/privatewar/types/lobby.lua`. Source decisions: `design/10-frontend.md`
