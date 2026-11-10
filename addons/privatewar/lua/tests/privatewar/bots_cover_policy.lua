@@ -32,11 +32,14 @@ return {
     groupName = "PW cover search policy",
     beforeEach = function(state)
         state.mode, state.pending = PW.ActiveMode, PW._BotTactics.pending
+        state.hurt = PW._BotTactics.hurt
         PW.ActiveMode, PW._BotTactics.pending = nil, {}
+        PW._BotTactics.hurt = {}
     end,
     afterEach = function(state)
         hook.Remove("PW_CanSearchBotCover", listener)
         PW.ActiveMode, PW._BotTactics.pending = state.mode, state.pending
+        PW._BotTactics.hurt = state.hurt
     end,
     cases = {
         {
@@ -45,6 +48,8 @@ return {
                 local bot, board = fixture()
                 local intent, goal, path, contacts = board.intent, board.goal, board.path, board.contacts
                 local enqueues, finds, traces = 0, 0, 0
+                PW._BotTactics.hurt[bot] = { at = CurTime(), attacker = NULL }
+                stub(must(PW.Equipment), "Count").with(function() return 2 end)
                 hook.Add("PW_CanSearchBotCover", listener, function(who)
                     expect(who).to.equal(bot)
                     return false
@@ -60,6 +65,9 @@ return {
                     f.reloading, f.onGround, f.crouching }).to.deepEqual({ 37, 400, 12, 460, -1, 0, 0,
                     false, true, false })
                 expect(f.profile).to.exist()
+                expect(f.lethal).to.equal(2)
+                expect(f.hurtAt).to.equal(CurTime())
+                expect(f.attacker).to.equal(NULL)
                 expect(f.at).to.equal(CurTime())
                 expect(f.pos).to.equal(Vector())
                 expect(board.intent).to.equal(intent)

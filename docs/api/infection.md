@@ -46,6 +46,13 @@ not become an approach. A dry weapon does not justify a forward melee charge. No
 snap view, enemy world-position lookup, private-board mutation or difficulty override is permitted.
 The existing infected pursuit and native input-release contracts remain mandatory.
 
+The mode answers the optional generic `PW_CanSearchBotCover(bot)` question with false **only** for an
+infected role. Survivor/unbound/missing-state answers remain nil. Generic tactics checks this policy both
+before enqueue and before execution, retaining token/reset guards and updating all non-cover facts.
+This avoids unused infected cover searches without changing pursuit, goals, paths, intent or FIFO/A*.
+It neither enables cover behaviors nor claims a measured pursuit-latency benefit. Role/behavior policy
+still permits infected only `pw_infection_pursuit`, `hunt`, `search` and `idle`.
+
 `Infection fallback death: an unproven infected attack cannot fabricate contact infection credit`
 observed RED against the retained attacker-role-only credit path. The correction preserves any-death
 conversion but credits only accepted live native contact; the case subsequently passed in the 98/0/0 gate.

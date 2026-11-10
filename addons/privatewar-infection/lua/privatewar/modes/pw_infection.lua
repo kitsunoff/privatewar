@@ -120,6 +120,10 @@ function MODE:PW_CanRunBotBehavior(ply, id)
         or id == "take_cover" or id == "reload_cover" then return false end
 end
 
+function MODE:PW_CanSearchBotCover(ply)
+    if lib.Role(ply) == "infected" then return false end
+end
+
 function MODE:PW_CanRunBotInput(ply)
     return lib.State ~= nil and lib.State.playing and lib.Role(ply) ~= nil
 end

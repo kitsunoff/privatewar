@@ -100,6 +100,14 @@ consume a newer pending request or write to a replaced board/facts generation. O
 request writes its owner's `tactics.cover`. This is not a bot teleport or an alternative damage path.
 Tests: `bots_tactics_reset.lua`; no optional addon is required for these cases.
 
+Cover search separately asks `PW_CanSearchBotCover(bot)` before enqueue and before execution. Exactly false
+opts out; absent/nil/true retains legacy behavior. This does not infer eligibility from a mode id, role,
+weapon or behavior filter. All non-cover facts continue refreshing. A denied live callback consumes only
+its matching pending token, performs no navmesh search/traces and leaves cached cover untouched; the
+existing relationship reset owns cache invalidation. Stale callbacks cannot clear newer pending work.
+The global FIFO and time-sliced A* are unchanged. Tests: `bots_cover_policy.lua`, plus existing scheduler,
+navigation and tactics-reset suites. See [role policy](role-policy.md).
+
 Types (the field lists of the rows marked "contract"; names the design does not give are in "Open in design"):
 
 ```lua
