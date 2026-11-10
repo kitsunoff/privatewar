@@ -153,10 +153,9 @@ local function changed()
 end
 
 ---@param now number?
----@param completed boolean
 ---@return boolean
-local function refresh(now, completed)
-    if not completed and not nonMatch() then return false end
+local function refresh(now)
+    if not nonMatch() then return false end
     initialize()
     local st = store()
     now = now or st.time()
@@ -176,7 +175,7 @@ local function refresh(now, completed)
     end
     for id in pairs(before) do if current[id] == nil then different = true end end
     local selection = current[st.getActive()]
-    if selection ~= nil and selection.valid then
+    if selection ~= nil and selection.valid and st.pendingAttempt == nil then
         if selection.active then
             -- Archived ids do not grant idle expired permission. Only a validated explicit selection does.
             if st.selectedId == st.getActive() then st.selectedActive = true end
@@ -190,10 +189,10 @@ local function refresh(now, completed)
     return true
 end
 
-function lib.RefreshAvailability(now) return refresh(now, false) end
+function lib.RefreshAvailability(now) return refresh(now) end
 
 function lib._Complete()
-    refresh(nil, true)
+    lib.RefreshAvailability()
     return lib._RotationAllowed(false)
 end
 
@@ -267,7 +266,7 @@ function lib.Start(id)
         if not ok then st.log("playlist " .. id .. ": setting " .. setting .. " not applied: " .. tostring(why)) end
     end
     -- Reserve before entering core: PREMATCH callbacks may fail synchronously. Never refund an accepted failure.
-    local grant, spent = st.retained, st.spent
+    local grant, spent, selectedActive, previousId = st.retained, st.spent, st.selectedActive, st.getActive()
     st.retained, st.selectedActive = false, false
     st.spent = not available.active
     st.setActive(id)
@@ -278,6 +277,8 @@ function lib.Start(id)
         -- A core preflight refusal is not activation; the core marks accepted attempts below.
         st.retained = grant
         st.spent = spent
+        st.selectedActive = selectedActive
+        st.setActive(previousId)
     end
     st.attempt, st.accepted = nil, nil
     changed()

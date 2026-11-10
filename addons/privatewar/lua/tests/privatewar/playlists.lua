@@ -471,6 +471,18 @@ local serverCases = {
 
 local netCases = {
     {
+        name = "VOTE permits authoritative list requests but rejects playlist selection and start messages",
+        func = function(state)
+            local bot = makeBot(state, "superadmin")
+            state.phase = "VOTE"
+            expect(send(state, "pw_playlist_request", bot, "")).to.beTrue()
+            expect(#sent(state)).to.equal(1)
+            expect({ send(state, "pw_playlist_pick", bot, "") }).to.deepEqual({ false, "phase" })
+            expect({ send(state, "pw_playlist_start", bot, "event") }).to.deepEqual({ false, "phase" })
+            expect(#started(state)).to.equal(0)
+        end
+    },
+    {
         name = "Start and pick require the privilege; the list request answers any player",
         func = function(state)
             addPlaylist(state, "pwt_net", { Name = "Net", Modes = { tdm = 1 }, Maps = { "gm_a" } })

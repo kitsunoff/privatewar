@@ -26,6 +26,8 @@ return {
         PW._Playlist = assert(playlists()._NewStore)({
             luaEntries = function() return { { ClassName = "event", Name = "Event",
                 Modes = { scheduled_test = 1 }, Maps = { "gm_b" }, IsActive = function()
+                    assert(match().GetPhase() == "LOBBY" or match().GetPhase() == "VOTE",
+                        "availability predicate ran inside the running-match interval")
                     state.calls = state.calls + 1 return state.utc < 1100
                 end } } end,
             facts = function() return {} end, time = function() return state.utc end,

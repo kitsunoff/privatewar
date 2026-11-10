@@ -144,6 +144,12 @@ end
 ---@param countdown? boolean
 local function transition(store, from, to, duration, countdown)
     exitPhase(store, from)
+    -- Leave the running-match interval before sampling predicates, but decide the final destination before
+    -- publishing or notifying listeners (in particular before the vote module can open a session).
+    store.phase = to --[[@as PW.PhaseName]]
+    if from == "POSTMATCH" and PW.Playlist ~= nil and not PW.Playlist._Complete() and to == "VOTE" then
+        to, duration = "LOBBY", -1
+    end
     store.endsAt = (duration ~= nil and duration >= 0) and store.clock() + duration or -1
     store.phase = to --[[@as PW.PhaseName]]
     store.countdown = countdown == true
@@ -344,9 +350,6 @@ function match._Tick()
     if store.busy then return end
     local allReady = store.phase == "PREMATCH" and PW.Phase._AllReady(store.players(), store.ready)
     local step = PW.Phase._Next(store, store.clock(), allReady, store.settings())
-    if step ~= nil and store.phase == "POSTMATCH" and PW.Playlist ~= nil and not PW.Playlist._Complete() then
-        step = { phase = "LOBBY", duration = -1 }
-    end
     if step ~= nil and step.begin and store.mode ~= nil then
         nextMatch(store, step.duration)
     elseif step ~= nil then

@@ -207,6 +207,17 @@ return {
             end
         },
         {
+            name = "Rejected core preflight preserves active selection and its later expiry entitlement",
+            func = function(state)
+                install(state, {}) state.entries = { entry(state) }
+                assert(lib().SetActive)("event")
+                PW._Playlist.start = function() return false end
+                expect(assert(lib().Start)("event")).to.beFalse()
+                state.now = 1100 assert(lib().RefreshAvailability)(state.now)
+                expect(assert(lib().GetSelection)()).to.deepEqual({ id = "event", retained = true, canStart = true })
+            end
+        },
+        {
             name = "Failed accepted activation does not refund an expired start",
             func = function(state)
                 install(state, {}) state.entries = { entry(state) }
@@ -288,6 +299,9 @@ return {
                 assert(lib().SetActive)("event")
                 state.now, state.phase = 1200, "POSTMATCH"
                 local calls = state.calls --[[@as number]]
+                assert(lib().RefreshAvailability)()
+                expect(state.calls).to.equal(calls)
+                state.phase = "LOBBY"
                 expect(lib()._Complete()).to.beFalse()
                 expect(state.calls).to.equal(calls + 1)
                 state.phase = "VOTE"
