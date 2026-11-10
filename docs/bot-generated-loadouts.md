@@ -128,3 +128,7 @@ All pure generator/rule cases and existing inherited tests passed in that first 
 
 A fresh-map 1280×720 screenshot confirmed the generated Game Setup toggle is visible, its label fits and its
 default state is on. This was an agent UI check, not the user's visual/controller checkpoint.
+
+The later [native match-start follow-up](bot-loadout-start-performance.md) found startup spikes that the earlier
+provider microbenchmark did not establish or exclude. Functional gates are green, but startup-lag acceptance remains
+blocked; do not treat the generation-slice measurements above as a match-start performance pass.
