@@ -6,8 +6,9 @@ Extended on 2026-11-07 after T-2.1, T-2.2 and T-2.3: the items of "Open in desig
 code (items 2, 3, 5, 6, 8, 9 and parts of item 1) are now in the main text. Extended again on 2026-11-07 after T-2.4,
 T-2.5, T-2.6 and T-2.13 (Domination, Kill Confirmed, playlists, the `bots` placeholder, the vote and `PW_NextMatch`):
 items 4, 7 and 14 and the event ids of item 1(a) that these tasks award are decided in code and moved to the main
-text. The code wins over any description here. Items 11, 12 and 13 and the remaining event ids of item 1(a) are still
-open. Decisions marked "lane agent" are gameplay or API details that the orchestrator recorded after the merge.
+text. Read current implementations alongside this contract; decided design takes precedence. Report actual conflicts
+instead of changing design to match code. "Open in design" contains historical planning details; inspect current
+code and the relevant subsystem contracts before treating an older task as unimplemented.
 
 Contract for the `modes` lane (T-2.1 to T-2.6, T-2.13). It sits on top of `core.md` (kind `modes`, hook dispatch,
 settings, phases and match, `PW.Call`) and `teams.md`; it does not repeat them. Where a name is not defined by a
@@ -339,8 +340,8 @@ The loop (the state machine is pure data: `MODE._NewState`, `MODE._Step`; `Think
   during the intermission and without a round time).
 - The first mode that uses it is S&D, after MVP (`02-modes.md` d.5); no MVP mode inherits it. The `MODE` interface is
   designed so that S&D does not break the API.
-- The loader checks `KIND.Required` on the file's own table before `Base` resolution (see "Core changes needed",
-  item 2): a child mode must repeat `Name` and `Teams` today.
+- The registry checks `KIND.Required` after `Base` resolution (`core.md`, "Required fields"); inherited `Name`
+  and `Teams` satisfy the kind. A child need not repeat them.
 
 ### Objective round lifecycle extension (frozen, implemented)
 
@@ -879,11 +880,9 @@ is in "Domination" (`TASKS.md` T-2.4: `rate × min(diff, 3)`, the limit `±100`;
    Enable ConVars follow from `Global`: `pw_playlist_<id>_enabled`, `pw_event_<id>_enabled`
    (`01-extensibility.md` d.11; `core.md` "Enable ConVars"). Done: both files exist; `playlists.lua` requires
    `Name` and `Modes` ("Playlists").
-2. **`KIND.Required` is checked before `Base` resolution** (`sh_loader.lua`, `loadEntity`, `core.md` "Entity
-   files"). A mode that inherits `Name` or `Teams` from its base is rejected by the loader, although
-   `00-core.md` d.4 says a round mode "only sets parameters". Either the loader checks after `Base`
-   resolution, or every child repeats the required fields. Decided: `KIND.Required` will be validated after `Base`
-   resolution (wave 0).
+2. **Required-field validation: implemented.** `KIND.Required` is checked by the registry after `Base` resolution,
+   including late registrations. Inherited fields count. See `core.md`, "Required fields"; no loader change or
+   repeated required fields are needed for a new child mode.
 3. ~~A team swap function~~ Done: `PW.Teams.Swap` (`teams.md`).
 4. ~~**VOTE hand-over.**~~ Done (T-2.13): the core asks the question hook `PW_NextMatch(mode)` at the end of `VOTE` and
    starts the answer through its usual path, including a map change; `PW.Match.EndVote()` ends `VOTE` early. See

@@ -3,9 +3,10 @@
 Status: frozen on 2026-11-07, changes only through the orchestrator.
 
 Extended on 2026-11-07 after T-3.1 to T-3.5: the items of "Open in design" that the lane agents decided in code
-(items 1, 2, 3, 5, 6, 7 and 8) are now in the main text; the code wins over any description here. Items 9 to 11 are
-still open, as are T-3.6 to T-3.8 (the integrations). Values marked "lane agent" are gameplay or API details the
-orchestrator recorded after the merge.
+(items 1, 2, 3, 5, 6, 7 and 8) are now in the main text. Read current implementations alongside this contract;
+decided design takes precedence and actual conflicts must be reported. ARC9 (T-3.6) is implemented in
+`addons/privatewar-arc9/`; TFA/MW Base (T-3.7/T-3.8) remain future integrations, not supported by assertion.
+Values marked "lane agent" record implementation details; they are not authorization to change gameplay.
 
 Contract for the `weapons` lane (T-3.1 to T-3.8). It sits on top of `core.md` (kind `weapons`, weapon registration
 phase, registry, `soft` registration) and does not repeat it. Sources: `design/04-weapons.md` d.1 to d.6 (cited as
@@ -45,8 +46,7 @@ function ADAPTER:Claims(class) ... end
 - Methods are written as `ADAPTER:Method(...)`; `Priority` is a field (`04 d.1`).
 - No `apiVersion` field and no `id` field: an adapter guards itself with `PW.API` (`04 d.1`;
   `01-extensibility.md` d.14); the id is the file name.
-- The guard in `04` "Registration" reads `if not COD or PW.API ~= 1 then return end`. `COD` is a leftover of the
-  research naming (`notes/08` §5 uses `COD.*`); the global of the gamemode is `PW`. The example above uses `PW`.
+- The namespace and compatibility guard are `PW` and `PW.API`; historical research using `COD.*` is not an API.
 - Adapters are not auto-subscribed: their methods are not `PW_*` hooks. `KIND.Subscribe` stays omitted (`"never"`).
 - Enable ConVar `pw_adapter_<id>_enabled` follows from `Global = "ADAPTER"` (`01-extensibility.md` d.11).
 - The core skips adapters whose `IsAvailable()` returns `false` and logs a single clear line per adapter at startup.
@@ -242,15 +242,16 @@ integration module still registers its own curation with `soft` registrations.
 | Method | Realm | Default | Contract |
 | --- | --- | --- | --- |
 | `ADAPTER:GetSlots(class, build)` | shared | none: no gunsmith | `PW.Slot[]`; `build` may be `nil`; nested slots depend on the build (ARC9) |
-| `ADAPTER:GetOptions(class, slot)` | shared | none | `PW.Option[]` for a slot |
+| `ADAPTER:GetOptions(class, slotId)` | shared | none | `PW.Option[]` for an opaque string slot id, not a `PW.Slot` record |
+| `ADAPTER:IsSelectionCosmetic(class, slotId, optionId)` | shared | `nil` | Optional cheap selected-option check. `true`/`false` must agree with full live discovery; `nil` preserves the generic discovery path. ARC9 implements it without constructing full copied lists |
 | `ADAPTER:Validate(class, build)` | server | identity | `clean: PW.Build, rejected: table<PW.SlotId, string>` (reason codes). A cheap static check: the slot exists, the option belongs to the slot. Runs when a class is saved, not at every spawn (`05-loadout.md` d.15) |
 | `ADAPTER:Apply(wep, build)` | server | none | `PW.Build`: what actually stuck. Applies, syncs to clients, blocks client presets. Runs at spawn after `Give` (`05-loadout.md` d.15) |
 | `ADAPTER:SetCustomizationLocked(locked)` | server | no-op, logged once | Idempotent. `04 d.2`: applied with `true` for the whole session by every adapter |
 
 - The gamemode owns attachments; there is no in-match customization and no "free customization" toggle. Native
   customization menus of ARC9, TFA and MW Base are always blocked (`04 d.2`).
-- `Validate` and `Apply` move to the live weapon because every base validates against instance state
-  (`notes/08` §5, item 3).
+- `Validate` is the cheap static save-time check. `Apply` resolves constraints that require a live weapon and
+  returns only what stuck (`05-loadout.md` d.15); the two signatures are deliberately different.
 - Attachments are not registry entities; they stay adapter data (`06-progression.md` d.2).
 - Mandatory cases (T-3.6 to T-3.8): `Apply` on a bot's weapon returns the applied build; a conflicting build returns
   what stuck; the lock is active (the base's own customization path refuses).
@@ -636,7 +637,8 @@ Module `weapons_catalog`, namespace `PW.WeaponsCatalog` (lane agent decisions; t
 ```text
 privatewar-arc9/lua/privatewar/
   modules/arc9/shared.lua          MODULE: base ConVars (arc9_atts_nocustomize 1), bot shims, weapon registration
-  weapon_adapters/arc9.lua         ADAPTER: Claims, Apply, GetFireInfo, ...
+  weapon_adapters/arc9/shared.lua  ADAPTER: discovery, stats, input rules, stat modifiers
+  weapon_adapters/arc9/init.lua    ADAPTER: server Apply, Validate, lock, ammo, bot preparation
 ```
 
 The module owns everything base-specific; the adapter stays a separate entity because loadout, bots and HUD look up
@@ -686,10 +688,8 @@ The design wins (`04 d.1`):
    `Global = "ADAPTER"`, `Subscribe = "never"`, `Required = { IsAvailable = "function", Claims = "function",
    ListWeapons = "function" }`, validated after `Base` resolution. The core lane's directory; the orchestrator added
    the file for T-3.1.
-2. **`KIND.Required` is checked before `Base` resolution** (`sh_loader.lua`, `loadEntity`; see `modes.md`, "Core
-   changes needed", item 2). If an adapter requires `function` fields (`IsAvailable`, `Claims`, `ListWeapons`), an
-   adapter that inherits them through `Base` is rejected. Decided: `KIND.Required` will be validated after `Base`
-   resolution (wave 0).
+2. **Required-field validation: implemented.** The registry validates after `Base` resolution, including late
+   registrations. Inherited required methods count; see `core.md`, "Required fields".
 3. **Extension of `PW.Weapon`** with `Attachments`, `Camos`, `Cost`, `Price` is a non-breaking addition
    (`01-extensibility.md` d.14); the type file `lua/privatewar/types/weapons.lua` is core-owned and gets the fields.
 4. No other core change: the registration phase, `soft` and `PW_PreRegister` exist (`core.md`).

@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: safety
+expected_outcome: |
+  Rejects false build reporting, shared mutable state, unenforced native lock, unsupported prediction claims and input bypass.
+  Gives real APIs and mounted two-bot/conflict/lock/reload checks; no source copying or core base branching.

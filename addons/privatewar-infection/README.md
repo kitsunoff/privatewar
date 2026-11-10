@@ -50,4 +50,6 @@ Historical death-conversion/two-hit results are not used as acceptance evidence 
 Previously installed lifecycle and native-fists checks covered both roles and rollback. The POSTMATCH screen
 uses authoritative personal round wins, shared placements and a `ROUND WINS` score column, including
 departed participants and late delivery. Human/P2P and HUD visual checkpoints are not passed by automated
-tests or agent image inspection. Removal between game startups needs a separately authorized restart.
+tests or agent image inspection. Removal between game startups needs an authorized restart; explicit standing
+user authorization is sufficient within its scope, but does not establish Deck availability or authorize other
+device work. Confirm the Deck is free and use the locked scripts; avoid unnecessary restarts.
