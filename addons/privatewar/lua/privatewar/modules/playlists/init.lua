@@ -142,6 +142,7 @@ function lib.Get(id)
 end
 
 local function nonMatch()
+    if store().restoring then return false end
     local phase = store().phase()
     return phase == "LOBBY" or phase == "VOTE"
 end
@@ -228,6 +229,7 @@ function lib.SetActive(id)
         end
     end
     if id ~= st.getActive() or st.selectedId ~= id then
+        st.selectionVersion = (st.selectionVersion or 0) + 1
         st.retained = false
         st.spent = false
         st.selectedId = id
@@ -246,7 +248,10 @@ function lib.Pick(id)
     return lib.Sample(entry, { rng = st.rng, maps = st.pool(), fits = st.fits })
 end
 
-function lib.Start(id)
+---@param id string
+---@param fixed? PW.PlaylistPick
+---@return boolean, string?
+local function start(id, fixed)
     local st = store()
     if st.attempt ~= nil then return false, "playlist start already in progress" end
     if PW.NavGen ~= nil and PW.NavGen.IsGenerating() then return false, "navmesh generation running" end
@@ -260,8 +265,12 @@ function lib.Start(id)
     if available == nil or not available.valid or not (available.active or retained) then
         return false, "playlist is inactive"
     end
-    local pick, reason = lib.Pick(id)
+    local pick, reason = fixed, nil
+    if pick == nil then pick, reason = lib.Pick(id) end
     if pick == nil then return false, reason end
+    if fixed ~= nil and (entry.Modes[pick.mode] == nil or not st.fits(pick.mode, pick.map)) then
+        return false, "Chosen playlist mode or map is no longer available"
+    end
     for setting, value in pairs(entry.Settings) do
         local ok, why = st.setSetting(setting, value)
         if not ok then st.log("playlist " .. id .. ": setting " .. setting .. " not applied: " .. tostring(why)) end
@@ -271,10 +280,11 @@ function lib.Start(id)
     st.retained, st.selectedActive = false, false
     st.spent = not available.active
     st.setActive(id)
-    local attempt = { id = id, mode = pick.mode, map = pick.map } --[[@as PW.PlaylistAttempt]]
+    local attempt = { id = id, mode = pick.mode, map = pick.map, previousId = previousId }
+        --[[@as PW.PlaylistAttempt]]
     st.attempt = attempt
     local ok = st.start(pick.mode, pick.map)
-    if not ok and st.phase() == "LOBBY" and (PW.MapChange == nil or not PW.MapChange.IsChanging())
+    if (not ok or attempt.waiting) and st.phase() == "LOBBY" and (PW.MapChange == nil or not PW.MapChange.IsChanging())
         and not attempt.accepted then
         -- A core preflight refusal is not activation; the core marks accepted attempts below.
         st.retained = grant
@@ -284,11 +294,28 @@ function lib.Start(id)
     end
     st.attempt = nil
     changed()
-    return ok, not ok and "playlist start refused" or nil
+    return ok, not ok and (PW.Match ~= nil and PW.Match.GetAbortReason() or "playlist start refused") or nil
+end
+
+function lib.Start(id) return start(id) end
+
+function lib._QueueStart(mode, map)
+    local st = store()
+    local attempt = st.attempt
+    if attempt == nil or attempt.mode ~= mode or attempt.map ~= map then return nil end
+    attempt.waiting = true
+    local version = st.selectionVersion
+    return function()
+        if store() ~= st or st.selectionVersion ~= version or st.getActive() ~= attempt.previousId then
+            return false, "Playlist selection changed while waiting; start cancelled"
+        end
+        return start(attempt.id, { mode = attempt.mode, map = attempt.map })
+    end
 end
 
 function lib._AcceptStart(mode, map)
     local st = store()
+    st.restoring = nil
     local attempt = st.attempt
     if attempt == nil and st.phase() == "VOTE" and lib.GetActive() ~= "" then
         attempt = { id = lib.GetActive(), mode = mode, map = map }
@@ -303,12 +330,16 @@ function lib._PendingStart(mode, map)
     if attempt ~= nil and attempt.mode == mode and attempt.map == map then return attempt.id end
 end
 
-function lib._RestoreStart(id)
-    if not isstring(id) or #id > 64 or lib.Get(id) == nil then return false end
+function lib._RestoreStart(id, mode, map)
+    if not isstring(id) or #id > 64 then return false end
+    local entry = lib.Get(id)
+    if entry == nil or (mode ~= nil and entry.Modes[mode] == nil) then return false end
+    if map ~= nil and entry.Maps ~= nil and not table.HasValue(entry.Maps, map) then return false end
     local st = store()
     st.setActive(id)
     st.selectedId, st.selectedActive, st.retained = nil, false, false
     st.pendingAttempt = nil
+    st.restoring = true
     return true
 end
 
@@ -411,6 +442,7 @@ function module:PW_PhaseChange(phase)
     end
 end
 function lib._StartFailed(reason)
+    store().restoring = nil
     if lib.GetActive() == "" then return end
     local st = store()
     st.selectedActive, st.retained, st.pendingAttempt, st.spent = false, false, nil, true

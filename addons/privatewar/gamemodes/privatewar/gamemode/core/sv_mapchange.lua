@@ -296,13 +296,24 @@ function lib._Apply()
     local fromFile = PW.Settings._FromFile
     if fromFile ~= nil then fromFile(valid.settings) end
     local match = PW.Match
-    if valid.playlist ~= nil and (PW.Playlist == nil or not PW.Playlist._RestoreStart(valid.playlist)) then
+    if valid.playlist ~= nil
+        and (PW.Playlist == nil or not PW.Playlist._RestoreStart(valid.playlist, valid.mode, valid.map)) then
         store.log("pending match rejected: invalid playlist continuation")
         if match ~= nil then match.Abort("pending playlist continuation is invalid") end
         return false, "start"
     end
-    if match == nil or not match.Start(mode) then return false, "start" end
-    PW.Notify("PW_PendingMatchApplied", valid)
+    if match == nil then return false, "start" end
+    if not match.Start(mode) then
+        match.Abort(match.GetAbortReason() or "Pending match could not start")
+        return false, "start"
+    end
+    local waiting = PW._Match.startWait
+    if waiting ~= nil then
+        waiting.accepted = true
+        waiting.applied = function() PW.Notify("PW_PendingMatchApplied", valid) end
+    else
+        PW.Notify("PW_PendingMatchApplied", valid)
+    end
     return true
 end
 

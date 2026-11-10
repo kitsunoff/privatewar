@@ -174,6 +174,11 @@ function lib.Open()
     })
     if #options == 0 then
         st.session = nil
+        local mode = current ~= nil and st.resolveMode(current.mode) or nil
+        if mode ~= nil and mode.MapReadiness == true then
+            assert(PW.Match)._RefuseStart("S&D vote has no compatible maps; choose another map")
+            return nil
+        end
         st.log("vote: nothing to offer, the same mode repeats")
         return nil
     end
@@ -219,6 +224,10 @@ function lib._Pick(ply, modeId, map)
     if not isstring(modeId) or not isstring(map) or st.resolveMode(modeId) == nil or not st.fits(modeId, map) then
         st.log(string.format("vote pick from %s refused: %s on %s does not fit", nick(ply), tostring(modeId),
             tostring(map)))
+        local mode = isstring(modeId) and st.resolveMode(modeId) or nil
+        if mode ~= nil and mode.MapReadiness == true then
+            assert(PW.Match)._RefuseStart("S&D vote selection is not compatible with this map")
+        end
         return false, "fits"
     end
     session.picked = { mode = modeId, map = map }
@@ -249,7 +258,7 @@ function lib.Result()
     local result = decide(st, session)
     local mode = st.resolveMode(result.mode)
     if mode == nil then
-        st.log(string.format("vote result %s is no longer a mode, the same mode repeats", result.mode))
+        assert(PW.Match)._RefuseStart("Voted mode is no longer available; choose another match")
         return nil
     end
     return { mode = mode, map = result.map }

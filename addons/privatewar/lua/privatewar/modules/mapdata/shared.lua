@@ -260,10 +260,37 @@ end
 ---@return table?
 function lib.GetModeData(modeId)
     local entry = lib.Get()
-    if entry == nil then return nil end
     local modes = rawget(PW, "Modes") --[[@as PW.Registry?]]
     local mode = modes ~= nil and modes.Get(modeId) or nil
-    return lib._FindModeData(entry.Modes, lib._ModeChain(mode, modeId))
+    local readiness = lib._ReadModeReadiness(modeId)
+    local data = lib._ResolveModeData(entry ~= nil and entry.Modes or nil,
+        readiness.state == "ready" and PW._Map.generated or nil, lib._ModeChain(mode, modeId))
+    return istable(data) and data or nil
+end
+
+---@param authored any
+---@param generated table<string, table>?
+---@param chain string[]
+---@return any, boolean
+function lib._ResolveModeData(authored, generated, chain)
+    if istable(authored) then
+        for _, id in ipairs(chain) do
+            local value = (authored --[[@as table<string, any>]])[id]
+            if value ~= nil then return value, true end
+        end
+    end
+    return lib._FindModeData(generated, chain), false
+end
+
+---@param modeId string
+---@param data table?
+function lib.SetGeneratedModeData(modeId, data)
+    assert(SERVER, "generated map data is server-owned")
+    lib._DropGeneratedReadiness(modeId)
+    PW._Map.generated = PW._Map.generated or {}
+    PW._Map.generated[modeId] = data
+    lib.SetModeReadiness(modeId, data ~= nil and "ready" or "pending", nil,
+        data ~= nil and "generated" or nil)
 end
 
 ---One log line per map and mode for map data a mode rejects (03-mapdata.md d.6).
@@ -284,18 +311,43 @@ end
 ---@param mode table
 ---@param mapName string
 ---@return boolean
+function lib._ProvisionalMode(mode, mapName)
+    if string.sub(string.lower(mapName), 1, 3) ~= "de_" then return false end
+    local chain = lib._ModeChain(mode, tostring(mode.ClassName))
+    return table.HasValue(chain, "snd") and isfunction(mode.MapCandidate)
+        and PW.Call(mode, "MapCandidate", mapName) == true
+end
+
+---@param mode table
+---@param mapName string
+---@return boolean
+---@return string?
 ---@return string?
 function lib.ModeFits(mode, mapName)
     if mode.MapData ~= true then return true end
     local modeId = tostring(mode.ClassName)
     local entry = lib.Get(mapName)
-    if entry == nil then return false, "no map data" end
-    local data = lib._FindModeData(entry.Modes, lib._ModeChain(mode, modeId))
-    if data == nil then return false, "no data for " .. modeId end
-    if not isfunction(mode.ValidateMapData) then return true end
+    local data, authored = lib._ResolveModeData(entry ~= nil and entry.Modes or nil, nil,
+        lib._ModeChain(mode, modeId))
+    local readiness = mapName == game.GetMap() and mode.MapReadiness == true
+        and lib._ReadModeReadiness(modeId) or nil
+    if data == nil and not authored then
+        if readiness ~= nil and readiness.state == "rejected" then return false, readiness.reason end
+        if lib._ProvisionalMode(mode, mapName) then
+            local generated = readiness ~= nil and readiness.state == "ready" and readiness.source == "generated"
+            return true, nil, generated and "generated" or "provisional"
+        end
+        return false, entry == nil and "no map data" or ("no data for " .. modeId)
+    end
+    if not istable(data) then return false, "Authored map data is invalid" end
+    if readiness ~= nil and readiness.state == "rejected" then return false, readiness.reason end
+    if not isfunction(mode.ValidateMapData) then return true, nil, "authored" end
     local ok, reason = PW.Call(mode, "ValidateMapData", data)
-    if ok == true then return true end
+    if ok == true then return true, nil, "authored" end
     reason = isstring(reason) and reason or "ValidateMapData failed"
     reportInvalid(mapName, modeId, reason)
     return false, reason
 end
+
+if SERVER then AddCSLuaFile("privatewar/modules/mapdata/sh_readiness.lua") end
+include("privatewar/modules/mapdata/sh_readiness.lua")

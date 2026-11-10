@@ -1,6 +1,6 @@
 # Approved feature contracts: S&D detection, scheduled playlists and bot chatter
 
-Status: approved design/API revision, 2026-11-11; **not implemented or game-verified**.
+Status: approved design/API revision, 2026-11-11; **game/native verification pending**.
 Explicit user approval covers these design changes and the playlist JSON mandatory-test replacement only.
 This file supersedes conflicting legacy descriptions in `map.md`, `modes.md`, `ui.md` and `core.md` for these
 features. Unmentioned APIs, gameplay, validation, privilege and mandatory tests are unchanged.
@@ -239,6 +239,37 @@ for this minimal integration. Native mounting/playback, independent selection an
 implementation verification; read-only code inspection is not proof of conformance. Announcer/music remains draft.
 
 ## Verification boundary
+
+### Integration implementation candidate (2026-11-11)
+
+The integration branch connects these contracts without changing their approved design. Runtime/game verification
+is still pending; the following describes the implementation, not a native or human acceptance claim.
+
+- `PW.Match.Start` and vote continuation share a pre-PREMATCH readiness gate for `MapReadiness` modes (currently
+  S&D and its descendants). Remote targets use `ModeFits` eligibility, never the loaded map's geometry. On the
+  loaded map wait for `IsNavReady()`, call `PW.SND.PrepareMap(modeId)`, then require `GetModeReadiness` to be ready.
+  No settings snapshot, playable phase or active next mode is published before this gate passes.
+- A pending readiness request stays in its original LOBBY/VOTE phase, with one fixed mode/map and no timer-driven
+  repeat or new vote resolution. A second start is refused. Think checks readiness; 120 monotonic seconds is an
+  initial technical timeout, not a new calendar/product rule. Abort, changed map/mode or a preparation error ends
+  that request. Rejected geometry is not retried by the request; a later explicit request may prepare it again.
+- Queued playlist starts restore their preflight reservation immediately and resume the original sampled pair,
+  rechecking availability and selection identity/version before reserving again. Replacement cancels the queued
+  launch. Rejected preflight preserves an existing lobby grant; accepted activation failures never refund it.
+  A waiting VOTE rechecks availability at launch and cannot use that lobby grant.
+- A validated pending file is deleted once before waiting, as before. Its original version/map/count/age guards
+  remain unchanged. Pending team application is notified only after successful PREMATCH entry. An accepted pending
+  playlist continuation suppresses availability predicates throughout its wait, including startup polling in
+  LOBBY; rejection clears the continuation without granting expired permission.
+- Failures retain a bounded player-safe `GetAbortReason()` and publish the notification
+  `PW_MatchStartRefused(reason)` (no return value). Lobby sends `pw_lobby_error`: one server-owned UTF-8 string,
+  at most 256 bytes, no control characters. Clients reject oversized/malformed payloads and display a notification
+  and chat reason. Normal lobby requests replay the last failure for late joins; existing request privilege,
+  phase, rate and length validation remains in force. No new client-to-server message or path is introduced.
+- `snd_start_integration.lua` adds behavior-first cases for direct/pending/vote entry, asynchronous readiness,
+  bounded visible errors, exact queued targets, expiry/selection changes, one-shot pending application and
+  terminal failure. GLuaTest RED/GREEN has not been observed; engine timing, native spawns, UI/controller, P2P,
+  installed maps and Deck performance still require authorized game verification.
 
 TASKS.md defines mandatory additions and the narrow T-2.6 replacement. Existing T-11.12, other objective-mode,
 spawn, navgen, pending-map JSON, privilege/network, bot fairness/name and UI cases are retained unchanged.

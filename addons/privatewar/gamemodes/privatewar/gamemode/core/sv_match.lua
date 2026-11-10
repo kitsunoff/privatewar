@@ -95,6 +95,14 @@ local function defer(request)
     return true
 end
 
+---@return boolean
+function match._RefusePhase()
+    return defer(function(store)
+        if store.phase ~= "VOTE" then return false end
+        return match._SetPhase("LOBBY")
+    end)
+end
+
 ---Leaving LIVE: MODE:Cleanup, then PW_MatchEnd, each only when its counterpart ran.
 ---@param store PW.MatchStore
 ---@param from string
@@ -225,6 +233,7 @@ end
 ---@param map? string
 ---@return boolean
 local function beginMatch(store, mode, duration, map)
+    if store.startWait ~= nil then return false end
     if store.phase == "VOTE" and PW.Playlist ~= nil and not PW.Playlist._RotationAllowed(true) then
         return match.Abort("playlist expired; rotation cancelled")
     end
@@ -235,6 +244,11 @@ local function beginMatch(store, mode, duration, map)
         if store.phase ~= "LOBBY" then match.Abort(reason) end
         return false
     end
+    if PW.MapChange ~= nil and PW.MapChange.IsChanging() then return false end
+    local readiness = match._StartPreflight(resolved, map, function()
+        return beginMatch(store, resolved, duration, map)
+    end)
+    if readiness ~= "ready" then return readiness == "pending" end
     local changer = PW.MapChange
     if changer ~= nil then
         local step = changer._Decide(PW._MapChange.map(), map, changer.IsChanging())
@@ -259,7 +273,7 @@ end
 ---@return boolean
 function match.Start(mode, map)
     local store = PW._Match
-    if store.phase ~= "LOBBY" or store.busy then
+    if store.phase ~= "LOBBY" or store.busy or store.startWait ~= nil then
         store.log(string.format("match start ignored: phase is %s", store.phase))
         return false
     end
@@ -282,6 +296,7 @@ end
 ---@return boolean
 local function nextMatch(store, duration)
     local answer = PW.Ask("PW_NextMatch", store.mode)
+    if store.phase ~= "VOTE" then return false end
     if istable(answer) and istable(answer.mode) and isstring(answer.mode.ClassName)
         and (answer.map == nil or isstring(answer.map)) then
         return beginMatch(store, answer.mode, duration, answer.map)
@@ -293,6 +308,7 @@ end
 ---@return boolean
 function match.EndVote()
     return defer(function(store)
+        if store.startWait ~= nil then return false end
         if store.phase ~= "VOTE" or store.mode == nil or store.endsAt < 0 then return false end
         return nextMatch(store, store.settings().prematch)
     end)
@@ -311,8 +327,11 @@ end
 ---@return boolean
 function match.Abort(reason)
     local store = PW._Match
+    store.startWait, store.startReady = nil, nil
     store.abortReason = tostring(reason)
     store.log("match aborted: " .. store.abortReason)
+    PW.Notify("PW_MatchStartRefused", match._StartReason(reason))
+    if PW.MapChange ~= nil then PW.MapChange._Cancel("the start was aborted") end
     if PW.Playlist ~= nil then PW.Playlist._StartFailed(store.abortReason) end
     return defer(function(current)
         if current.phase == "LOBBY" then return false end
@@ -348,6 +367,7 @@ end
 function match._Tick()
     local store = PW._Match
     if store.busy then return end
+    if match._TickStart() then return end
     local allReady = store.phase == "PREMATCH" and PW.Phase._AllReady(store.players(), store.ready)
     local step = PW.Phase._Next(store, store.clock(), allReady, store.settings())
     if step ~= nil and step.begin and store.mode ~= nil then
@@ -388,3 +408,5 @@ end)
 -- NW2 values set before InitPostEntity may not reach clients (notes/10 R4): a phase set earlier (the initial LOBBY,
 -- or a transition made while the map loads) is counted in seq and published here.
 hook.Add("InitPostEntity", "PW.Match", function() match._Publish() end)
+
+include("sv_start_preflight.lua")

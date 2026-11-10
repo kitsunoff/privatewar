@@ -35,6 +35,8 @@
 
 ---@class PW.PlaylistAttempt
 ---@field accepted? boolean acceptance belongs to this request, surviving synchronous phase cleanup
+---@field waiting? boolean core queued readiness without accepting a playable start
+---@field previousId? string selection to restore on rejected or waiting preflight
 ---@field id string
 ---@field mode string
 ---@field map string
@@ -125,6 +127,8 @@
 ---@field spent boolean one expired attempt per selection/lobby, including backward clock samples
 ---@field attempt? PW.PlaylistAttempt
 ---@field pendingAttempt? PW.PlaylistAttempt
+---@field selectionVersion? integer changes only on replacement, not availability polling
+---@field restoring? boolean accepted pending start must not evaluate availability while waiting
 ---@field bootReady boolean
 ---@field startupResolved? boolean
 ---@field publishedAt? number
@@ -165,8 +169,9 @@
 ---@field _Poll fun()
 ---@field _RotationAllowed fun(refresh: boolean): boolean
 ---@field _AcceptStart fun(mode: string, map: string)
+---@field _QueueStart fun(mode: string, map: string?): PW.StartContinuation? original sampled target continuation
 ---@field _PendingStart fun(mode: string, map: string): string?
----@field _RestoreStart fun(id: string): boolean
+---@field _RestoreStart fun(id: string, mode?: string, map?: string): boolean
 ---@field _Complete fun(): boolean
 ---@field _BootReady fun()
 ---@field _ResolveStartup fun()

@@ -92,6 +92,9 @@
 
 ---Internal (server): state of the mapdata module. Survives pw_reload; a map change starts a new Lua state.
 ---@class PW.MapStore
+---@field readiness? table<string, PW.MapModeReadiness>
+---@field entitiesReady? boolean InitPostEntity has completed in this Lua state
+---@field generated? table<string, table> ephemeral current-map lower-priority mode data
 ---@field detected? PW.MapSpawns the cached auto-detected spawns of the current map
 ---@field reason? string what filled the cache: "InitPostEntity" or "on demand"
 ---@field nav? PW.MapNav the navmesh cache, nil until the navmesh was read (first Think after InitPostEntity)
@@ -102,6 +105,18 @@
 
 ---The map module (03-mapdata.md d.2, d.3, d.6). Shared, except the spawn functions (server).
 ---@class PW.MapLib
+---@field _ModeDataSource fun(modeId: string): string, boolean effective authored id or generated S&D source
+---@field _ReadinessKey fun(field: "state"|"reason"|"source", id: string): string collision-free metadata key
+---@field _ClearReadinessKeys fun(id: string) server: clear all metadata fields without aliasing mode ids
+---@field _ReadModeReadiness fun(modeId: string): PW.MapModeReadiness shared authoritative current-map metadata
+---@field _ProvisionalMode fun(mode: table, mapName: string): boolean approved S&D Base-chain exception only
+---@field _DropGeneratedReadiness fun(sourceId: string) server: invalidate shared generated-source certifications
+---@field SetModeReadiness fun(id: string, state: PW.MapReadinessState, reason?: string, source?: string)
+---@field GetModeReadiness fun(modeId: string): PW.MapReadinessState, string? server only
+---@field _ResetGenerated fun(reason: string) server: invalidate geometry, nav handles and active consumers
+---@field _ResolveModeData fun(a: any, g: table<string, table>?, c: string[]): any, boolean
+---@field SetGeneratedModeData fun(modeId: string, data: table?) server: set or clear ephemeral current-map data
+---@field IsNavReady fun(): boolean server: nav load has completed, including an empty result
 ---Team index of spawn points that belong to no team (FFA and deathmatch spawns): 0.
 ---@field AnyTeam integer
 ---Pure: the map data file id of a map name: lowercase, every character outside [a-z0-9_] replaced by "_"
@@ -119,7 +134,7 @@
 ---ValidateMapData (optional) must return true. On false the reason; data the mode rejects is logged once per map and
 ---mode. Does not check that the map is installed or that the mode is enabled. Shared; works for any map with a data
 ---file, not only the current one.
----@field ModeFits fun(mode: table, mapName: string): boolean, string?
+---@field ModeFits fun(mode: table, mapName: string): boolean, string?, string?
 ---Server: spawn points of the current map by team index. Layers (03-mapdata.md d.3): the map file's Spawns when it
 ---has at least one valid point; otherwise the auto-detected spawn entities, and when those have fewer than
 ---_NavRules.minSpawns points in total the navmesh samples are added to the any-team (0) points (team points are

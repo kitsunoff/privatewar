@@ -328,8 +328,20 @@ net.Receive("pw_lobby_state", function()
     notify()
 end)
 
+local lastError = ""
+net.Receive("pw_lobby_error", function(length)
+    if not IsValid(module) or length < 8 or length > 257 * 8 then return end
+    local reason = net.ReadString()
+    if #reason == 0 or #reason > 256 or reason:find("%c") or not utf8.len(reason) then return end
+    if reason == lastError then return end
+    lastError = reason
+    notification.AddLegacy(reason, NOTIFY_ERROR, 8)
+    chat.AddText(Color(255, 160, 100), "[PW] " .. reason)
+end)
+
 ---@param phase PW.PhaseName
 function module:PW_PhaseChanged(phase)
+    if phase == "PREMATCH" then lastError = "" end
     if lib._ShouldShow(phase, IsValid(module), kitValid()) then lib.Open() else lib.Close() end
 end
 

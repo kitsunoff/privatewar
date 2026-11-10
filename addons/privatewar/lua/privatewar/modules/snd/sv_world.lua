@@ -41,6 +41,23 @@ local function reachable(from, to)
     return false
 end
 
+---@param pos Vector
+---@return boolean
+function lib._AutoSafe(pos)
+    if not grounded(pos) or areaAt(pos) == nil then return false end
+    local hull = util.TraceHull({ start = pos + Vector(0, 0, 2), endpos = pos + Vector(0, 0, 2),
+        mins = mins, maxs = maxs, filter = player.GetAll(), mask = MASK_PLAYERSOLID })
+    return not hull.StartSolid and not hull.AllSolid
+end
+
+---@param from Vector
+---@param to Vector
+---@return boolean
+function lib._AutoMutual(from, to)
+    local a, b = areaAt(from), areaAt(to)
+    return a ~= nil and b ~= nil and reachable(a, b) and reachable(b, a)
+end
+
 function lib.Activate(map)
     local origin = assert(areaAt(map.bomb), "S&D bomb point is off the navmesh")
     local points = { map.bomb }

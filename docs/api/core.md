@@ -2,10 +2,20 @@
 
 Status: **frozen** on 2026-11-06. Changes go only through the orchestrator. Type definitions: `lua/privatewar/types/core.lua`.
 
-Approved revision (2026-11-11), not implemented: [feature contracts](feature-contracts.md) require readiness before
+Approved revision (2026-11-11), integration candidate with game verification pending:
+[feature contracts](feature-contracts.md) require readiness before
 playable S&D starts, visible abort-to-lobby on activation failure, and playlist expiry/one-shot pending-start
 handling. These override affected automatic vote/repeat paths below, not the ordinary phase machine. Existing
 pending-match map/count/age/version guards and JSON persistence remain; only playlist JSON storage is removed.
+
+The candidate readiness gate is before PREMATCH. `Start` may return true with one request waiting in LOBBY
+instead of entering a playable phase; vote continuation similarly waits in VOTE. The queued request holds a
+fixed mode/map, rejects duplicate starts, times out after 120 monotonic seconds and cancels on abort or changed
+map/mode. No entitlement is spent on readiness refusal. An accepted pending-file continuation is distinct:
+it cannot regain an expired grant, and `PW_PendingMatchApplied` waits until actual PREMATCH entry. Failure
+notification `PW_MatchStartRefused(reason: string)` returns nothing; the lobby replays its bounded safe reason
+to late joiners through `pw_lobby_error`. See the feature-contract implementation section for the validation
+and unobserved native-test boundary. Ordinary modes retain their existing phase flow.
 
 Extended after T-1.4 to T-1.19 (2026-11-06) and after wave 0, 2026-11-07 (required fields checked after `Base`, `PW.HookFor`, class table `IsValid`, net `owner`,
 shared enable snapshot: see "Required fields", "Auto-subscription", "Enable ConVars" and "Client messages"): sections "Built-in kind `modes`", "Built-in kind `weapons`", "Weapon
