@@ -28,6 +28,18 @@ function lib.Available(arc9, adapter)
     return arc9 ~= nil and adapter ~= nil and adapter:IsValid() and adapter:IsAvailable()
 end
 
+function lib.DescribeWeapon(class, category, kind, stored)
+    if kind ~= "gun" and kind ~= "melee" then return nil end
+    -- These public pack flags exclude scripted special guns even when their ARC9 enum says SMG/shotgun.
+    if kind == "gun" and (stored.ShootEnt or stored.NotForNPCs == true) then return nil end
+    local sub = string.lower(tostring(stored.SubCategory or ""))
+    if kind == "gun" and (sub == "light machine guns" or string.find(class, "_lm_", 1, true)) then
+        category = "lmg"
+    end
+    return { class = class, category = kind == "gun" and category or nil,
+        knife = kind == "melee" and (stored.HoldType == "knife" or string.find(class, "_knife", 1, true) ~= nil) }
+end
+
 function lib.OptionRole(att)
     if att == nil or att.AdminOnly or att.Ignore then return nil end
     local categories = istable(att.Category) and att.Category or { att.Category }

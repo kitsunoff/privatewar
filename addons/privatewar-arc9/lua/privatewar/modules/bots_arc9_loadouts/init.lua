@@ -10,19 +10,6 @@ local function adapter()
     return found --[[@as PW.Adapter?]]
 end
 
----@param entity PW.Entity
----@param stored table<string, any>
----@return string?
-local function categoryOf(entity, stored)
-    local category = (entity --[[@as table<string, any>]]).Category
-    local sub = string.lower(tostring(stored.SubCategory or ""))
-    -- ARC9 has no LMG enum: installed COD packs publish these as ARs. Keep the human catalogue unchanged.
-    if category == "ar" and (sub == "light machine guns" or string.find(entity.ClassName, "_lm_", 1, true)) then
-        return "lmg"
-    end
-    return isstring(category) and category or nil
-end
-
 ---@param arcAdapter PW.Adapter
 ---@return PW.Arc9BotWeapon[]
 local function weaponsFor(arcAdapter)
@@ -35,12 +22,9 @@ local function weaponsFor(arcAdapter)
         local class = entity.ClassName
         if PW.Adapters.For(class) == arcAdapter then
             local stored = weapons.GetStored(class) --[[@as table<string, any>?]]
-            local kind = (entity --[[@as table<string, any>]]).Kind
-            if stored ~= nil and (kind == "gun" or kind == "melee") and not stored.ShootEnt then
-                out[#out + 1] = { class = class, category = kind == "gun" and categoryOf(entity, stored) or nil,
-                    knife = kind == "melee" and (stored.HoldType == "knife"
-                        or string.find(class, "_knife", 1, true) ~= nil) }
-            end
+            local data = entity --[[@as table<string, any>]]
+            local info = stored ~= nil and lib.DescribeWeapon(class, data.Category, data.Kind, stored) or nil
+            if info ~= nil then out[#out + 1] = info end
         end
     end
     table.sort(out, function(a, b) return a.class < b.class end)
@@ -76,6 +60,7 @@ function lib.Start()
     if not lib.Available(rawget(_G, "ARC9"), found) then
         PW._Arc9BotLoadouts = { map = map, version = lib.Version, status = "failed", entries = {},
             error = "ARC9 unavailable", frames = 0, resumes = 0, totalSeconds = 0, maxFrameSeconds = 0 }
+        print("[PW] ARC9 bot loadouts: unavailable; keeping existing class sources")
         return
     end
     PW._Arc9BotLoadouts = lib.New(map, generationApi(found --[[@as PW.Adapter]]))
@@ -108,7 +93,7 @@ end
 function MODULE:PW_BotLoadoutCandidates(_, candidates)
     if PW.Setting("bots_arc9_loadouts.generate") ~= true then return end
     for _, entry in ipairs(lib.Candidates(PW._Arc9BotLoadouts, game.GetMap(), true)) do
-        if lib.Legal(entry) then candidates[#candidates + 1] = entry end
+        if lib.Legal(entry) then candidates[#candidates + 1] = table.Copy(entry) end
     end
 end
 

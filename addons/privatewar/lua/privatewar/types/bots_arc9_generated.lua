@@ -30,6 +30,8 @@
 ---@field Archetypes string[]
 ---@field Perks table<string, string[]>
 ---@field Available fun(arc9: ARC9Lib?, adapter: PW.Adapter?): boolean
+---@field DescribeWeapon fun(class: string, category: string?, kind: string?,
+---  stored: table<string, any>): PW.Arc9BotWeapon?
 ---@field OptionRole fun(att: table<string, any>?): string?
 ---@field Candidates fun(state: PW.Arc9BotGenerationState?, map: string, enabled: boolean): PW.BotClassEntry[]
 ---@field Keep fun(state: PW.Arc9BotGenerationState?, map: string): PW.Arc9BotGenerationState?

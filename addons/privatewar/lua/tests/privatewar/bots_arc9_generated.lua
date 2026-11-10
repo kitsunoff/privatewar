@@ -51,6 +51,7 @@ end
 
 return {
     groupName = "PW generated ARC9 bot loadouts",
+    skip = function() return PW.Arc9BotLoadouts == nil end,
     cases = {
         {
             name = "Generate: 18 additive candidates, three per archetype, coherent slots and pistol-only knife",
@@ -112,6 +113,18 @@ return {
                         expect(next(build)).to.beNil()
                     end
                 end
+            end
+        },
+        {
+            name = "Metadata: mislabeled special guns are excluded, LMG families corrected locally, knife retained",
+            func = function()
+                expect(lib().DescribeWeapon("arc9_cod2019_lm_minigun", "shotgun", "gun", { NotForNPCs = true }))
+                    .to.beNil()
+                expect(lib().DescribeWeapon("xm25", "smg", "gun", { ShootEnt = "grenade" })).to.beNil()
+                local lmg = must(lib().DescribeWeapon("arc9_cod2019_lm_pkm", "ar", "gun", {}))
+                expect(lmg.category).to.equal("lmg")
+                expect(must(lib().DescribeWeapon("arc9_cod2019_me_knife", nil, "melee",
+                    { HoldType = "knife", NotForNPCs = true })).knife).to.beTrue()
             end
         },
         {

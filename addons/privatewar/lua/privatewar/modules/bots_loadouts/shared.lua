@@ -86,9 +86,7 @@ end
 function lib.Weight(entry, weights, categoryOf)
     if weights == nil then return 1 end
     local primary = firstItem(entry.loadout.primary)
-    local secondary = firstItem(entry.loadout.secondary)
     local category = entry.category or (primary ~= nil and categoryOf(primary) or nil)
-        or (secondary ~= nil and categoryOf(secondary) or nil)
     local weight = category ~= nil and weights[category] or nil
     if not isnumber(weight) then return 1 end
     return math.max(0, weight --[[@as number]])
