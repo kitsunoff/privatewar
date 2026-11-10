@@ -5,7 +5,7 @@ are unchanged: `05-loadout.md` d.14–15, `04-weapons.md` d.1–4, `06-progressi
 
 ## Host control and selection
 
-- Game Setup exposes **Generated ARC9 bot loadouts → Generate ARC9 loadouts**
+- Game Setup exposes **BOTS_ARC9_LOADOUTS → Generate ARC9 loadouts**
   (`bots_arc9_loadouts.generate`, match-scoped, default on). Existing permission checking, schema validation,
   generated controls and match snapshots apply. Changes during a match take effect next match.
 - The provider adds up to **18** candidates, three each of SMG assault, assault rifle, shotgun, LMG, sniper
@@ -101,3 +101,30 @@ source when testing the old empty-source policy.
 entries and returns nothing; it must not replace or modify existing entries. The bot-loadout owner appends copies
 that pass the existing current-match validator after notification dispatch. Existing presets/player classes are
 built first and retain their ordering and source gates. No provider can skip the final validator through this seam.
+
+## Mounted verification (2026-11-10)
+
+On the Steam Deck, `PW_MAP=gm_construct PW_TEST_TIMEOUT=480 nix develop --command make test` passed
+**1952 / 0 / 0** (passed / failed / skipped), 193 groups, 182.530 seconds, on runtime commit `1f3baa5`.
+`nix develop --command make check` also passed, including type/lint, rules and tool/package/export self-tests.
+The mounted generator produced 18 candidates in **198 Think slices**, **107.11 ms total CPU work**,
+**1.67 ms maximum slice**. The native case retained and read back actual ARC9 camouflage texture state on
+**13 generated builds** (not a count of unique textures).
+No claim is made that these measurements pass gameplay, rendering or P2P human acceptance.
+
+Ten isolated provider + ordinary match-validation calls (18 accepted candidates each) measured **5.21 ms mean**,
+**5.66 ms maximum**; adapter legality alone averaged 0.53 ms. This cost is paid when building a bot's pool, not
+every frame. Complete `PoolFor` calls with the session's existing human classes were much slower and noisy:
+five-call batches measured 107.84 ms mean with generation off and 59.30 ms with it on. These are not a controlled
+frame-time comparison or evidence that enabling generation accelerates the original pool. They include original
+human-class harvesting/validation and cache/GC effects; the isolated provider number is the added-path measurement.
+Broader bot-spawn performance acceptance remains pending; no original pool logic was rewritten to hide that cost.
+
+The first full run reported 1950 passes and two failures from the new native case (an assertion plus its ensuing
+timeout). Investigation identified unrelated human-upload repair inside the progression counter and same-tick test
+weapon removal ahead of ARC9's deferred `PostModify` callbacks. The corrected fixture isolates human harvesting,
+uses the public LIVE lifecycle, retains native weapons until callbacks drain, and keeps the original assertions.
+All pure generator/rule cases and existing inherited tests passed in that first run as well.
+
+A fresh-map 1280×720 screenshot confirmed the generated Game Setup toggle is visible, its label fits and its
+default state is on. This was an agent UI check, not the user's visual/controller checkpoint.
