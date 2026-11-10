@@ -23,12 +23,18 @@ end
 return { groupName = "PW SND automatic de layouts",
     beforeEach = function(state)
         state.mapStore = PW._Map
+        state.sndStore = PW._SND
+        PW._SND = { generation = 0, serial = 0, nextSnapshot = 0 }
         PW._Map = must(PW.Map)._NewStore()
     end,
-    afterEach = function(state) PW._Map = state.mapStore --[[@as PW.MapStore]] end,
+    afterEach = function(state)
+        PW._Map = state.mapStore --[[@as PW.MapStore]]
+        PW._SND = state.sndStore --[[@as PW.SNDStore]]
+    end,
     cases = {
     { name = "SND auto: each preflight redetects and only publishes after successful activation", func = function()
         local map = must(PW.Map)
+        stub(map, "IsNavReady").with(function() return true end)
         local data = must(lib().Derive(input()))
         local detects, activates, publications = 0, 0, 0
         local blocked = false
@@ -51,7 +57,7 @@ return { groupName = "PW SND automatic de layouts",
         blocked = true
         local rejected, reason = lib().PrepareMap("snd")
         expect(rejected).to.beNil()
-        expect(string.find(must(reason), "blocked approach", 1, true) ~= nil).to.beTrue()
+        expect(reason).to.equal("S&D layout has blocked or unreachable objective points")
         expect(publications).to.equal(2)
     end },
     { name = "SND auto: directed one-way routes never qualify as mutual reachability", func = function()

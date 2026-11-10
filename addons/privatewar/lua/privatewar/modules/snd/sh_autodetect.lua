@@ -27,19 +27,63 @@ end
 ---@param gap number
 ---@return boolean
 local function adjacent(a, b, gap)
-    return a.mins.x <= b.maxs.x + gap and b.mins.x <= a.maxs.x + gap
-        and a.mins.y <= b.maxs.y + gap and b.mins.y <= a.maxs.y + gap
-        and a.mins.z <= b.maxs.z + gap and b.mins.z <= a.maxs.z + gap
+    local distance = 0
+    for _, axis in ipairs({ "x", "y", "z" }) do
+        ---@cast axis "x"|"y"|"z"
+        local separation = math.max(0, a.mins[axis] - b.maxs[axis], b.mins[axis] - a.maxs[axis])
+        distance = distance + separation * separation
+    end
+    return distance <= gap * gap
 end
 ---@param a PW.SNDTarget
 ---@param b PW.SNDTarget
 ---@return boolean
 local function order(a, b)
     for _, axis in ipairs({ "x", "y", "z" }) do
+        ---@cast axis "x"|"y"|"z"
+        ---@type number, number
+        local ac, bc = a.mins[axis] / 2 + a.maxs[axis] / 2, b.mins[axis] / 2 + b.maxs[axis] / 2
+        if ac ~= bc then return ac < bc end
+    end
+    for _, axis in ipairs({ "x", "y", "z" }) do
         if a.mins[axis] ~= b.mins[axis] then return a.mins[axis] < b.mins[axis] end
         if a.maxs[axis] ~= b.maxs[axis] then return a.maxs[axis] < b.maxs[axis] end
     end
     return a.name < b.name
+end
+
+---@param group PW.SNDTarget[]
+---@return PW.SNDTarget
+local function bounds(group)
+    local lo, hi = Vector(group[1].mins), Vector(group[1].maxs)
+    for _, t in ipairs(group) do
+        lo = Vector(math.min(lo.x, t.mins.x), math.min(lo.y, t.mins.y), math.min(lo.z, t.mins.z))
+        hi = Vector(math.max(hi.x, t.maxs.x), math.max(hi.y, t.maxs.y), math.max(hi.z, t.maxs.z))
+    end
+    return { mins = lo, maxs = hi, name = group[1].name }
+end
+
+---@param list PW.SNDTarget[]
+---@param root fun(i: integer): integer
+---@param roots integer[]
+---@return boolean, string?
+local function connect(list, root, roots)
+    for i, a in ipairs(list) do
+        for j = i + 1, #list do
+            local b = list[j]
+            local named = a.name ~= "" and b.name ~= ""
+            if (a.name == "") ~= (b.name == "") and adjacent(a, b, 128) then
+                return false, "Unnamed S&D target is adjacent to a named site"
+            end
+            if named and a.name ~= b.name and adjacent(a, b, 0) then
+                return false, "Overlapping named S&D sites are ambiguous"
+            end
+            if (named and a.name == b.name) or (a.name == "" and b.name == "" and adjacent(a, b, 128)) then
+                roots[root(j)] = root(i)
+            end
+        end
+    end
+    return true
 end
 
 function lib.GroupTargets(targets)
@@ -65,18 +109,8 @@ function lib.GroupTargets(targets)
         while roots[i] ~= i do i = roots[i] end
         return i
     end
-    for i, a in ipairs(list) do
-        for j = i + 1, #list do
-            local b = list[j]
-            local named = a.name ~= "" and b.name ~= ""
-            if named and a.name ~= b.name and adjacent(a, b, 0) then
-                return nil, "Overlapping named S&D sites are ambiguous"
-            end
-            if (named and a.name == b.name) or (not named and adjacent(a, b, 128)) then
-                roots[root(j)] = root(i)
-            end
-        end
-    end
+    local ok, reason = connect(list, root, roots)
+    if not ok then return nil, reason end
     ---@type table<integer, PW.SNDTarget[]>
     local buckets = {}
     for i, t in ipairs(list) do
@@ -86,19 +120,18 @@ function lib.GroupTargets(targets)
     end
     ---@type PW.SNDTarget[][]
     local groups = {}
-    for _, group in pairs(buckets) do
-        local name = ""
-        for _, t in ipairs(group) do
-            if t.name ~= "" and name ~= "" and t.name ~= name then
-                return nil, "Unnamed S&D target bridges named sites"
-            end
-            if t.name ~= "" then name = t.name end
-        end
-        groups[#groups + 1] = group
-    end
+    for _, group in pairs(buckets) do groups[#groups + 1] = group end
     if #groups ~= 2 then return nil, "S&D needs exactly two unambiguous bomb sites" end
-    table.sort(groups, function(a, b) return order(a[1], b[1]) end)
+    local a, b = bounds(groups[1]), bounds(groups[2])
+    if not order(a, b) and not order(b, a) then return nil, "Indistinguishable S&D site ordering keys" end
+    if order(b, a) then groups[1], groups[2] = groups[2], groups[1] end
     return groups
+end
+
+function lib.SitesOverlap(a, b)
+    local dx, dy = a.pos.x - b.pos.x, a.pos.y - b.pos.y
+    return dx * dx + dy * dy <= (a.radius + b.radius) ^ 2
+        and a.pos.z - a.below <= b.pos.z + b.above and b.pos.z - b.below <= a.pos.z + a.above
 end
 
 ---@param pos Vector
@@ -173,6 +206,7 @@ function lib.Derive(input)
         if site == nil then return nil, "S&D site " .. id .. " has no safe reachable nav point" end
         sites[i] = site
     end
+    if lib.SitesOverlap(sites[1], sites[2]) then return nil, "Generated S&D plant cylinders overlap" end
     local data = { sites = sites, bomb = bomb, spawns = spawns }
     local ok, invalid = lib.Validate(data)
     if not ok then return nil, invalid end

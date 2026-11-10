@@ -11,6 +11,7 @@
 
 local lib = PW.Map --[[@as PW.MapLib]]
 include("privatewar/modules/mapdata/sv_spawn_quality.lua")
+include("privatewar/modules/mapdata/sv_readiness.lua")
 
 ---The TeamNum keyvalue of a spawn entity (kept by the engine in the entity's datadesc), nil if not a number.
 ---@param ent Entity
@@ -106,6 +107,7 @@ function lib._LoadNav(opts)
     if count == 0 then
         local nav = { loaded = false, areas = {}, samples = {}, eligible = 0, costMs = 0 }
         PW._Map.nav = nav
+        SetGlobal2Bool("pw_map_nav_ready", true)
         log("map " .. game.GetMap() .. ": no navmesh; navmesh spawn fallback unavailable")
         return nav
     end
@@ -119,6 +121,7 @@ function lib._LoadNav(opts)
     local nav = { loaded = true, areas = areas, samples = samples, eligible = eligible,
         costMs = (SysTime() - started) * 1000, supplements = supplements }
     PW._Map.nav = nav
+    SetGlobal2Bool("pw_map_nav_ready", true)
     log(string.format("map %s: navmesh %d areas, %d eligible, %d spawn samples, %d quality supplements, %.1f ms",
         game.GetMap(), #areas, eligible, #samples, #supplements, nav.costMs))
     return nav
@@ -137,7 +140,8 @@ function lib.GetNavAreas()
 end
 
 PW.HookFor(MODULE, "InitPostEntity", function()
-    PW._Map.generated = nil
+    PW._Map.entitiesReady = true
+    lib._ResetGenerated("Map entities loaded")
     lib._Refresh("InitPostEntity")
     PW._Map.navCheckAt = 0
     PW._Map.navTries = 0
@@ -145,18 +149,18 @@ end)
 
 ---@return boolean
 function lib.IsNavReady()
-    return PW._Map.nav ~= nil and not PW._Map.navPaused
+    return PW._Map.entitiesReady == true and PW._Map.nav ~= nil and not PW._Map.navPaused
 end
 
 PW.HookFor(MODULE, "PostCleanupMap", function()
-    PW._Map.generated = nil
+    lib._ResetGenerated("Map cleanup invalidated the S&D layout")
     lib._Refresh("PostCleanupMap")
 end)
 
 function lib._NavThink()
     local store = PW._Map
     local at = store.navCheckAt
-    if store.navPaused or at == nil or store.nav ~= nil or CurTime() < at then return end
+    if not store.entitiesReady or store.navPaused or at == nil or store.nav ~= nil or CurTime() < at then return end
     local tries = (store.navTries or 0) + 1
     store.navTries = tries
     if navmesh.GetNavAreaCount() > 0 or tries >= navTriesMax then
@@ -172,10 +176,14 @@ function lib.PauseNav(paused)
     local store = PW._Map
     if not paused then
         store.navPaused = nil
+        store.nav = nil
+        store.navCheckAt, store.navTries = 0, 0
         return
     end
+    local nav, detected = store.nav, store.detected
     store.navPaused = true
-    local nav = store.nav
+    lib._ResetGenerated("Navmesh generation invalidated the S&D layout")
+    store.detected, store.navTries = detected, nil
     if nav ~= nil then
         store.nav = { loaded = false, areas = {}, samples = nav.samples, eligible = nav.eligible, costMs = nav.costMs }
     end

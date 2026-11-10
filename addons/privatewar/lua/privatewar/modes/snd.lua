@@ -9,6 +9,7 @@ MODE.Dependencies = { objective_actions = { "collect", "hold", "plant", "defuse"
 MODE.TeamPolicy = "managed"
 MODE.BotQuotaPolicy = "rounds"
 MODE.MapData = true
+MODE.MapReadiness = true
 MODE.RoundsToWin = 6
 MODE.SwapSidesEvery = 3
 

@@ -19,11 +19,16 @@
 ---@class PW.SNDLib
 ---@field PublicSites fun(raw: any): PW.SNDPublicSite[]? shared: bounded public presentation facts only
 ---@field GroupTargets fun(targets: PW.SNDTarget[]): PW.SNDTarget[][]?, string?
+---@field SitesOverlap fun(a: PW.SNDSite, b: PW.SNDSite): boolean touching counts as ambiguous overlap
 ---@field Derive fun(input: PW.SNDDeriveInput): PW.SNDMapData?, string?
 ---@field Detect fun(): PW.SNDMapData?, string? server: inspect the loaded map, no persistent cache
 ---@field PrepareMap fun(modeId: string): PW.SNDMapData?, string? server: rederive/validate before start
 ---@field _AutoSafe fun(pos: Vector): boolean
 ---@field _AutoMutual fun(from: Vector, to: Vector): boolean
+---@field _ReadinessThink fun() server: one readiness resolution after entities/nav are available
+
+---@class PW.SNDStore
+---@field mapChecked? boolean current-map automatic preflight already attempted
 
 ---@class PW.SNDPublicSite
 ---@field id string

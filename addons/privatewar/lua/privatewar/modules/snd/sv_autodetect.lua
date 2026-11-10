@@ -66,7 +66,10 @@ end
 
 function lib.PrepareMap(modeId)
     local map = assert(PW.Map)
+    map.SetModeReadiness(modeId, "pending")
     map.SetGeneratedModeData("snd", nil)
+    if not map.IsNavReady() then return nil, "S&D is waiting for map entities and navmesh" end
+    PW._SND.mapChecked = true -- Any completed attempt, including rejection, requires an explicit retry or reset.
     local data = map.GetModeData(modeId)
     local mode = PW.Modes.Get(modeId)
     if mode == nil then return nil, "S&D mode is unavailable" end
@@ -74,15 +77,55 @@ function lib.PrepareMap(modeId)
     local _, authored = map._ResolveModeData(entry ~= nil and entry.Modes or nil, nil,
         map._ModeChain(mode, modeId))
     if not authored then
-        if PW.Call(mode, "MapCandidate", game.GetMap()) ~= true then return nil, "No S&D map data" end
-        local reason
-        data, reason = lib.Detect()
-        if data == nil then return nil, reason end
+        if not map._ProvisionalMode(mode, game.GetMap()) then return nil, "No S&D map data" end
+        local ok, detected, reason = pcall(lib.Detect)
+        if not ok then
+            print("[PW] S&D detection failed: " .. tostring(detected))
+            reason, detected = "S&D detection failed; choose another map", nil
+        end
+        data = detected
+        if data == nil then
+            reason = isstring(reason) and #reason > 0 and reason or "S&D detection rejected this map"
+            map.SetModeReadiness(modeId, "rejected", reason)
+            return nil, reason
+        end
     end
     local valid, reason = lib.Validate(data)
-    if not valid then return nil, reason end
+    if not valid then
+        map.SetModeReadiness(modeId, "rejected", reason)
+        return nil, reason
+    end
     local ok, failure = pcall(lib.Activate, data --[[@as PW.SNDMapData]])
-    if not ok then return nil, tostring(failure) end
+    if not ok then
+        print("[PW] S&D activation failed: " .. tostring(failure))
+        reason = "S&D layout has blocked or unreachable objective points"
+        map.SetModeReadiness(modeId, "rejected", reason)
+        return nil, reason
+    end
     if not authored then map.SetGeneratedModeData("snd", data) end
+    map.SetModeReadiness(modeId, "ready", nil, authored and "authored" or "generated")
+    PW._SND.mapChecked = true
     return data --[[@as PW.SNDMapData]]
 end
+
+---@param reason string
+function MODULE:PW_MapDataInvalidated(reason)
+    PW._SND.mapChecked = nil
+    local mode = PW.ActiveMode
+    if mode == nil or not table.HasValue(assert(PW.Map)._ModeChain(mode, mode.ClassName), "snd") then return end
+    -- Cleanup is idempotent. Retire rounds and snapshots synchronously even if Abort is deferred by the core.
+    PW.Call(mode, "Cleanup")
+    assert(PW.Match).Abort(reason)
+end
+
+function lib._ReadinessThink()
+    if PW._SND.mapChecked or not assert(PW.Map).IsNavReady() then return end
+    PW._SND.mapChecked = true
+    local mode = PW.Modes.Get("snd")
+    if mode == nil or not mode:IsValid() then return end
+    local data = assert(PW.Map).GetModeData("snd")
+    if data == nil and not assert(PW.Map)._ProvisionalMode(mode, game.GetMap()) then return end
+    lib.PrepareMap("snd")
+end
+
+PW.HookFor(MODULE, "Think", function() lib._ReadinessThink() end)
