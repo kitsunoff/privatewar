@@ -2,6 +2,11 @@
 
 Status: frozen on 2026-11-07, changes only through the orchestrator.
 
+Approved revision (2026-11-11), not implemented: [feature contracts](feature-contracts.md) define S&D provisional
+eligibility, Lua-only playlist resolution/availability and expiry/start/vote recovery. Those contracts supersede
+the affected legacy sections below. JSON playlist APIs are explicitly removed by that revision; existing JSON
+runtime is history, not the new contract. Unrelated lifecycle, scoring, role and mandatory regression rules remain.
+
 Extended on 2026-11-07 after T-2.1, T-2.2 and T-2.3: the items of "Open in design" that the lane agents decided in
 code (items 2, 3, 5, 6, 8, 9 and parts of item 1) are now in the main text. Extended again on 2026-11-07 after T-2.4,
 T-2.5, T-2.6 and T-2.13 (Domination, Kill Confirmed, playlists, the `bots` placeholder, the vote and `PW_NextMatch`):
@@ -397,7 +402,7 @@ not added: a departed participant may remain through its saved identity. A non-d
 a draw has no winner and represents a shared top or empty standings. This validates the existing shape; it does
 not calculate or replace a child's standings, award rewards or reinterpret its result.
 
-### S&D map shape (frozen, authored)
+### S&D map shape (authored and generated)
 
 `MAP.Modes.snd = { sites = PW.SNDSite[], bomb = Vector,
 spawns = table<integer, PW.SpawnPoint[]> }`. Each proposed `PW.SNDSite` is
@@ -407,7 +412,9 @@ volume. `bomb` is the authored initial/recovery ground point; `spawns` uses side
 All vectors/dimensions must be finite; radii positive, vertical bounds nonnegative. No dimensions, site count
 or positions are chosen here. Cross-map `ValidateMapData` is structural only; current-map ground/hull/nav/LOS
 validation is a separate activation check. Do not edit the shared map until the orchestrator serializes it.
-This shape introduces no automatic map fallback; invalid out-of-world/unreachable bomb drops recover at `bomb`.
+The approved [S&D detector contract](feature-contracts.md#snd-map-eligibility-and-activation) may supply this same
+shape when authored data is absent; invalid authored data blocks it. Invalid out-of-world/unreachable bomb drops
+recover at `bomb`. Loaded-world validation remains mandatory for both sources.
 
 ### Search and Destroy implementation boundary
 
@@ -579,6 +586,11 @@ lifetime never thinks).
 
 ## Playlists
 
+**Legacy implemented surface (through the Vote section).** Read
+[Lua playlists and availability](feature-contracts.md#lua-playlists-and-availability) as the normative replacement
+for JSON storage/APIs, callable fields, availability, entitlement, snapshots and expiry handling. Tables below
+describe existing static validation/sampling and pre-revision wire/runtime history, not required JSON compatibility.
+
 Kind `playlists/`, class table `PLAYLIST`, data only (`02-modes.md` d.2; `01-extensibility.md` d.12 table). Modes
 lane, T-2.6. The kind declaration is `lua/privatewar/kinds/playlists.lua` (`Global = "PLAYLIST"`, `Subscribe = "never"`,
 `Required = { Name = "string", Modes = "table" }`; `Maps` and `Settings` are optional). The per-entry enable ConVar
@@ -629,7 +641,7 @@ matching check is skipped. The result is a clean copy (`Name`, `Modes`, `Maps`, 
 | `Maps` | `nil` (the key is missing), else a non-empty list of map names (1 to 64 letters, digits, `_` and `-`). An empty list is an error: leave the key out for "every map that fits". Not a list: an error |
 | `Settings` | `nil` gives `{}`. Else every key is a full id `owner.key` (lowercase letters, digits, `_`), the value is not `nil`, the setting exists, its scope is `match` (`server` and `client` settings are rejected) and the value passes `PW.Settings._Validate`; the stored value is the validated and clamped one |
 
-### Host-saved playlists (JSON)
+### Host-saved playlists (JSON; superseded history, remove in implementation)
 
 `data/privatewar/playlists/<id>.json` (`PW.Playlist.DataDir = "privatewar/playlists"`), read next to the Lua playlists
 (`02-modes.md` d.3). The id is the file name without `.json`: lowercase letters, digits and `_`, at most 64 characters
@@ -727,6 +739,11 @@ bot settings (full id `<owner>.<key>`); the `bots_*` modules of `07-bots.md` d.3
 | `bots.difficulty` | `match` | enum | `regular` | `recruit`, `regular`, `hardened`, `veteran` | The bot difficulty tier (`07-bots.md` d.10, d.15). The option list is fixed here; the tiers will be a data kind `bot_difficulties` (`07-bots.md` d.10) and the list will then have to come from it |
 
 ## Vote module
+
+The approved [availability/start contract](feature-contracts.md#time-and-state-machine) overrides same-mode repeat
+when a selected rotation expires; the [S&D contract](feature-contracts.md#snd-map-eligibility-and-activation) admits
+provisional candidates but requires post-load validation with visible lobby recovery. Legacy behavior below remains
+unchanged otherwise, including weighted draws, recent-map exclusions, privilege checks and tie handling.
 
 Module `vote` (modes lane, T-2.13; `lua/privatewar/modules/vote/`). Source: `00-core.md` d.2, d.5; `02-modes.md` d.2, d.5b;
 `08-lobby.md` d.5. Types: `lua/privatewar/types/vote.lua`. Lane agent decisions unless a design item is cited.

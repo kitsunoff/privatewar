@@ -11,20 +11,19 @@ After loading the map, derive team spawns and two approximate bomb sites from it
 rather than reproduce the original brush shape. Authored `MAP.Modes.snd` remains the preferred source. Other Counter-Strike
 map types and automatic objective layouts for other modes are out of scope.
 
-This record is a task, not authorization to implement or change decided design. The research in
+The user explicitly approved the design/API revision on 2026-11-11; runtime remains unimplemented and this record
+does not grant device/publication permissions. [Approved contract](../../docs/api/feature-contracts.md#snd-map-eligibility-and-activation).
+The research in
 [notes/27](../../notes/27-snd-de-map-autodetect.md) contains proposals and inferences, not game-test results.
 
 ## Decisions and prerequisites
 
-- [ ] Obtain implementation authorization and approval for changes to `design/03-mapdata.md` d.4 and d.6 and
-  `design/02-modes.md` d.8, plus the affected frozen `docs/api/map.md` and `docs/api/modes.md` contracts. Keep mode
-  semantics and map-data ownership explicit; do not broaden candidate eligibility for unrelated objective modes.
-- [ ] Confirm uncertain gameplay choices: A/B naming when original labels cannot be recovered; minimum valid spawns
-  per side; whether navmesh remains mandatory for humans; and whether invalid authored S&D data blocks fallback.
-  The research recommends deterministic A/B labels, mandatory navmesh, and no fallback from invalid authored data.
-- [ ] Agree how unverified maps participate in playlists and votes and how failures recover: a `de_` prefix does not
-  guarantee compatibility, and a first failure can happen only after the map loads. Decide whether a persistent
-  failure cache is needed; do not silently let server and client candidate lists disagree.
+- [x] Design/API revision approved: `03-mapdata.md` d.10 and `02-modes.md` d.10; authored-first, invalid authored
+  blocks fallback; mandatory navmesh for humans too; at least one safe spawn per T/CT side. No unrelated modes change.
+- [x] Provisional installed de_ maps participate in Custom, playlists and votes, including derived S&D. Validate
+  after load; failure returns to usable lobby with a visible reason. No persistent failure cache/retry/substitution.
+- [x] Nonempty targetname first; unnamed adjacent AABB grouping at 128 units; reject ambiguity, exactly two sites.
+  Deterministic A/B may differ from CS; the API contract fixes technical ordering and bounded safe activation.
 - [ ] Obtain explicit permission and confirmation that the Steam Deck is free before any game access or tests. Verify
   the assumptions in notes/27 section 9, especially brush SENT registration timing, entity visibility, world bounds,
   nonblocking behavior, site naming and representative maps. Do not treat inferred engine behavior as established.
@@ -41,8 +40,7 @@ This record is a task, not authorization to implement or change decided design. 
 - [ ] On detection or validation failure, return to a usable lobby with a clear player-visible reason; cover both
   pending starts and direct starts. Do not rely solely on server logs or unhandled assertions. Define recovery for
   playlist and vote flows without silently starting an unrelated mode.
-- [ ] If a failure cache is approved, specify versioning, map/nav metadata, stale and corrupt entries, invalidation,
-  bounded storage and client synchronization. Geometry must be rediscovered and validated on the loaded map.
+- [ ] Keep failures transient: no persistent cache. Rediscover/validate loaded geometry on a later explicit attempt.
 
 ## Entity detection and generated data
 
@@ -55,8 +53,8 @@ This record is a task, not authorization to implement or change decided design. 
 - [ ] Collect target world bounds, account for brush origin and possible multiple or disjoint volumes, and group
   targets into exactly two sites by an explicitly tested, bounded rule. Reject ambiguous, missing or extra sites with
   a useful reason instead of inventing a layout. Do not assume all ports preserve the same entity classes.
-- [ ] Choose deterministic A/B identifiers according to the approved policy; check whether `MapCreationID` order or
-  nav place names reliably match original labels. Document when labels can differ from Counter-Strike. Consider that
+- [ ] Implement deterministic A/B identifiers using the contract's group geometry order, independent of enumeration,
+  `MapCreationID` and nav place names. Document that labels can differ from Counter-Strike. Consider that
   existing bots attack the first site.
 - [ ] Derive grounded, hull-clear, mutually reachable site and approach points, radius and vertical limits with a
   bounded search. Select a safe attacker-side bomb recovery point. Keep all values finite and make the result pass
@@ -77,7 +75,7 @@ This record is a task, not authorization to implement or change decided design. 
   ambiguous layouts, blocked points, geometry limits, finite input, spawn filtering, bomb point and output validation.
 - [ ] Cover foreign SENT ownership, readiness and reload, directed/one-way reachability, client/server eligibility,
   public snapshot validation and cleanup, lobby/vote/playlist/map-change flow, and player-visible failure recovery.
-  If implemented, test cache invalidation, corruption and synchronization.
+  Test absence of persistent failure storage and fresh detection on subsequent explicit attempts.
 - [ ] Run `nix develop --command make check` and `nix develop --command make test` with pipefail before merge. Game
   tests require explicit permission and a confirmed-free Deck. Record actual commands, results and skipped checks.
 - [ ] At a human checkpoint, inspect representative CS:S `de_` maps including stacked sites, a Workshop port and a map

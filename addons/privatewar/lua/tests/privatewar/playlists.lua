@@ -1,8 +1,6 @@
--- T-2.6 playlists (TASKS.md, "Mandatory test cases" T-2.6: weighted sampling respects weights over many draws;
--- host-saved JSON loads and validates like Lua playlists; invalid JSON is rejected with a message; 02-modes.md
--- d.1-d.5b; docs/api/modes.md "Playlists"). Pure cases run over plain data with a deterministic RNG. The server
--- cases swap in a playlists store with fakes and a test-only data folder (privatewar_test/playlists), whose files
--- every case removes. Net cases call the receive path (PW.Net._Dispatch) with one pool bot.
+-- T-2.6 Lua-only playlists: weighted sampling, startup validation and privileged server selection/start.
+-- The approved 2026-11-11 contract replaces the former JSON-specific clauses only. Net cases retain the real
+-- receive path (PW.Net._Dispatch) and one shared pool bot. No playlist storage is read or written.
 
 local testDir = "privatewar_test/playlists"
 
@@ -120,24 +118,26 @@ local function sent(state)
 end
 
 ---@param state table<string, any>
----@param name string
----@param text string
-local function writeFile(state, name, text)
-    file.CreateDir(testDir)
-    file.Write(testDir .. "/" .. name, text)
-    local written = state.written --[[@as string[] ]]
-    written[#written + 1] = name
+---@param id string
+---@param data table<string, any>
+local function addPlaylist(state, id, data)
+    data.ClassName = id
+    local entities = state.entities --[[@as table<string, any>[] ]]
+    entities[#entities + 1] = data
 end
 
 ---@param state table<string, any>
----@param luaEntries? fun(): table[]
+---@param luaEntries? fun(): table<string, any>[]
 local function installStore(state, luaEntries)
     state.logs, state.started, state.applied, state.sent = {}, {}, {}, {}
     state.active = ""
+    state.entities = {}
     PW._Playlist = must(lib()._NewStore)({
         log = function(message) logs(state)[#logs(state) + 1] = message end,
-        dir = testDir,
-        luaEntries = luaEntries or function() return {} end,
+        luaEntries = luaEntries or function() return state.entities end,
+        phase = function() return state.phase end,
+        time = function() return state.now end,
+        broadcast = function() end,
         facts = facts,
         pool = function() return { "gm_a", "gm_b" } end,
         fits = function() return true end,
@@ -187,12 +187,6 @@ local function send(state, name, ply, id)
     return must(PW.Net)._Dispatch(name, 64, ply)
 end
 
----@param raw table<string, any>
----@return string
-local function jsonOf(raw)
-    return util.TableToJSON({ Name = raw.Name, Modes = raw.Modes, Maps = raw.Maps, Settings = raw.Settings })
-end
-
 ---Encodes and decodes a list state through recorded writes.
 ---@param state PW.PlaylistListState
 ---@return PW.PlaylistListState
@@ -202,18 +196,20 @@ local function roundTrip(state)
     lib()._Encode(state, {
         uint = function(value, width) bits[#bits + 1] = { value, width } end,
         string = function(value) bits[#bits + 1] = value end,
-        bool = function(value) bits[#bits + 1] = value end
+        bool = function(value) bits[#bits + 1] = value end,
+        number = function(value) bits[#bits + 1] = value end
     })
     local at = 0
     local function nextBit()
         at = at + 1
         return bits[at]
     end
-    return lib()._Decode({
+    return must(lib()._Decode({
         uint = function() return must(nextBit())[1] end,
         string = function() return nextBit() end,
-        bool = function() return nextBit() end
-    })
+        bool = function() return nextBit() end,
+        number = function() return nextBit() end
+    }))
 end
 
 local pureCases = {
@@ -314,59 +310,56 @@ local pureCases = {
         end
     },
     {
-        name = "Host-saved JSON loads and validates like a Lua playlist: same result, same rejections",
+        name = "Lua-only static and callable fields use the same normalization and rejection constraints",
         func = function()
             local fromLua = must(lib().Normalize(goodPlaylist(), facts()))
-            local fromJson = must(lib().FromJson(lib().ToJson(fromLua), facts()))
-            expect(fromJson).to.deepEqual(fromLua)
-            local noMaps = must(lib().FromJson([[{"Name":"Open","Modes":{"tdm":1}}]], facts()))
+            local resolved = must(lib().Resolve({ Name = "TDM and FFA", Modes = function() return fromLua.Modes end,
+                Maps = function() return fromLua.Maps end,
+                Settings = function() return fromLua.Settings end }, facts()))
+            expect(resolved).to.deepEqual(fromLua)
+            local noMaps = must(lib().Resolve({ Name = "Open", Modes = { tdm = 1 } }, facts()))
             expect(noMaps.Maps).to.beNil()
             expect(noMaps.Settings).to.deepEqual({})
             for _, case in ipairs(badCases()) do
                 local bad = goodPlaylist()
                 case.change(bad)
                 local _, luaErr = lib().Normalize(bad, facts())
-                local data, jsonErr = lib().FromJson(jsonOf(bad), facts())
+                local data, jsonErr = lib().Resolve(bad, facts())
                 expect(data).to.beNil()
                 expect(jsonErr).to.equal(luaErr)
             end
         end
     },
     {
-        name = "Invalid JSON is rejected with a readable message",
+        name = "Invalid startup resolver output is rejected with a readable message",
         func = function()
-            for _, text in ipairs({ "", "   ", "{", "not json at all", "[1, 2, 3]", [["a string"]], "42" }) do
-                local data, err = lib().FromJson(text, facts())
+            for _, output in ipairs({ false, 42, "not modes", {} }) do
+                local data, err = lib().Resolve({ Name = "Bad", Modes = function() return output end }, facts())
                 expect(data).to.beNil()
-                expect(mentions(err, "invalid JSON")).to.beTrue()
+                expect(mentions(err, "Modes")).to.beTrue()
             end
-            expect(select(2, lib().FromJson(nil, facts()))).to.exist()
-            local _, version = lib().FromJson([[{"Version":2,"Name":"x","Modes":{"tdm":1}}]], facts())
-            expect(mentions(version, "Version")).to.beTrue()
-            local _, field = lib().FromJson([[{"Name":"x","Modes":{"tdm":1},"Colour":"red"}]], facts())
-            expect(mentions(field, "Colour")).to.beTrue()
+            local _, reason = lib().Resolve({ Name = "Bad", Modes = function() error("broken") end }, facts())
+            expect(mentions(reason, "broken")).to.beTrue()
         end
     },
     {
-        name = "The file id is the name of a *.json file made of lowercase letters, digits and _",
+        name = "Removed JSON conversion storage and file-id APIs are absent",
         func = function()
-            expect(lib().FileId("night_ffa2.json")).to.equal("night_ffa2")
-            for _, name in ipairs({ "Night.json", "a b.json", "a.txt", ".json", "x.json.bak", "../a.json" }) do
-                expect(lib().FileId(name)).to.beNil()
+            for _, name in ipairs({ "FromJson", "ToJson", "FileId", "LoadDir", "Save", "Version", "DataDir" }) do
+                expect(rawget(lib(), name)).to.beNil()
             end
-            expect(lib().FileId(5)).to.beNil()
         end
     },
     {
-        name = "The list round-trips through the explicit wire encoding; the rows show Custom first and the warning",
+        name = "The list round-trips through the explicit wire encoding; the rows show Custom last and the warning",
         func = function()
             local state = { list = {
-                { id = "a", name = "Alpha", summary = "tdm on 2 maps", fill = 0 },
-                { id = "b", name = "Beta", summary = "ffa on all maps", fill = 24 }
-            }, active = "b", canPick = true }
+                { id = "a", name = "Alpha", summary = "tdm on 2 maps", fill = 0, active = true, valid = true },
+                { id = "b", name = "Beta", summary = "ffa on all maps", fill = 24, active = true, valid = true }
+            }, active = "b", canPick = true, serial = 1, sampledAt = 1000, retained = false, canStart = true }
             expect(roundTrip(state)).to.deepEqual(state)
             local rows = lib()._Items(state, 16)
-            expect(rows.items[1].id).to.equal(lib().CustomRow)
+            expect(rows.items[3].id).to.equal(lib().CustomRow)
             expect(#rows.items).to.equal(3)
             expect(rows.selected).to.equal("b")
             expect(rows.warning).to.equal("Beta expects 24 players, the server has 16")
@@ -413,28 +406,22 @@ local serverCases = {
         end
     },
     {
-        name = "JSON files load with the id of the file name; an invalid file is rejected with a message, not loaded",
+        name = "Invalid Lua definitions are rejected with a message and do not affect valid entries",
         func = function(state)
-            writeFile(state, "pwt_good.json", lib().ToJson(must(lib().Normalize(goodPlaylist(), facts()))))
-            writeFile(state, "pwt_broken.json", "{ this is not json")
-            writeFile(state, "pwt_wrong.json", jsonOf({ Name = "Wrong", Modes = { nope = 1 } }))
-            writeFile(state, "bad name.json", jsonOf(goodPlaylist()))
-            local list, errors = must(lib().LoadDir)()
+            addPlaylist(state, "pwt_good", goodPlaylist())
+            addPlaylist(state, "pwt_broken", { Name = "Broken", Modes = function() error("broken") end })
+            addPlaylist(state, "pwt_wrong", { Name = "Wrong", Modes = { nope = 1 } })
+            addPlaylist(state, "bad name", goodPlaylist())
+            local list = must(lib().GetList)()
             expect(#list).to.equal(1)
             expect(list[1].id).to.equal("pwt_good")
-            expect(list[1].source).to.equal("json")
+            expect(list[1].source).to.equal("lua")
             expect(list[1].Settings["tdm.scorelimit"]).to.equal(100)
-            ---@type table<string, string>
-            local byFile = {}
-            for _, failure in ipairs(errors) do byFile[failure.file] = failure.message end
-            expect(mentions(byFile["pwt_broken.json"], "invalid JSON")).to.beTrue()
-            expect(mentions(byFile["pwt_wrong.json"], "unknown mode")).to.beTrue()
-            expect(byFile["bad name.json"]).to.exist()
             expect(#logs(state)).to.equal(3)
         end
     },
     {
-        name = "The list holds Lua and JSON playlists sorted by name; a Lua playlist wins over a JSON file of its id",
+        name = "The Lua-only list is sorted by name and unknown ids are absent",
         func = function(state)
             local entities = {
                 { ClassName = "pwt_lua", Name = "Zulu", Modes = { tdm = 1 } },
@@ -442,26 +429,22 @@ local serverCases = {
                 { ClassName = "pwt_bad", Name = "Bad", Modes = { nope = 1 } }
             }
             installStore(state, function() return entities end)
-            writeFile(state, "pwt_same.json", jsonOf({ Name = "Json loses", Modes = { tdm = 1 } }))
-            writeFile(state, "pwt_json.json", jsonOf({ Name = "Alpha", Modes = { dom = 1 } }))
             ---@type string[]
             local names = {}
             for _, entry in ipairs(must(lib().GetList)()) do names[#names + 1] = entry.id .. ":" .. entry.Name end
-            expect(names).to.deepEqual({ "pwt_json:Alpha", "pwt_same:Lua wins", "pwt_lua:Zulu" })
+            expect(names).to.deepEqual({ "pwt_same:Lua wins", "pwt_lua:Zulu" })
             expect(must(lib().Get)("pwt_lua").source).to.equal("lua")
             expect(must(lib().Get)("pwt_nope")).to.beNil()
         end
     },
     {
-        name = "Save validates like a load and writes a file the loader reads back",
+        name = "Startup resolution returns copied validated data without saving files",
         func = function(state)
-            local ok, err = must(lib().Save)("pwt_saved", { Name = "Saved", Modes = { nope = 1 } })
-            expect({ ok, mentions(err, "unknown mode") }).to.deepEqual({ false, true })
-            expect(must(lib().Save)("Bad Id", goodPlaylist())).to.beFalse()
+            local data, err = lib().Resolve({ Name = "Saved", Modes = { nope = 1 } }, facts())
+            expect(data).to.beNil()
+            expect(mentions(err, "unknown mode")).to.beTrue()
             expect(file.Exists(testDir .. "/pwt_saved.json", "DATA")).to.beFalse()
-            local written = state.written --[[@as string[] ]]
-            written[#written + 1] = "pwt_saved.json"
-            expect(must(lib().Save)("pwt_saved", goodPlaylist())).to.beTrue()
+            addPlaylist(state, "pwt_saved", goodPlaylist())
             local entry = must(must(lib().Get)("pwt_saved"))
             expect(entry.Name).to.equal("TDM and FFA")
             expect(entry.Modes).to.deepEqual({ tdm = 2, ffa = 1 })
@@ -470,8 +453,8 @@ local serverCases = {
     {
         name = "Start applies the settings that apply, remembers the playlist and starts a sampled mode and map",
         func = function(state)
-            writeFile(state, "pwt_start.json", jsonOf({ Name = "Go", Modes = { ffa = 1 }, Maps = { "gm_a", "gm_b" },
-                Settings = { ["bots.fill"] = 20, ["bots.difficulty"] = "recruit" } }))
+            addPlaylist(state, "pwt_start", { Name = "Go", Modes = { ffa = 1 }, Maps = { "gm_a", "gm_b" },
+                Settings = { ["bots.fill"] = 20, ["bots.difficulty"] = "recruit" } })
             expect(must(lib().Start)("pwt_start")).to.beTrue()
             expect(applied(state)).to.deepEqual({ { "bots.difficulty", "recruit" }, { "bots.fill", 20 } })
             expect(state.active).to.equal("pwt_start")
@@ -488,9 +471,21 @@ local serverCases = {
 
 local netCases = {
     {
+        name = "VOTE permits authoritative list requests but rejects playlist selection and start messages",
+        func = function(state)
+            local bot = makeBot(state, "superadmin")
+            state.phase = "VOTE"
+            expect(send(state, "pw_playlist_request", bot, "")).to.beTrue()
+            expect(#sent(state)).to.equal(1)
+            expect({ send(state, "pw_playlist_pick", bot, "") }).to.deepEqual({ false, "phase" })
+            expect({ send(state, "pw_playlist_start", bot, "event") }).to.deepEqual({ false, "phase" })
+            expect(#started(state)).to.equal(0)
+        end
+    },
+    {
         name = "Start and pick require the privilege; the list request answers any player",
         func = function(state)
-            writeFile(state, "pwt_net.json", jsonOf({ Name = "Net", Modes = { tdm = 1 }, Maps = { "gm_a" } }))
+            addPlaylist(state, "pwt_net", { Name = "Net", Modes = { tdm = 1 }, Maps = { "gm_a" } })
             local bot = makeBot(state, "user")
             expect({ send(state, "pw_playlist_start", bot, "pwt_net") }).to.deepEqual({ false, "privilege" })
             expect({ send(state, "pw_playlist_pick", bot, "pwt_net") }).to.deepEqual({ false, "privilege" })
@@ -513,10 +508,10 @@ local netCases = {
             local bot = makeBot(state, "superadmin")
             expect(send(state, "pw_playlist_pick", bot, "pwt_missing")).to.beTrue()
             expect(state.active).to.equal("")
-            expect(#sent(state)).to.equal(0)
+            expect(#sent(state)).to.equal(1)
             state.active = "pwt_gone"
             expect(send(state, "pw_playlist_request", bot, "")).to.beTrue()
-            expect(sent(state)[1].state.active).to.equal("")
+            expect(sent(state)[2].state.active).to.equal("")
             expect(send(state, "pw_playlist_pick", bot, "")).to.beTrue()
             expect(state.active).to.equal("")
         end

@@ -13,6 +13,7 @@
 ---@field teams table<string, integer>
 ---@field createdAt integer os.time() when the file was written
 ---@field mapChangeCount integer game.GetMapChangeCount() on the map that wrote the file
+---@field playlist? string accepted start only; bound to this pending record's mode/map/count/age/version
 
 ---What the new map knows when it checks a pending match.
 ---@class PW.PendingFacts

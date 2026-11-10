@@ -3,14 +3,15 @@
 -- Module: lua/privatewar/modules/playlists/ (shared.lua: pure rules and wire; init.lua: server glue and messages;
 -- cl_init.lua: client state). Kind: lua/privatewar/kinds/playlists.lua.
 
----The class table of a playlist file (data only).
+---The class table of a Lua playlist; resolvers and availability execute only on the server.
 ---@class PW.Playlist : PW.Entity
 ---@field Name string display name
----@field Modes table<string, number> mode id -> weight (> 0)
----@field Maps? string[] map pool; nil = every map that fits the modes
----@field Settings? table<string, any> match-scope overrides by full setting id
+---@field Modes table<string, number>|fun(self: PW.Playlist): table<string, number>
+---@field Maps? string[]|fun(self: PW.Playlist): string[]?
+---@field Settings? table<string, any>|fun(self: PW.Playlist): table<string, any>?
+---@field IsActive? fun(self: PW.Playlist, nowUTC: number): boolean, number?
 
----A validated playlist (the same shape for Lua files and host-saved JSON).
+---Copied and validated startup data; no functions or availability state.
 ---@class PW.PlaylistData
 ---@field Name string
 ---@field Modes table<string, number>
@@ -20,7 +21,23 @@
 ---One listed playlist.
 ---@class PW.PlaylistEntry : PW.PlaylistData
 ---@field id string
----@field source "lua"|"json"
+---@field source "lua"
+
+---@class PW.PlaylistAvailability
+---@field active boolean
+---@field valid boolean
+---@field nextChange? number
+
+---@class PW.PlaylistSelection
+---@field id string
+---@field retained boolean
+---@field canStart boolean
+
+---@class PW.PlaylistAttempt
+---@field accepted? boolean acceptance belongs to this request, surviving synchronous phase cleanup
+---@field id string
+---@field mode string
+---@field map string
 
 ---What validation needs to know about the game; every field is optional (not given = not checked).
 ---@class PW.PlaylistFacts
@@ -45,33 +62,40 @@
 ---@field name string
 ---@field summary string for example "tdm, ffa on 2 maps"
 ---@field fill integer the playlist's bots.fill, 0 when it sets none
+---@field active boolean
+---@field valid boolean
+---@field nextChange? number
 
 ---What the server sends to one client.
 ---@class PW.PlaylistListState
 ---@field list PW.PlaylistSummary[]
 ---@field active string the active playlist id, "" for Custom
 ---@field canPick boolean
+---@field serial integer
+---@field sampledAt integer
+---@field retained boolean
+---@field canStart boolean
 
 ---@class PW.PlaylistWriter
 ---@field uint fun(value: integer, bits: integer)
 ---@field string fun(value: string)
 ---@field bool fun(value: boolean)
+---@field number fun(value: number)
 
 ---@class PW.PlaylistReader
 ---@field uint fun(bits: integer): integer
 ---@field string fun(): string
 ---@field bool fun(): boolean
-
----Why a JSON file was not loaded.
----@class PW.PlaylistFileError
----@field file string
----@field message string
+---@field number fun(): number
 
 ---Injectable glue of the server side (tests give fakes).
 ---@class PW.PlaylistStoreOptions
 ---@field log? PW.LogFn
----@field dir? string folder under data/ with the host's JSON files
----@field luaEntries? fun(): table[] enabled entries of the playlists registry
+---@field time? fun(): number
+---@field phase? fun(): PW.PhaseName
+---@field broadcast? fun()
+---@field luaEntries? fun(): table<string, any>[] enabled entries of the playlists registry
+---@field allLuaEntries? fun(): table<string, any>[] all startup definitions
 ---@field facts? fun(): PW.PlaylistFacts
 ---@field pool? fun(): string[] the maps of a playlist with Maps = nil
 ---@field fits? fun(modeId: string, map: string): boolean
@@ -86,8 +110,26 @@
 
 ---@class PW.PlaylistStore
 ---@field log PW.LogFn
----@field dir string
----@field luaEntries fun(): table[]
+---@field time fun(): number
+---@field phase fun(): PW.PhaseName
+---@field broadcast fun()
+---@field entries? PW.PlaylistEntry[]
+---@field definitions? table<string, table<string, any>>
+---@field availability table<string, PW.PlaylistAvailability>
+---@field serial integer
+---@field sampledAt number
+---@field lastPoll? number
+---@field selectedId? string
+---@field retained boolean
+---@field selectedActive boolean
+---@field spent boolean one expired attempt per selection/lobby, including backward clock samples
+---@field attempt? PW.PlaylistAttempt
+---@field pendingAttempt? PW.PlaylistAttempt
+---@field bootReady boolean
+---@field startupResolved? boolean
+---@field publishedAt? number
+---@field luaEntries fun(): table<string, any>[]
+---@field allLuaEntries fun(): table<string, any>[]
 ---@field facts fun(): PW.PlaylistFacts
 ---@field pool fun(): string[]
 ---@field fits fun(modeId: string, map: string): boolean
@@ -106,48 +148,50 @@
 ---@field activeName? string the name of the active playlist
 
 ---@class PW.PlaylistLib
----Format version written into host-saved JSON ("Version"); a file without it is read as version 1.
----@field Version integer
----Folder under data/ with the host-saved JSON files: "privatewar/playlists".
----@field DataDir string
 ---Privilege to pick and start a playlist: "pw.match.start" (the lobby's privilege).
 ---@field Privilege string
+---@field _MaxEntries integer bounded startup admission and snapshot codec limit (128)
 ---Row id of Custom in the lobby's playlist list: "@custom".
 ---@field CustomRow string
----Pure: the same validation for Lua playlists and JSON: Name, Modes (known ids, weights > 0), Maps (nil or a
+---Pure: validates resolved Name, Modes (known ids, weights > 0), Maps (nil or a
 ---non-empty list of map names), Settings (known match settings, valid values). Returns a clean copy or nil and
 ---a message.
 ---@field Normalize fun(raw: any, facts?: PW.PlaylistFacts): PW.PlaylistData?, string?
----Pure over util.JSONToTable: JSON text -> a validated playlist, or nil and a readable message.
----@field FromJson fun(text: any, facts?: PW.PlaylistFacts): PW.PlaylistData?, string?
----Pure: a validated playlist -> JSON text (with Version).
----@field ToJson fun(data: PW.PlaylistData): string
----Pure: file name -> playlist id ("night.json" -> "night"); nil unless the name is [a-z0-9_]+ plus ".json".
----@field FileId fun(fileName: any): string?
+---@field Resolve fun(definition: table<string, any>, facts?: PW.PlaylistFacts): PW.PlaylistData?, string?
+---@field _Evaluate fun(definition: table<string, any>, nowUTC: number): PW.PlaylistAvailability, string?
+---@field RefreshAvailability? fun(nowUTC?: number): boolean
+---@field GetAvailability? fun(id: string): PW.PlaylistAvailability?
+---@field GetSelection? fun(): PW.PlaylistSelection
+---@field _Poll fun()
+---@field _RotationAllowed fun(refresh: boolean): boolean
+---@field _AcceptStart fun(mode: string, map: string)
+---@field _PendingStart fun(mode: string, map: string): string?
+---@field _RestoreStart fun(id: string): boolean
+---@field _Complete fun(): boolean
+---@field _BootReady fun()
+---@field _ResolveStartup fun()
+---@field _StartFailed fun(reason: string)
 ---Pure: one id by weight; ids are visited in sorted order; rng() in [0, 1). nil without a positive weight.
 ---@field PickWeighted fun(weights: table<string, number>, rng: fun(): number): string?
 ---Pure: the next mode and map of a playlist by weight, or nil and a reason.
 ---@field Sample fun(data: PW.PlaylistData, opts: PW.PlaylistSampleOptions): PW.PlaylistPick?, string?
 ---Pure: the pw_playlist_list encoding.
 ---@field _Encode fun(state: PW.PlaylistListState, writer: PW.PlaylistWriter)
----@field _Decode fun(reader: PW.PlaylistReader): PW.PlaylistListState
+---@field _Decode fun(reader: PW.PlaylistReader): PW.PlaylistListState?
+---@field _Newer fun(current: PW.PlaylistListState?, incoming: PW.PlaylistListState): boolean
 ---Pure: the lobby summary of a listed playlist.
 ---@field _Summary fun(entry: PW.PlaylistEntry, fill: integer): PW.PlaylistSummary
----Server: the listed playlists: enabled Lua playlists, then the host's JSON ones; sorted by name. Invalid ones are
+---Server: enabled validated Lua startup entries, sorted by name. Invalid ones are
 ---skipped with one log line each.
 ---@field GetList? fun(): PW.PlaylistEntry[]
 ---@field Get? fun(id: string): PW.PlaylistEntry?
----Server: reads and validates every *.json of the folder; returns the playlists and the files that failed.
----@field LoadDir? fun(dir?: string): PW.PlaylistEntry[], PW.PlaylistFileError[]
----Server: validates and writes a playlist as <id>.json in the folder.
----@field Save? fun(id: string, data: table, dir?: string): boolean, string?
 ---Server: samples the next mode and map of a listed playlist.
 ---@field Pick? fun(id: string): PW.PlaylistPick?, string?
 ---Server: applies the settings of a playlist, remembers it as the active one and starts the match.
 ---@field Start? fun(id: string): boolean, string?
 ---Server: the active playlist id, "" for Custom (a ConVar, so it survives a map change).
 ---@field GetActive? fun(): string
----@field SetActive? fun(id: string)
+---@field SetActive? fun(id: string): boolean, string?
 ---Client: the last list the server sent, nil before the first answer.
 ---@field GetState? fun(): PW.PlaylistListState?
 ---Client: asks the server for the list.
@@ -156,7 +200,7 @@
 ---@field SendPick? fun(id: string)
 ---Client: asks the server to start a playlist.
 ---@field SendStart? fun(id: string)
----Pure: the rows of the lobby's playlist list ("@custom" first) and the warning for the active playlist.
+---Pure: visible active/retained/upcoming rows, Custom last, and the selected playlist's slot warning.
 ---@field _Items fun(state: PW.PlaylistListState, maxPlayers: integer): PW.PlaylistItems
 ---Client: called after a list arrives (the lobby screen sets it).
 ---@field OnChange? fun()

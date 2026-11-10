@@ -2,6 +2,11 @@
 
 Status: **frozen** on 2026-11-06. Changes go only through the orchestrator. Type definitions: `lua/privatewar/types/core.lua`.
 
+Approved revision (2026-11-11), not implemented: [feature contracts](feature-contracts.md) require readiness before
+playable S&D starts, visible abort-to-lobby on activation failure, and playlist expiry/one-shot pending-start
+handling. These override affected automatic vote/repeat paths below, not the ordinary phase machine. Existing
+pending-match map/count/age/version guards and JSON persistence remain; only playlist JSON storage is removed.
+
 Extended after T-1.4 to T-1.19 (2026-11-06) and after wave 0, 2026-11-07 (required fields checked after `Base`, `PW.HookFor`, class table `IsValid`, net `owner`,
 shared enable snapshot: see "Required fields", "Auto-subscription", "Enable ConVars" and "Client messages"): sections "Built-in kind `modes`", "Built-in kind `weapons`", "Weapon
 registration phase", "Auto-subscription", "Enable ConVars", "Settings", "Hot reload", "Hook dispatch", "Entity

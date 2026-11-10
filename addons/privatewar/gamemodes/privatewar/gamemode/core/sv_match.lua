@@ -144,6 +144,12 @@ end
 ---@param countdown? boolean
 local function transition(store, from, to, duration, countdown)
     exitPhase(store, from)
+    -- Leave the running-match interval before sampling predicates, but decide the final destination before
+    -- publishing or notifying listeners (in particular before the vote module can open a session).
+    store.phase = to --[[@as PW.PhaseName]]
+    if from == "POSTMATCH" and PW.Playlist ~= nil and not PW.Playlist._Complete() and to == "VOTE" then
+        to, duration = "LOBBY", -1
+    end
     store.endsAt = (duration ~= nil and duration >= 0) and store.clock() + duration or -1
     store.phase = to --[[@as PW.PhaseName]]
     store.countdown = countdown == true
@@ -219,6 +225,9 @@ end
 ---@param map? string
 ---@return boolean
 local function beginMatch(store, mode, duration, map)
+    if store.phase == "VOTE" and PW.Playlist ~= nil and not PW.Playlist._RotationAllowed(true) then
+        return match.Abort("playlist expired; rotation cancelled")
+    end
     local resolved = match._Definition(mode, PW.Registries or {})
     if resolved == nil then
         local reason = string.format("mode %s is no longer registered (reloaded)", tostring(mode.ClassName))
@@ -233,10 +242,15 @@ local function beginMatch(store, mode, duration, map)
             store.log("match start ignored: a map change is in progress")
             return false
         elseif step == "changelevel" then
-            return changeLevel(store, changer, resolved --[[@as table]], map --[[@as string]])
+            local accepted = changeLevel(store, changer, resolved --[[@as table]], map --[[@as string]])
+            if accepted and PW.Playlist ~= nil then
+                PW.Playlist._AcceptStart(resolved.ClassName, map --[[@as string]])
+            end
+            return accepted
         end
     end
     store.mode = resolved
+    if PW.Playlist ~= nil then PW.Playlist._AcceptStart(resolved.ClassName, map or game.GetMap()) end
     return match._SetPhase("PREMATCH", duration)
 end
 
@@ -299,6 +313,7 @@ function match.Abort(reason)
     local store = PW._Match
     store.abortReason = tostring(reason)
     store.log("match aborted: " .. store.abortReason)
+    if PW.Playlist ~= nil then PW.Playlist._StartFailed(store.abortReason) end
     return defer(function(current)
         if current.phase == "LOBBY" then return false end
         return match._SetPhase("LOBBY")

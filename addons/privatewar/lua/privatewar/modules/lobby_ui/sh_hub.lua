@@ -153,13 +153,25 @@ local function playlistCards(input, canPick)
     local keys = {}
     local playlists = input.playlists or nil
     for _, item in ipairs(playlists ~= nil and playlists.list or {}) do
-        local key = lib._SeenKey(item.id)
-        keys[#keys + 1] = key
-        cards[#cards + 1] = {
-            id = item.id, title = item.name, text = item.summary, new = input.seen[key] ~= true,
-            footer = item.fill > 0 and string.format("Fills to %d with bots", item.fill) or nil,
-            locked = not canPick, reason = not canPick and reasons.playlist or nil
-        }
+        local upcoming = playlists ~= nil and item.valid and item.nextChange ~= nil
+            and item.nextChange > playlists.sampledAt and item.nextChange - playlists.sampledAt <= 48 * 3600
+        if item.active or (playlists ~= nil and item.id == playlists.active) or upcoming then
+            local key = lib._SeenKey(item.id)
+            keys[#keys + 1] = key
+            local timing = ""
+            if playlists ~= nil and item.nextChange ~= nil then
+                timing = string.format(" - %s in %dm", item.active and "ends" or "starts",
+                    math.ceil((item.nextChange - playlists.sampledAt) / 60))
+            elseif not item.active then timing = " - unavailable" end
+            local allowed = canPick and (item.active or
+                (playlists ~= nil and playlists.active == item.id and playlists.canStart))
+            cards[#cards + 1] = {
+                id = item.id, title = item.name, text = item.summary .. timing, new = input.seen[key] ~= true,
+                footer = item.fill > 0 and string.format("Fills to %d with bots", item.fill) or nil,
+                locked = not allowed,
+                reason = not canPick and reasons.playlist or (not allowed and "Playlist is inactive" or nil)
+            }
+        end
     end
     cards[#cards + 1] = {
         id = customId, title = "Custom game", new = false, locked = false,
@@ -219,14 +231,18 @@ function lib._Hub(input)
     local mode = (state ~= nil and model ~= nil) and modeEntry(state, model.mode) or nil
     local summary = summaryOf(input, mode, model ~= nil and model.map or nil)
     local active = activePlaylist(input)
-    local cards, keys = playlistCards(input, state ~= nil and state.canStart)
+    local cards, keys = playlistCards(input, state ~= nil and state.canStart
+        and input.playlists ~= false and input.playlists ~= nil and input.playlists.canPick)
+    local entryReason = input.playlists and active ~= nil and
+        (not input.playlists.canPick and reasons.start or
+        (not input.playlists.canStart and "Playlist is inactive" or nil)) or nil
     local rows, fill = matchRowsOf(active, mode)
     local canStart = state ~= nil and state.canStart
     local entry = input.entry ~= nil and lib._Entry(input.entry) or nil
     return {
         ready = state ~= nil, cards = cards, selected = active ~= nil and active.id or customId, seenKeys = keys,
-        start = lib._ApplyFlow(startAction(state, model, active, summary, entry ~= nil and entry.startReason or nil),
-            input.flow),
+        start = lib._ApplyFlow(startAction(state, model, active, summary,
+            entry ~= nil and entry.startReason or entryReason), input.flow),
         hint = entry ~= nil and entry.hints[1] or nil,
         modeMap = action("modemap", "Mode & map", "Choose the mode and the map.",
             lockReason(state, canStart, reasons.modeMap)),

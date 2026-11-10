@@ -64,10 +64,12 @@ end
 local function samplePlaylists(active, fill)
     return {
         list = {
-            { id = "night", name = "Night ops", summary = "pwt_tdm on all maps", fill = fill or 12 },
-            { id = "ship", name = "Shipment 24/7", summary = "pwt_tdm, pwt_ffa on 1 map", fill = 0 }
+            { id = "night", name = "Night ops", summary = "pwt_tdm on all maps", fill = fill or 12,
+                active = true, valid = true },
+            { id = "ship", name = "Shipment 24/7", summary = "pwt_tdm, pwt_ffa on 1 map", fill = 0,
+                active = true, valid = true }
         },
-        active = active or "", canPick = true
+        active = active or "", canPick = true, sampledAt = 1000, serial = 1, retained = false, canStart = true
     }
 end
 
@@ -232,6 +234,32 @@ return {
                 local bare = lobby()._Hub(hubInput(true, { playlists = false }))
                 expect(#bare.cards).to.equal(1)
                 expect(bare.selected).to.equal("@custom")
+            end
+        },
+        {
+            name = "Scheduled hub cards use authoritative availability countdown retained start and receiver privilege",
+            func = function()
+                local snapshot = samplePlaylists("night")
+                snapshot.list[1].active, snapshot.list[1].nextChange = false, nil
+                snapshot.retained, snapshot.canStart = true, true
+                snapshot.list[2].nextChange = snapshot.sampledAt + 60
+                local input = hubInput(true, { playlists = snapshot })
+                local hub = lobby()._Hub(input)
+                expect(hub.start.locked).to.beFalse()
+                expect(cardOf(hub.cards, "night").locked).to.beFalse()
+                expect(string.find(cardOf(hub.cards, "ship").text, "ends in 1m", 1, true)).to.exist()
+                snapshot.canStart = false
+                hub = lobby()._Hub(input)
+                expect(lockedWithReason(hub.start)).to.beTrue()
+                expect(cardOf(hub.cards, "night").locked).to.beTrue()
+                snapshot.canPick = false
+                expect(cardOf(lobby()._Hub(input).cards, "ship").locked).to.beTrue()
+                snapshot.active = ""
+                snapshot.list[2].active = false
+                snapshot.list[2].nextChange = snapshot.sampledAt + 48 * 3600
+                expect(#lobby()._Hub(input).cards).to.equal(2)
+                snapshot.list[2].nextChange = snapshot.list[2].nextChange + 1
+                expect(#lobby()._Hub(input).cards).to.equal(1)
             end
         },
         {

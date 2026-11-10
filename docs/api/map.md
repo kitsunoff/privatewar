@@ -2,10 +2,15 @@
 
 Status: frozen on 2026-11-07, changes only through the orchestrator.
 
+Approved revision (2026-11-11), not implemented: [feature contracts](feature-contracts.md#snd-map-eligibility-and-activation)
+supersede the authored-only S&D rule and extend ModeFits/readiness/generated-data lookup. The legacy descriptions
+below remain implementation history for those affected seams, not permission to ignore the new activation guard.
+Other objective modes and all ordinary spawn APIs are unchanged.
+
 Extended on 2026-11-07 after T-2.7, T-2.8, T-2.9 and T-2.11: the items of "Open in design" that the lane agents
 decided in code (items 1, 3, 4, 5 and 8, and the function set of item 11) are now in the main text. Extended again on
 2026-11-07 after T-2.4, T-2.10 and T-2.12 (`PW.Map.ModeFits`, `pw_mark`, navmesh generation): items 2, 6 and 9 are
-decided in code and item 10 is partly done. The code wins over any description here. Values marked "lane agent" are
+decided in code and item 10 is partly done. Approved design and the revision above take precedence over code. Values marked "lane agent" are
 gameplay or API details the orchestrator recorded after the merge.
 
 Contract for the `map` lane (T-2.7 to T-2.12). It sits on top of `core.md` and `modes.md`. Every item cites its

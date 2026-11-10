@@ -208,6 +208,10 @@ function lib._Cast(ply, index)
 end
 
 function lib._Pick(ply, modeId, map)
+    if PW.Playlist ~= nil and not PW.Playlist._RotationAllowed(true) then
+        assert(PW.Match).Abort("playlist expired during vote")
+        return false, "playlist inactive"
+    end
     local st = store()
     local session = st.session
     if session == nil then return false, "closed" end
@@ -238,6 +242,7 @@ local function decide(st, session)
 end
 
 function lib.Result()
+    if PW.Playlist ~= nil and not PW.Playlist._RotationAllowed(true) then return nil end
     local st = store()
     local session = st.session
     if session == nil then return nil end
