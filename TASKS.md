@@ -59,7 +59,7 @@ Develop directly in this canonical repository (`kitsunoff/privatewar`), on featu
 
 1. Obtain explicit permission and confirmation that the Deck is free before any access. Touch it only through the locked scripts (`make test`, `scripts/deck/*.sh`); never `ssh` to it directly. The lock serializes access but grants no permission. `scripts/deck/lock.sh` needs GNU coreutils: always run the Deck scripts through `nix develop --command`.
 2. For any client-visible change, look at the result with `scripts/deck/snap.sh` (it reloads the map so the host's client runs the new files) and read the printed screenshot path. `pw_reload` alone does not refresh the host's client.
-3. Never run `scripts/deck/cp1.sh` unless the user asks for it. Restart the game (`run.sh --restart`) only after a `make test` timeout (exit 124).
+3. Never run `scripts/deck/cp1.sh` unless the user asks for it. An explicit standing user authorization permits restarting GMod when necessary, not only after a `make test` timeout (exit 124); no repeated restart approval is needed within that authorization's scope. Avoid unnecessary restarts. Restart permission does not establish Deck availability or authorize other device work: confirm it is free and use the locked scripts through Nix. `scripts/deck/test.sh` starts a stopped game and restarts an already running game when the main addon or GLuaTest directory is missing (fresh install); otherwise it reloads the map. Account for this before an authorized test run.
 4. Never leave uncommitted experiments deployed to the Deck.
 
 ### Manual checks and pending decisions

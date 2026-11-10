@@ -120,7 +120,11 @@ set -o pipefail
 nix develop --command make test
 ```
 
-`make test` deploys and reloads the map, potentially interrupting play. `scripts/deck/test.sh` supports only
+`make test` deploys and normally reloads the map, potentially interrupting play. `scripts/deck/test.sh` starts a
+stopped game; if the main addon or GLuaTest directory is missing, it restarts an already running game for that
+fresh install, because addon folders mount at startup. Otherwise it reloads the map. Account for this before
+an authorized test run; restart permission does not replace test permission or confirmation that the Deck is free.
+`scripts/deck/test.sh` supports only
 `--expect-failure`, not a guessed file/group filter. For a long whole-suite run, an authorized invocation can use
 `nix develop --command env PW_TEST_TIMEOUT=480 make test`; record the actual timeout, counts and exit status.
 Do not silently filter tests or alter the runner to obtain green.
@@ -129,8 +133,11 @@ Use only `scripts/deck/*.sh` through `nix develop --command`, never direct SSH o
 `cmd.sh` belongs inside your own locked run; do not steal/remove another owner's lock. `pw_reload` reloads the server
 but cannot reliably update host-client datapack code. Client-visible verification uses an authorized locked
 `nix develop --command bash scripts/deck/snap.sh` and inspection of its printed screenshot path (map reload).
-Never run `cp1.sh` without a specific request. Restart only after `make test` timeout 124, then retry once;
-use `nix develop --command bash scripts/deck/logs.sh --once` inside the permitted workflow. At most two attempts
+Never run `cp1.sh` without a specific request. Explicit standing user authorization permits necessary GMod restarts
+within its scope without repeated approval; a `make test` timeout 124 is not a prerequisite. Avoid unnecessary
+restarts. Confirm the Deck is free and use `nix develop --command bash scripts/deck/run.sh --restart` through the
+locked workflow; restart permission does not establish availability or authorize other device work. After a timeout
+restart, retry the test once. Use `nix develop --command bash scripts/deck/logs.sh --once` inside the permitted workflow. At most two attempts
 for an environment problem; report blocked instead of looping. Never edit a running script or leave experiments deployed.
 
 ## 6. Review and report

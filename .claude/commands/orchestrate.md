@@ -96,7 +96,11 @@ model substitution or paid evaluation without the required authorization.
   - obtain explicit permission and confirmation that the Deck is free before any access; the lock is not permission;
   - touch the Deck only through the locked scripts (`make test`, `scripts/deck/*.sh`); never ssh to it directly;
   - `scripts/deck/cmd.sh` only inside your own locked run (it refuses with exit 75 otherwise);
-  - restart the game (`run.sh --restart`) only after a `make test` timeout (exit 124);
+  - explicit standing user authorization permits necessary GMod restarts (`run.sh --restart`) without waiting for
+    a test timeout or asking again within its scope; avoid unnecessary restarts. Restart permission never establishes
+    Deck availability or authorizes other device work: confirm it is free and use the locked scripts through Nix;
+  - `test.sh` starts a stopped game, restarts a running game for a fresh install (main addon or GLuaTest directory
+    missing), and otherwise reloads the map; account for this before an authorized test run;
   - if the lock is held, wait for it; never touch another agent's run or the lock file `pw-deck.lock`;
   - never leave uncommitted experiments deployed to the Deck;
   - `pw_reload` refreshes the server only: the host's client keeps the clientside Lua of the last map load (old
@@ -141,9 +145,12 @@ the full merge gate remains incomplete.
 Workflow: follow docs/agent-workflow.md and load the matching skill linked from AGENTS.md. Set `set -o pipefail`
 in the invoking shell. Write tests → authorized game RED (or explicitly unobserved) → implement →
 `nix develop --command make check` → authorized `nix develop --command make test` → commit when static gates are clean.
-If `make test` times out (exit 124), within the permitted locked workflow use
-`nix develop --command bash scripts/deck/run.sh --restart`, then retry once;
-read errors with `nix develop --command bash scripts/deck/logs.sh --once`.
+An explicit standing restart authorization allows `nix develop --command bash scripts/deck/run.sh --restart`
+when necessary within its scope, with a confirmed-free Deck and the permitted locked workflow; avoid unnecessary
+restarts. A timeout (exit 124) is one possible reason, not a prerequisite; after a timeout restart, retry once.
+Restart authorization alone grants neither device availability nor other Deck work. `test.sh` may restart a running
+game on fresh install (main addon or GLuaTest directory missing); otherwise it reloads the map, or starts a stopped game.
+Read errors with `nix develop --command bash scripts/deck/logs.sh --once`.
 Before reporting: merge the latest main into your branch (`git merge main`), then re-run
 `nix develop --command make check` and `make test`.
 
