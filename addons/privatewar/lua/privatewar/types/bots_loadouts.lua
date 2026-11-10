@@ -3,7 +3,7 @@
 -- (shared.lua: the pure pool, weights and pick; init.lua: the server glue, the players' pool and the hooks).
 
 ---Where a pool class comes from: the classes/ kind or the custom classes of the session's humans.
----@alias PW.BotClassSource "preset"|"players"
+---@alias PW.BotClassSource "preset"|"players"|"generated"
 
 ---One class a bot may pick.
 ---@class PW.BotClassEntry
@@ -11,6 +11,7 @@
 ---@field source PW.BotClassSource
 ---@field name string
 ---@field loadout PW.Loadout
+---@field category? string explicit archetype for bot-only candidates (LMG and pistol-only included)
 
 ---A preset as plain data for the pool.
 ---@class PW.BotPresetClass
@@ -49,6 +50,9 @@
 ---@field Sources fun(value: any): PW.BotClassSources
 ---Pure: the pool: enabled sources only, classes that pass check; presets in order, then players by key.
 ---@field BuildPool fun(input: PW.BotPoolInput): PW.BotClassEntry[]
+---Append copies of provider candidates passing current match validation; existing entries stay untouched.
+---@field AppendCandidates fun(pool: PW.BotClassEntry[], candidates: PW.BotClassEntry[],
+---  check: fun(loadout: PW.Loadout): boolean)
 ---Pure: the weight of a class: weights[category of its primary], else 1; never below 0.
 ---@field Weight fun(entry: PW.BotClassEntry, weights: table<string, number>?, categoryOf: PW.BotCategoryFn): number
 ---Pure: the weighted pick for roll in [0, 1); an even draw when every weight is 0; nil for an empty pool.

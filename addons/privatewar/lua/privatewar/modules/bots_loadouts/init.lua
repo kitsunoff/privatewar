@@ -87,12 +87,18 @@ function lib.PoolFor(bot)
     local loadout = loadoutLib()
     if loadout == nil then return {} end
     lib.Harvest(nil)
-    return lib.BuildPool({
+    local pool = lib.BuildPool({
         sources = lib.Sources(PW.Setting("bots.classes")),
         presets = presets(),
         players = playerClasses(),
         check = function(value) return (loadout.Validate(bot, value)) end
     })
+    ---@type PW.BotClassEntry[]
+    local candidates = {}
+    -- Notification: providers append bot-only candidates; the owner still enforces current match validation.
+    PW.Notify("PW_BotLoadoutCandidates", bot, candidates)
+    lib.AppendCandidates(pool, candidates, function(value) return (loadout.Validate(bot, value)) end)
+    return pool
 end
 
 ---@param bot Player

@@ -173,6 +173,7 @@ return {
                 local sources = { preset = true }
                 stub(PW, "Setting").with(function(id)
                     if id == "bots.classes" then return sources end
+                    if id == "bots_arc9_loadouts.generate" then return false end -- isolate preset source policy
                     if id == "loadout.bannedweapons" then return { weapon_shotgun = true } end
                     return setting(id)
                 end)
