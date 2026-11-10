@@ -48,7 +48,12 @@
               ./.glualint.json
               ./.luarc.json
               ./.markdownlint-cli2.yaml
+              ./.opencode/skills
+              ./AGENTS.md
               ./README.md
+              ./LICENSE
+              ./THIRD_PARTY_NOTICES.md
+              ./design
               ./scripts/check
               ./addons
               ./docs
@@ -149,6 +154,8 @@
           types = gate "types" "scripts/check/types.sh";
           markdown = gate "markdown" "scripts/check/markdown.sh";
           rules = gate "rules" "scripts/check/rules.sh";
+          agent-guides = gate "agent-guides" "scripts/check/agent-guides.sh";
+          agent-guides-selftest = gate "agent-guides-selftest" "scripts/check/agent-guides-selftest.sh";
           # The gates must reject known-bad fixtures, otherwise a green check proves nothing.
           gates-selftest = gate "gates-selftest" "scripts/check/selftest.sh";
         }

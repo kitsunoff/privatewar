@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: implement
+expected_outcome: |
+  A data-only stat perk and new declaration/group/composition/UI-warning tests, preserving frozen existing perks.
+  No partial SetStatMods or foreign-owner change; static Nix checks only and game gate incomplete.

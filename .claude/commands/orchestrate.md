@@ -63,14 +63,11 @@ addons are `addons/<name>/`; the dev-only addon is `addons/privatewar-dev/`. Pat
 
 ## Model choice
 
-The orchestrator picks the model per agent with the Agent tool `model` parameter.
-
-- Sonnet: pure-logic tasks with a tight mandatory test list, simple modules on a frozen contract,
-  docs/contract sync, chores. Sonnet briefs must list explicit stop conditions ("if X, stop and report").
-- Opus: core (`gamemodes/privatewar/gamemode/core/`) and contract changes; weapon base integrations
-  (ARC9/TFA/MW Base); bots; anything that needs manual verification or debugging on the Deck
-  (map change, P2P, navmesh, spawns); a task Sonnet failed twice.
-- Track rework rounds per model. If Sonnet tasks need rework more often than Opus tasks, shift the boundary.
+Use the user's authorized routing and the actual harness's available models/tools; this workflow does not require
+a particular vendor or grant recursive delegation. Freeze exact ownership, APIs, tests and stop conditions for
+every implementer. Escalate a concrete unresolved core/contract/native-integration problem with evidence, rather
+than relying on a model name as a substitute for a complete brief. At most two targeted rework rounds; no silent
+model substitution or paid evaluation without the required authorization.
 
 ## Branches
 
@@ -96,9 +93,14 @@ The orchestrator picks the model per agent with the Agent tool `model` parameter
   the agent's own temp files.
 - Never edit a script while it runs. Bash reads scripts incrementally.
 - STRICT Deck rules (one Steam Deck, one game instance, shared by all worktrees):
+  - obtain explicit permission and confirmation that the Deck is free before any access; the lock is not permission;
   - touch the Deck only through the locked scripts (`make test`, `scripts/deck/*.sh`); never ssh to it directly;
   - `scripts/deck/cmd.sh` only inside your own locked run (it refuses with exit 75 otherwise);
-  - restart the game (`run.sh --restart`) only after a `make test` timeout (exit 124);
+  - explicit standing user authorization permits necessary GMod restarts (`run.sh --restart`) without waiting for
+    a test timeout or asking again within its scope; avoid unnecessary restarts. Restart permission never establishes
+    Deck availability or authorizes other device work: confirm it is free and use the locked scripts through Nix;
+  - `test.sh` starts a stopped game, restarts a running game for a fresh install (main addon or GLuaTest directory
+    missing), and otherwise reloads the map; account for this before an authorized test run;
   - if the lock is held, wait for it; never touch another agent's run or the lock file `pw-deck.lock`;
   - never leave uncommitted experiments deployed to the Deck;
   - `pw_reload` refreshes the server only: the host's client keeps the clientside Lua of the last map load (old
@@ -127,8 +129,8 @@ Tests go in the task's own test file (lua/tests/privatewar/<area>_<topic>.lua), 
 lua/tests/privatewar/kind_examples.lua: parallel tasks editing it caused merge conflicts.
 
 Setup in the worktree (it is fresh):
-1. git switch --create task/<T-id>-<slug> main   (then verify `git log --oneline --max-count=1` is main's current commit:
-   fresh worktrees were created from stale commits before)
+1. Inspect git status/base first. Create the assigned feature branch from the exact assigned current base
+   (normally origin/main); verify its commit. Do not overwrite existing changes or create a second task branch blindly.
 2. cp <main repo path>/.deck.env .   (git-ignored Deck address)
 3. export NIX_CONFIG="access-tokens = github.com=$(gh auth token)"   (avoids GitHub rate limits;
    the sandbox may block the export: continue without it)
@@ -140,10 +142,15 @@ Setup in the worktree (it is fresh):
 Run game tests only after the user confirms the Deck is free. If not authorized, report them skipped;
 the full merge gate remains incomplete.
 
-Workflow: write the tests → `nix develop --command make check` → implement → `make check` →
-`nix develop --command make test` (runs GLuaTest in the game on the Steam Deck, about 30 s) → commit.
-If `make test` times out (exit 124): run `bash scripts/deck/run.sh --restart`, wait about 60 s, retry once;
-read errors with `bash scripts/deck/logs.sh --once`.
+Workflow: follow docs/agent-workflow.md and load the matching skill linked from AGENTS.md. Set `set -o pipefail`
+in the invoking shell. Write tests → authorized game RED (or explicitly unobserved) → implement →
+`nix develop --command make check` → authorized `nix develop --command make test` → commit when static gates are clean.
+An explicit standing restart authorization allows `nix develop --command bash scripts/deck/run.sh --restart`
+when necessary within its scope, with a confirmed-free Deck and the permitted locked workflow; avoid unnecessary
+restarts. A timeout (exit 124) is one possible reason, not a prerequisite; after a timeout restart, retry once.
+Restart authorization alone grants neither device availability nor other Deck work. `test.sh` may restart a running
+game on fresh install (main addon or GLuaTest directory missing); otherwise it reloads the map, or starts a stopped game.
+Read errors with `nix develop --command bash scripts/deck/logs.sh --once`.
 Before reporting: merge the latest main into your branch (`git merge main`), then re-run
 `nix develop --command make check` and `make test`.
 
@@ -157,7 +164,7 @@ Known type-checker traps (LuaLS is strict, every diagnostic is an error):
 - player slots are nearly exhausted at maxplayers 12: reuse shared bots in beforeAll/afterAll, create at most 2;
 - bridge commands sent during a map change are lost;
 - `GM:` methods already declared by the GLua annotations need `rawset(GM, ...)`;
-- pre-commit type-checks staged files only: commit annotations before or with the code;
+- pre-commit checks the whole project: commit annotations with the code and keep the working tree type-clean;
 - `table.Copy` on a list of registry entities copies the entities themselves, and `PW.Call` then treats the
   copies as invalid: copy such lists by hand (`for i, v in ipairs(list) do copy[i] = v end`);
 - `net.WriteTable` is forbidden (DESIGN.md global rule 4);

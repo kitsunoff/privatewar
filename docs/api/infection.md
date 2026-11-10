@@ -173,6 +173,9 @@ when a complete terminal snapshot arrives late. No per-frame Gather loop or hidd
 
 Source presence, not successful API registration, determines optional-addon test absence. A mounted
 broken implementation fails. No automated suite substitutes for the human HUD, gameplay or P2P checkpoint.
-The removal-between-startups matrix remains unverified without a separate authorized restart. Prior
+The removal-between-startups matrix remains unverified until actually tested across an authorized restart.
+Explicit standing user authorization permits a necessary restart within its scope, without a timeout prerequisite
+or repeated approval; it does not establish Deck availability or authorize other device work. Confirm the Deck is
+free, use the locked scripts and avoid unnecessary restarts. Prior
 source-absent baseline evidence is distinct from a disabled-addon test. Agent image inspection does not
 pass a human checkpoint.

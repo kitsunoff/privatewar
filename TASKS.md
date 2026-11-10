@@ -26,6 +26,11 @@ T-<phase>.<n>  Title                                  lane · agent · depends o
 ## How to continue (handover)
 
 For an agent that picks the work up in the middle (for example Codex after Claude): everything needed is in this repository. Read `CLAUDE.md` (project rules), `AGENTS.md` (short entry point), this file, then "Phase 11" at the end for the current queue. Task status is not stored per row in the older phase tables; inspect current code and task branches alongside "Phase 11". Pre-snapshot merge hashes and branch references are historical, not instructions to recreate implemented work.
+Use `AGENTS.md` "Coding skills" for mode, weapon-adapter, perk and wildcard implementation workflows;
+`docs/agent-test-map.md` maps their foundation mandatory clauses to exact current regression cases.
+The historical playtest-followup PR-pending references below are superseded by merged commit `b1f69fc`;
+subsequent spawn/bot/scoreboard/ARC9 work is present through `2f58518`. These are implementation history,
+not new game/performance/human-checkpoint pass claims. Inspect the current base before choosing work.
 
 ### Publishing
 
@@ -52,9 +57,9 @@ Develop directly in this canonical repository (`kitsunoff/privatewar`), on featu
 
 ### Steam Deck rules
 
-1. Touch the Deck only through the locked scripts (`make test`, `scripts/deck/*.sh`); never `ssh` to it directly. `scripts/deck/lock.sh` needs GNU coreutils: always run the Deck scripts through `nix develop --command`.
+1. Obtain explicit permission and confirmation that the Deck is free before any access. Touch it only through the locked scripts (`make test`, `scripts/deck/*.sh`); never `ssh` to it directly. The lock serializes access but grants no permission. `scripts/deck/lock.sh` needs GNU coreutils: always run the Deck scripts through `nix develop --command`.
 2. For any client-visible change, look at the result with `scripts/deck/snap.sh` (it reloads the map so the host's client runs the new files) and read the printed screenshot path. `pw_reload` alone does not refresh the host's client.
-3. Never run `scripts/deck/cp1.sh` unless the user asks for it. Restart the game (`run.sh --restart`) only after a `make test` timeout (exit 124).
+3. Never run `scripts/deck/cp1.sh` unless the user asks for it. An explicit standing user authorization permits restarting GMod when necessary, not only after a `make test` timeout (exit 124); no repeated restart approval is needed within that authorization's scope. Avoid unnecessary restarts. Restart permission does not establish Deck availability or authorize other device work: confirm it is free and use the locked scripts through Nix. `scripts/deck/test.sh` starts a stopped game and restarts an already running game when the main addon or GLuaTest directory is missing (fresh install); otherwise it reloads the map. Account for this before an authorized test run.
 4. Never leave uncommitted experiments deployed to the Deck.
 
 ### Manual checks and pending decisions
@@ -94,12 +99,12 @@ scripts/deck/
   dev.sh      deploy → pw_reload → logs (one command for agents)
 ```
 
-0. **Deck lock:** `deploy.sh`, `test.sh`, `run.sh`, `stop.sh`, `cp1.sh` and `dev.sh` take a lock shared by all worktrees (a symlink in the git common dir, `scripts/deck/lock.sh`), so parallel lane agents may all run `make test`: they wait in turn (message every 30 s, timeout `PW_DECK_LOCK_TIMEOUT`, default 1800 s, exit 75), a dead owner's lock is taken over, nested scripts re-enter. `cmd.sh` and `logs.sh` stay lock-free. Self-test: `scripts/check/deck-lock-selftest.sh` (part of `make check`).
+0. **Deck lock:** `deploy.sh`, `test.sh`, `run.sh`, `stop.sh`, `cp1.sh` and `dev.sh` take a lock shared by all worktrees (a symlink in the git common dir, `scripts/deck/lock.sh`). Only authorized users of a confirmed-free Deck may queue for it: they wait in turn (message every 30 s, timeout `PW_DECK_LOCK_TIMEOUT`, default 1800 s, exit 75), a dead owner's lock is taken over, nested scripts re-enter. `cmd.sh` requires your owned locked run; never send commands into someone else's run. Self-test: `scripts/check/deck-lock-selftest.sh` (part of `make check`).
 1. **Connection:** `DECK_HOST` (for example `steamdeck.local`) and `DECK_USER` (default `deck`) from environment variables; authentication by SSH key installed once with `ssh-copy-id`. **No passwords or hosts in the repository.**
 2. **Install detection** (the user is not sure whether GMod runs natively or through Proton): read `~/.local/share/Steam/steamapps/libraryfolders.vdf` to find the library holding app 4000 (internal storage or SD card); native build if `GarrysMod/hl2.sh` / `hl2_linux` exists, Proton if `GarrysMod/*.exe` and `steamapps/compatdata/4000/` exist. In both cases `addons/` and `console.log` live under `steamapps/common/GarrysMod/garrysmod/`. Launch arguments differ only in how Steam is asked to start the game (`steam -applaunch 4000 <args>`).
 3. **Reload:** on Linux (native) Lua auto-refresh works for changed files; new files need `pw_reload`. Under Proton auto-refresh is expected to work like on Windows (to verify). `dev.sh` always sends `pw_reload` after deploying, so both cases are covered on the server. **The host's client is not covered** (measured 2026-11-07): it runs clientside Lua from the server's datapack filled at map load, so after `pw_reload` it keeps the old content of changed files, still runs deleted files and finds a new file only one `pw_reload` later. To see new client code on screen, reload the map: `snap.sh` does it (map reload with the GLuaTest run skipped, then waits for the host's client).
 4. **Command bridge:** a listen server has no convenient remote console, so the dev-only module `pw_devbridge` polls `data/privatewar_dev/cmd.txt` once per second while `pw_dev` is 1 (default), runs the command on the server, and clears the file. It is excluded from Workshop packages.
-5. **Screenshots:** `cmd.sh screenshot`, then `scp` the newest file from `garrysmod/screenshots/` to the Mac for review.
+5. **Screenshots:** use `shot.sh` inside the approved locked workflow and inspect the printed local path. After client-code edits use `snap.sh` (map reload), not a bare server reload or direct SCP.
 6. **Verified on the user's Deck (2026-11-06, over SSH):**
 
    | Fact | Value |
