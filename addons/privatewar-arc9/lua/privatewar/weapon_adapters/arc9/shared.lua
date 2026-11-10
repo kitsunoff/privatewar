@@ -117,7 +117,15 @@ end
 local function copyList(list)
     ---@type table[]
     local result = {}
-    for i, entry in ipairs(list) do result[i] = table.Copy(entry) end
+    -- These records contain only strings/booleans (see slotsOf/optionsOf). Recursive table.Copy adds substantial
+    -- allocation/type-dispatch cost when the match validator repeatedly reads hundreds of attachment records.
+    for i, entry in ipairs(list) do
+        ---@type table<any, any>
+        local copy = {}
+        local fields = entry --[[@as table<any, any>]]
+        for key, value in pairs(fields) do copy[key] = value end
+        result[i] = copy
+    end
     return result
 end
 
