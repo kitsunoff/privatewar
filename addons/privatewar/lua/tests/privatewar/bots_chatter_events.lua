@@ -23,33 +23,35 @@ local function participant(bot, sent)
     } --[[@as Player]]
 end
 
+-- GLuaTest injects stub into case environments, not into this file-level helper.
+---@param stubber fun(tbl: table, key: string): any
 ---@param phase? string
 ---@param enabled? boolean
 ---@return table<string, any>
-local function setup(phase, enabled)
+local function setup(stubber, phase, enabled)
     local lib = must(PW.BotChatter)
     local module = must(must(PW.Registries.modules).Get("bots_chatter"))
-    stub(module, "IsValid").with(function() return true end)
-    stub(must(PW.Match), "GetPhase").with(function() return phase or "LIVE" end)
-    stub(PW, "Setting").with(function(id)
+    stubber(module, "IsValid").with(function() return true end)
+    stubber(must(PW.Match), "GetPhase").with(function() return phase or "LIVE" end)
+    stubber(PW, "Setting").with(function(id)
         if id == "bots_chatter.enabled" then return enabled ~= false end
         if id == "bots_chatter.chat" then return true end
         return false
     end)
-    stub(must(PW.Bot), "Get").with(function() return {} end)
-    stub(lib, "_Line").with(function(_, _, event) return event end)
+    stubber(must(PW.Bot), "Get").with(function() return {} end)
+    stubber(lib, "_Line").with(function(_, _, event) return event end)
     ---@param states table<any, PW.ChatterState>
     ---@param ply any
     local function identity(states, ply)
         states[ply] = states[ply] or { next = 0, speaking = 0 }
         return states[ply]
     end
-    stub(lib, "_Identity").with(identity)
+    stubber(lib, "_Identity").with(identity)
     -- Separate fixture clocks also keep the production service's global limit isolated between cases.
-    stub(_G, "CurTime").with(function() return 1000000 end)
-    stub(net, "Start").with(function() end)
-    stub(net, "WriteBool").with(function() end)
-    stub(net, "Broadcast").with(function() end)
+    stubber(_G, "CurTime").with(function() return 1000000 end)
+    stubber(net, "Start").with(function() end)
+    stubber(net, "WriteBool").with(function() end)
+    stubber(net, "Broadcast").with(function() end)
     module:PW_PhaseChange("LOBBY")
     return module
 end
@@ -64,7 +66,7 @@ return {
         {
             name = "Chatter events: enemy kill is global bot chat, duplicate event is rate limited",
             func = function()
-                local module = setup()
+                local module = setup(stub)
                 local sent = {}
                 local attacker, victim = participant(true, sent), participant(false, {})
                 stub(PW, "IsEnemy").with(function() return true end)
@@ -77,7 +79,7 @@ return {
         {
             name = "Chatter events: friendly kill and suicide never produce killer taunts",
             func = function()
-                local module = setup()
+                local module = setup(stub)
                 local sent = {}
                 local attacker, victim = participant(true, sent), participant(false, {})
                 stub(PW, "IsEnemy").with(function() return false end)
@@ -91,7 +93,7 @@ return {
         {
             name = "Chatter events: disabled service cannot deliver text",
             func = function()
-                local module = setup("LIVE", false)
+                local module = setup(stub, "LIVE", false)
                 local sent = {}
                 local attacker, victim = participant(true, sent), participant(false, {})
                 stub(PW, "IsEnemy").with(function() return true end)
@@ -102,7 +104,7 @@ return {
         {
             name = "Chatter events: round end suppresses delivery until round start",
             func = function()
-                local module = setup()
+                local module = setup(stub)
                 local sent = {}
                 local attacker, victim = participant(true, sent), participant(false, {})
                 stub(PW, "IsEnemy").with(function() return true end)
@@ -117,7 +119,7 @@ return {
         {
             name = "Chatter events: non-LIVE service cannot deliver text",
             func = function()
-                local module = setup("POSTMATCH")
+                local module = setup(stub, "POSTMATCH")
                 local sent = {}
                 local attacker, victim = participant(true, sent), participant(false, {})
                 stub(PW, "IsEnemy").with(function() return true end)

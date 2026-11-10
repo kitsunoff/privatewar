@@ -29,8 +29,10 @@ local function bot(human)
     } --[[@as Player]]
 end
 
+-- GLuaTest injects stub into case environments, not into this file-level helper.
+---@param stubber fun(tbl: table, key: string): any
 ---@return table<string, any>
-local function client()
+local function client(stubber)
     clientLoaded = true
     ---@type {receivers: table<string, function>, callbacks: function[], speaker: Player, now: number, all: boolean}
     local world = { receivers = {}, callbacks = {}, speaker = bot(), now = 0, all = true }
@@ -39,14 +41,14 @@ local function client()
     rawset(PW, "_StopBotChatter", nil)
     rawset(_G, "MODULE", { IsValid = function() return true end })
     rawset(sound, "PlayFile", function(_, _, callback) world.callbacks[#world.callbacks + 1] = callback end)
-    stub(net, "Receive").with(function(name, callback) world.receivers[name] = callback end)
-    stub(hook, "Add").with(function() end)
-    stub(net, "ReadEntity").with(function() return world.speaker end)
-    stub(net, "ReadString").with(function() return "lambdaplayers/vo/idle/test.mp3" end)
-    stub(net, "ReadBool").with(function() return world.all end)
-    stub(file, "Exists").with(function() return true end)
-    stub(PW, "Setting").with(function() return 1 end)
-    stub(_G, "CurTime").with(function() return world.now end)
+    stubber(net, "Receive").with(function(name, callback) world.receivers[name] = callback end)
+    stubber(hook, "Add").with(function() end)
+    stubber(net, "ReadEntity").with(function() return world.speaker end)
+    stubber(net, "ReadString").with(function() return "lambdaplayers/vo/idle/test.mp3" end)
+    stubber(net, "ReadBool").with(function() return world.all end)
+    stubber(file, "Exists").with(function() return true end)
+    stubber(PW, "Setting").with(function() return 1 end)
+    stubber(_G, "CurTime").with(function() return world.now end)
     include("privatewar/modules/bots_chatter/cl_init.lua")
     return world
 end
@@ -157,7 +159,7 @@ return {
         {
             name = "Chatter shutdown: stop-all closes playing audio and invalidates pending open callbacks",
             func = function()
-                local world = client()
+                local world = client(stub)
                 world.receivers.pw_bot_voice()
                 local playing = channel()
                 world.callbacks[1](playing)
@@ -175,7 +177,7 @@ return {
         {
             name = "Chatter shutdown: per-player stop invalidates its pending callback without stopping another bot",
             func = function()
-                local world = client()
+                local world = client(stub)
                 local first = world.speaker
                 world.receivers.pw_bot_voice()
                 world.speaker = bot()
@@ -195,7 +197,7 @@ return {
         {
             name = "Chatter shutdown: reload closes old channels and cancels old pending callbacks",
             func = function()
-                local world = client()
+                local world = client(stub)
                 world.receivers.pw_bot_voice()
                 local playing = channel()
                 world.callbacks[1](playing)
@@ -212,7 +214,7 @@ return {
         {
             name = "Chatter shutdown: stale callback after stop cannot restore or remove a newer stream",
             func = function()
-                local world = client()
+                local world = client(stub)
                 world.receivers.pw_bot_voice()
                 world.receivers.pw_bot_voice_stop()
                 world.receivers.pw_bot_voice()
