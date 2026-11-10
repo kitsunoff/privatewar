@@ -219,6 +219,9 @@ end
 ---@param map? string
 ---@return boolean
 local function beginMatch(store, mode, duration, map)
+    if store.phase == "VOTE" and PW.Playlist ~= nil and not PW.Playlist._RotationAllowed(true) then
+        return match.Abort("playlist expired; rotation cancelled")
+    end
     local resolved = match._Definition(mode, PW.Registries or {})
     if resolved == nil then
         local reason = string.format("mode %s is no longer registered (reloaded)", tostring(mode.ClassName))
@@ -233,10 +236,15 @@ local function beginMatch(store, mode, duration, map)
             store.log("match start ignored: a map change is in progress")
             return false
         elseif step == "changelevel" then
-            return changeLevel(store, changer, resolved --[[@as table]], map --[[@as string]])
+            local accepted = changeLevel(store, changer, resolved --[[@as table]], map --[[@as string]])
+            if accepted and PW.Playlist ~= nil then
+                PW.Playlist._AcceptStart(resolved.ClassName, map --[[@as string]])
+            end
+            return accepted
         end
     end
     store.mode = resolved
+    if PW.Playlist ~= nil then PW.Playlist._AcceptStart(resolved.ClassName, map or game.GetMap()) end
     return match._SetPhase("PREMATCH", duration)
 end
 
@@ -299,6 +307,7 @@ function match.Abort(reason)
     local store = PW._Match
     store.abortReason = tostring(reason)
     store.log("match aborted: " .. store.abortReason)
+    if PW.Playlist ~= nil then PW.Playlist._StartFailed(store.abortReason) end
     return defer(function(current)
         if current.phase == "LOBBY" then return false end
         return match._SetPhase("LOBBY")
@@ -335,6 +344,9 @@ function match._Tick()
     if store.busy then return end
     local allReady = store.phase == "PREMATCH" and PW.Phase._AllReady(store.players(), store.ready)
     local step = PW.Phase._Next(store, store.clock(), allReady, store.settings())
+    if step ~= nil and store.phase == "POSTMATCH" and PW.Playlist ~= nil and not PW.Playlist._Complete() then
+        step = { phase = "LOBBY", duration = -1 }
+    end
     if step ~= nil and step.begin and store.mode ~= nil then
         nextMatch(store, step.duration)
     elseif step ~= nil then

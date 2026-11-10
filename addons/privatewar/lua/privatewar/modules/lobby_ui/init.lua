@@ -160,6 +160,14 @@ function lib._OnStart(ply)
             tostring(modeId), tostring(map)))
         return false
     end
+    local playlists = PW.Playlist
+    if playlists ~= nil and playlists.SetActive ~= nil then
+        local selected, why = playlists.SetActive("")
+        if not selected then
+            store.log("custom start refused: " .. tostring(why))
+            return false
+        end
+    end
     store.log(string.format("lobby start by %s: %s on %s", nick(ply), modeId, map))
     return store.start(byId[modeId], map)
 end
