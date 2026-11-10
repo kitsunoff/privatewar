@@ -82,3 +82,7 @@ end)
 function MODULE:PW_PhaseChanged(phase)
     if phase ~= "LIVE" then current, latestSites = nil, nil end
 end
+
+if file.Exists("tests/privatewar/snd_wire_native.lua", "LUA") then
+    include("tests/privatewar/snd_wire_native.lua")
+end

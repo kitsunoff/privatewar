@@ -46,12 +46,13 @@ end
 ---@class PW.SNDTestStream
 ---@field bits integer
 ---@field cursor integer
+---@field readBits integer
 ---@field tokens { kind: string, value: any, bits: integer }[]
 
 ---@return PW.SNDWire, PW.SNDTestStream
 local function stream()
     ---@type PW.SNDTestStream
-    local data = { bits = 0, cursor = 1, tokens = {} }
+    local data = { bits = 0, cursor = 1, readBits = 0, tokens = {} }
     ---@param kind string
     ---@param value any
     ---@param bits integer
@@ -66,6 +67,7 @@ local function stream()
         local token = assert(data.tokens[data.cursor], "truncated fixture stream")
         assert(token.kind == kind and (bits == nil or token.bits == bits), "incompatible wire field")
         data.cursor = data.cursor + 1
+        data.readBits = data.readBits + token.bits
         return token.value
     end
     return {
@@ -73,12 +75,14 @@ local function stream()
         WriteFloat = function(value) write("float", value, 32) end,
         WriteBool = function(value) write("bool", value, 1) end,
         WriteString = function(value) write("string", value, (#value + 1) * 8) end,
-        WriteVector = function(value) write("vector", value, 96) end,
+        -- Symbolic cursor movement only. Native compression is tested in snd_wire_native.lua, not modeled here.
+        WriteVector = function(value) write("vector", value, 7) end,
         ReadUInt = function(bits) return read("uint", bits) end,
         ReadFloat = function() return read("float") end,
         ReadBool = function() return read("bool") end,
         ReadString = function() return read("string") end,
-        ReadVector = function() return read("vector") end
+        ReadVector = function() return read("vector") end,
+        BytesLeft = function() local left = data.bits - data.readBits return left / 8, left end
     }, data
 end
 

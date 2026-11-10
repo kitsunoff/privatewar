@@ -117,3 +117,8 @@ if SERVER then AddCSLuaFile("privatewar/modules/snd/sh_autodetect.lua") end
 include("privatewar/modules/snd/sh_autodetect.lua")
 if SERVER then AddCSLuaFile("privatewar/modules/snd/sh_wire.lua") end
 include("privatewar/modules/snd/sh_wire.lua")
+
+-- Test-only native transport fixture. This path is excluded from published addons.
+if SERVER and file.Exists("tests/privatewar/snd_wire_native.lua", "LUA") then
+    AddCSLuaFile("tests/privatewar/snd_wire_native.lua")
+end

@@ -28,8 +28,57 @@ local function vector(pos)
         and math.abs(pos.x) < math.huge and math.abs(pos.y) < math.huge and math.abs(pos.z) < math.huge
 end
 
-function lib._ReadState(wire, length)
-    if length < 67 or length > 1024 then return nil end
+---@param wire PW.SNDWire
+---@param length integer
+---@return PW.SNDWire
+local function bounded(wire, length)
+    -- Native cursor, not byte-count guesses: https://wiki.facepunch.com/gmod/net.BytesLeft
+    ---@return integer
+    local function bits()
+        local _, count = wire.BytesLeft()
+        if count == nil then error("No native read cursor", 0) end
+        assert(count >= 0 and count < math.huge and count == math.floor(count), "Invalid native read cursor")
+        return count --[[@as integer]]
+    end
+    local initial = bits()
+    assert(initial >= length, "Truncated native message")
+    ---@param func function
+    ---@param minimum integer
+    ---@param exact? integer
+    ---@param ... any
+    ---@return any, integer
+    local function take(func, minimum, exact, ...)
+        local before = bits()
+        local used = initial - before
+        assert(used >= 0 and used <= length and length - used >= minimum, "Truncated field")
+        ---@type any
+        local value = func(...)
+        ---@type integer
+        local consumed = before - bits()
+        assert(consumed >= minimum and consumed <= length - used
+            and (exact == nil or consumed == exact), "Native read exceeded payload budget")
+        return value, consumed
+    end
+    return setmetatable({
+        ReadUInt = function(count) return take(wire.ReadUInt, count, count, count) end,
+        ReadFloat = function() return take(wire.ReadFloat, 32, 32) end,
+        ReadBool = function() return take(wire.ReadBool, 1, 1) end,
+        ReadString = function()
+            local value, consumed = take(wire.ReadString, 8)
+            assert(#value <= 32 and consumed == (#value + 1) * 8, "Invalid bounded identifier")
+            return value
+        end,
+        -- No fixed vector size: use the engine's actual cursor movement. ReadVector can silently return zero
+        -- on failure (net.ReadVector docs); without an overflow flag not every corrupt final vector is distinguishable.
+        ReadVector = function() return take(wire.ReadVector, 1) end
+    }, { __index = wire }) --[[@as PW.SNDWire]]
+end
+
+---@param wire PW.SNDWire
+---@param length integer
+---@return PW.SNDStatePacket?
+local function readState(wire, length)
+    wire = bounded(wire, length)
     local generation, serial, phase = wire.ReadUInt(32), wire.ReadUInt(32), wire.ReadUInt(3)
     if phase == 0 then return { generation = generation, serial = serial } end
     if phases[phase] == nil or length < 166 then return nil end
@@ -38,12 +87,10 @@ function lib._ReadState(wire, length)
         fuse = wire.ReadFloat(), site = wire.ReadString(), progress = 0 }
     if #assert(view.site) > 32 or not time(view.deadline) or not time(view.fuse)
         or length < 166 + #assert(view.site) * 8 then return nil end
-    local stringBits = #assert(view.site) * 8
     local carrier = wire.ReadUInt(16)
     if carrier > 0 then view.carrier = carrier end
     if view.site == "" then view.site = nil end
     if wire.ReadBool() then
-        if length < 262 + stringBits then return nil end
         local pos = wire.ReadVector()
         if not vector(pos) then return nil end
         view.pos = pos
@@ -52,6 +99,12 @@ function lib._ReadState(wire, length)
     view.action = action == 1 and "plant" or (action == 2 and "defuse" or nil)
     view.progress = wire.ReadUInt(8) / 255
     return { generation = generation, serial = serial, view = view }
+end
+
+function lib._ReadState(wire, length)
+    if length < 67 or length > 1024 then return nil end
+    local ok, packet = pcall(readState, wire, length)
+    return ok and packet or nil
 end
 
 function lib._WriteSites(wire, generation, serial, sites)
@@ -69,24 +122,27 @@ end
 ---@param wire PW.SNDWire
 ---@param length integer
 ---@return PW.SNDSitesPacket?
-function lib._ReadSites(wire, length)
-    if length < 73 or length > 1024 or wire.ReadUInt(8) ~= 1 then return nil end
+local function readSites(wire, length)
+    wire = bounded(wire, length)
+    if wire.ReadUInt(8) ~= 1 then return nil end
     local generation, serial = wire.ReadUInt(32), wire.ReadUInt(32)
     if not wire.ReadBool() then return { generation = generation, serial = serial } end
-    if length < 281 then return nil end
-    ---@type integer
-    local consumed = 73
     ---@type PW.SNDPublicSite[]
     local raw = {}
     for i = 1, 2 do
         local id = wire.ReadString()
-        consumed = consumed + (#id + 1) * 8 + 96
-        if #id == 0 or #id > 32 or length < consumed + (2 - i) * 104 then return nil end
+        if #id == 0 or #id > 32 then return nil end
         raw[i] = { id = id, pos = wire.ReadVector() }
     end
     local sites = lib.PublicSites(raw)
     if sites == nil then return nil end
     return { generation = generation, serial = serial, sites = sites }
+end
+
+function lib._ReadSites(wire, length)
+    if length < 73 or length > 1024 then return nil end
+    local ok, packet = pcall(readSites, wire, length)
+    return ok and packet or nil
 end
 
 function lib._SitesFor(packet, generation, serial)

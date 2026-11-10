@@ -11,6 +11,7 @@
 ---@field ReadBool fun(): boolean
 ---@field ReadString fun(): string
 ---@field ReadVector fun(): Vector
+---@field BytesLeft fun(): number?, integer? native incoming-message cursor; required for bounded decoding
 
 ---@class PW.SNDStatePacket
 ---@field generation integer
