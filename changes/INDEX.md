@@ -18,6 +18,9 @@ historical test result into a current pass. Maintain one record per change and l
 ## Planned
 
 - [Fira Sans fonts](planned/fira-sans.md)
+- [Lambda-compatible bot voices, names and chat](planned/lambda-bot-voice.md)
+- [Automatic Search and Destroy support for `de_` maps](planned/snd-de-autodetect.md)
+- [Scheduled events (T-11.16)](planned/scheduled-events.md)
 
 ## In progress
 
@@ -25,7 +28,6 @@ No migrated records.
 
 ## Blocked
 
-- [Scheduled events (T-11.16)](blocked/scheduled-events.md)
 - [Additional weapon-base integrations (T-3.7 and T-3.8)](blocked/weapon-integrations.md)
 
 ## Done
