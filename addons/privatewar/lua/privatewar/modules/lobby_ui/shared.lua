@@ -55,8 +55,11 @@ function lib._CheckStart(request, facts)
     if not isstring(request.mode) or not facts.modes[request.mode] then return false, "unknown mode" end
     if not lib._ValidMapName(request.map) then return false, "invalid map" end
     if not facts.mapExists(request.map --[[@as string]]) then return false, "no such map" end
-    if facts.fits ~= nil and not facts.fits(request.mode --[[@as string]], request.map --[[@as string]]) then
-        return false, "mode not offered on this map"
+    if facts.fits ~= nil then
+        local offered, reason, recheck = facts.fits(request.mode --[[@as string]], request.map --[[@as string]])
+        if not offered and not (facts.allowRecheck == true and recheck == true) then
+            return false, reason or "mode not offered on this map"
+        end
     end
     return true
 end
@@ -71,13 +74,27 @@ function lib._NavLine(nav)
     return string.format("Navmesh: %d areas.", nav.areas)
 end
 
-function lib._Fits(registries)
+---@param mode table
+---@param target string
+---@param current string?
+---@return boolean
+local function canRecheck(mode, target, current)
+    if target ~= current or mode.MapReadiness ~= true or mode.MapData ~= true then return false end
+    local map = rawget(PW, "Map") --[[@as PW.MapLib?]]
+    if map == nil then return false end
+    -- Read-only shared metadata, also used by ModeFits; never clear readiness or treat rejection as certification.
+    local id = tostring(mode.ClassName)
+    return table.HasValue(map._ModeChain(mode, id), "snd") and map._ReadModeReadiness(id).state == "rejected"
+end
+
+function lib._Fits(registries, retryCurrent)
     return function(modeId, map)
         local modes = registries.modes
         local mode = modes ~= nil and modes.Get(modeId) or nil
         local mapData = rawget(PW, "Map") --[[@as PW.MapLib?]]
         if mode == nil or mapData == nil then return mode ~= nil and mode.MapData ~= true end
-        return (mapData.ModeFits(mode, map))
+        local offered, reason = mapData.ModeFits(mode, map)
+        return offered, reason, not offered and canRecheck(mode, map, retryCurrent)
     end
 end
 
@@ -169,7 +186,8 @@ local function mapsFor(state, modeId, fits)
     ---@type string[]
     local list = {}
     for _, name in ipairs(state.maps) do
-        if fits(modeId, name) then list[#list + 1] = name end
+        local offered, _, recheck = fits(modeId, name)
+        if offered or recheck == true then list[#list + 1] = name end
     end
     return list
 end
@@ -189,11 +207,24 @@ function lib._Model(state, selection, fits)
     ---@type { id: string, label: string }[]
     local maps = {}
     for index, entry in ipairs(state.modes) do modes[index] = { id = entry.id, label = entry.name } end
-    for index, name in ipairs(offered) do maps[index] = { id = name, label = name } end
+    for index, name in ipairs(offered) do
+        local recheck = false
+        if fits ~= nil and mode ~= nil then
+            local _, _, allowed = fits(mode.id, name)
+            recheck = allowed == true
+        end
+        maps[index] = { id = name, label = name .. (recheck and " (recheck required)" or "") }
+    end
+    ---@type string?
+    local retryReason
+    if fits ~= nil and mode ~= nil and map ~= nil then
+        local eligible, why, recheck = fits(mode.id, map)
+        if not eligible and recheck == true then retryReason = why end
+    end
     return {
         modes = modes, maps = maps, mode = mode ~= nil and mode.id or nil, map = map, sections = sections,
         toggles = state.toggles, canEdit = state.canEdit, canToggle = state.canToggle, nav = state.nav,
-        canStart = state.canStart and mode ~= nil and map ~= nil
+        canStart = state.canStart and mode ~= nil and map ~= nil, retryReason = retryReason
     }
 end
 

@@ -171,7 +171,8 @@ function lib._OnStart(ply)
         ids[mode.ClassName] = true
     end
     local ok, reason = lib._CheckStart({ mode = modeId, map = map },
-        { modes = ids, mapExists = store.mapExists, fits = lib._Fits(store.registries()) })
+        { modes = ids, mapExists = store.mapExists, fits = lib._Fits(store.registries(), store.map()),
+            allowRecheck = true })
     if not ok then
         store.log(string.format("lobby start from %s refused: %s (%s on %s)", nick(ply), tostring(reason),
             tostring(modeId), tostring(map)))

@@ -5,11 +5,24 @@ local function playlist() return assert(PW.Playlist) end
 local function changer() return assert(PW.MapChange) end
 
 ---@param state table<string, any>
-local function selectExpired(state)
+---@param expect fun(value: any): any case-local GLuaTest environment, never a file-global
+local function selectExpired(state, expect)
     expect(playlist().SetActive("event")).to.beTrue()
     state.utc = 1200
     playlist().RefreshAvailability()
     expect(playlist().GetSelection().retained).to.beTrue()
+end
+
+---@param state table<string, any>
+local function writePending(state)
+    local now = state.utc --[[@as number]]
+    local pending = { v = 1, map = state.map --[[@as string]], mode = "snd", settings = {},
+        teams = {}, bots = 0, mapChangeCount = 5, createdAt = now - 1, playlist = "event" }
+    -- An expired playlist is not an expired pending file. Preserve the production 120-second age guard.
+    assert(changer()._Validate(pending, { map = state.map, mapChangeCount = 6, now = state.utc }),
+        "SND preflight fixture requires a valid one-second-old pending file")
+    file.CreateDir("privatewar")
+    file.Write(path, util.TableToJSON(pending))
 end
 
 return {
@@ -82,6 +95,30 @@ return {
     end,
     cases = {
         {
+            name = "SND Custom can explicitly recheck a loaded rejected map without discarding its reason",
+            func = function(state)
+                local lobby = assert(PW.Lobby)
+                local map = assert(PW.Map)
+                stub(lobby, "_StartableModes").with(function() return { state.mode } end)
+                stub(map, "ModeFits").with(function() return false, "S&D plant volume is blocked" end)
+                stub(map, "_ReadModeReadiness").with(function()
+                    return { state = "rejected", reason = "S&D plant volume is blocked" }
+                end)
+                PW._Lobby = lobby._NewStore({ readStart = function() return "snd", state.map end,
+                    map = function() return state.map end, mapExists = function() return true end,
+                    registries = function() return { modes = { Get = function() return state.mode end } } end,
+                    log = function() end })
+                state.readiness = "rejected"
+                expect(lobby._OnStart(NULL)).to.beFalse()
+                expect(state.prepares).to.equal(1)
+                expect(match().GetAbortReason()).to.equal("S&D plant volume is blocked")
+                state.readiness = "ready"
+                expect(lobby._OnStart(NULL)).to.beTrue()
+                expect(state.prepares).to.equal(2)
+                expect(match().GetPhase()).to.equal("PREMATCH")
+            end
+        },
+        {
             name = "Pending playlist restoration rejects a different mode or map without evaluating availability",
             func = function(state)
                 expect(playlist()._RestoreStart("event", "tdm", state.map)).to.beFalse()
@@ -140,11 +177,8 @@ return {
         {
             name = "SND async accepted pending rejection is terminal and never restores expired permission",
             func = function(state)
-                file.CreateDir("privatewar")
-                file.Write(path, util.TableToJSON({ v = 1, map = state.map --[[@as string]],
-                    mode = "snd", settings = {}, teams = {}, bots = 0, mapChangeCount = 5,
-                    createdAt = 999, playlist = "event" }))
                 state.nav, state.utc = false, 1200
+                writePending(state)
                 expect(changer()._Apply()).to.beTrue()
                 state.nav, state.readiness = true, "rejected"
                 match()._Tick()
@@ -220,7 +254,7 @@ return {
         {
             name = "SND rejected expired playlist preflight preserves the selected one-shot grant",
             func = function(state)
-                selectExpired(state)
+                selectExpired(state, expect)
                 state.readiness = "rejected"
                 expect(playlist().Start("event")).to.beFalse()
                 expect(playlist().GetSelection().canStart).to.beTrue()
@@ -231,7 +265,7 @@ return {
         {
             name = "SND waiting expired playlist reserves nothing until ready then consumes its original target once",
             func = function(state)
-                selectExpired(state)
+                selectExpired(state, expect)
                 local draws = 0
                 PW._Playlist.rng = function() draws = draws + 1 return 0 end
                 state.nav = false
@@ -249,7 +283,7 @@ return {
         {
             name = "SND async rejection preserves expiry grant and replacing selection cancels the waiting launch",
             func = function(state)
-                selectExpired(state)
+                selectExpired(state, expect)
                 state.nav = false
                 expect(playlist().Start("event")).to.beTrue()
                 state.nav, state.readiness = true, "rejected"
@@ -295,11 +329,8 @@ return {
         {
             name = "SND pending-file wait delays applied notification without evaluating expired availability",
             func = function(state)
-                file.CreateDir("privatewar")
-                file.Write(path, util.TableToJSON({ v = 1, map = state.map --[[@as string]],
-                    mode = "snd", settings = {},
-                    teams = {}, bots = 0, mapChangeCount = 5, createdAt = 999, playlist = "event" }))
                 state.nav, state.utc = false, 1200
+                writePending(state)
                 expect(changer()._Apply()).to.beTrue()
                 expect(match().GetPhase()).to.equal("LOBBY")
                 expect(file.Exists(path, "DATA")).to.beFalse()
@@ -322,12 +353,10 @@ return {
         {
             name = "SND accepted pending continuation rejection does not refund an expired entitlement",
             func = function(state)
-                file.CreateDir("privatewar")
-                file.Write(path, util.TableToJSON({ v = 1, map = state.map --[[@as string]],
-                    mode = "snd", settings = {},
-                    teams = {}, bots = 0, mapChangeCount = 5, createdAt = 999, playlist = "event" }))
                 state.readiness, state.utc = "rejected", 1200
+                writePending(state)
                 expect(changer()._Apply()).to.beFalse()
+                expect(playlist().GetActive()).to.equal("event")
                 expect(match().GetPhase()).to.equal("LOBBY")
                 playlist().RefreshAvailability()
                 expect(playlist().GetSelection().canStart).to.beFalse()

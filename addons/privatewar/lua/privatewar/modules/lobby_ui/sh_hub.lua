@@ -199,6 +199,10 @@ local function startAction(state, model, active, summary, entryReason)
     end
     local start = action("start", "Start match", summary.text ~= "" and "Start " .. summary.text .. "." or nil, reason)
     start.label = "START MATCH"
+    if model ~= nil and model.retryReason ~= nil then
+        start.label, start.title = "RECHECK MAP", "Recheck map"
+        start.text = model.retryReason .. ". Explicitly recheck this map before starting."
+    end
     start.request = { mode = model ~= nil and model.mode or nil, map = model ~= nil and model.map or nil }
     return start
 end

@@ -271,6 +271,29 @@ is still pending; the following describes the implementation, not a native or hu
   terminal failure. GLuaTest RED/GREEN has not been observed; engine timing, native spawns, UI/controller, P2P,
   installed maps and Deck performance still require authorized game verification.
 
+### Rejected-map consumer recheck (integration correction)
+
+`ModeFits` remains strict: rejected geometry is not a validated playlist/vote candidate. Lobby consumers preserve
+its reason instead of collapsing the multiple returns to a boolean or a generic failure. For an **explicit Custom
+request on the loaded map only**, `PW.Lobby._Fits(registries, currentMap)` may additionally return third-result
+`true` for a rejected S&D descendant. The first return stays false. Manual picker/model consumers keep that pair
+visible, display the rejection and label the action `RECHECK MAP`; they do not silently select a different map.
+Server validation must opt in with `allowRecheck`, after ordinary map installation/id/mode/privilege checks. The
+request still runs full core preflight and cannot enter PREMATCH without fresh successful preparation/readiness.
+No rejection reset, geometry mutation, remote-map retry or automatic playlist/vote inclusion is authorized.
+
+Consumer/source coordination seam: the already implemented shared read-only queries `PW.Map._ModeChain` and
+`PW.Map._ReadModeReadiness` supply ancestry and replicated current-map rejection metadata. This use does not read
+foreign stores or duplicate authored/generated geometry rules. Changes to those source helpers need coordination
+with this consumer; `GetModeReadiness` remains server-only. No new mapdata API or implementation is assumed.
+
+The six reported integration failures exposed test-fixture errors: GLuaTest's case-local `expect` was referenced
+from a file-level helper, and pending fixtures were older than the required 120-second limit. The correction passes
+the case-local assertion function explicitly and validates a fresh pending file before exercising preflight.
+Existing assertions and production age checks remain intact. `snd_start_consumers.lua` and the Custom-path case
+cover reason propagation and explicit recheck without weakening strict eligibility. These corrections still need
+an authorized engine rerun; static gates cannot establish their runtime result.
+
 TASKS.md defines mandatory additions and the narrow T-2.6 replacement. Existing T-11.12, other objective-mode,
 spawn, navgen, pending-map JSON, privilege/network, bot fairness/name and UI cases are retained unchanged.
 This document supplies contracts only: no new test bodies, RED/GREEN, native assumptions, performance evidence or

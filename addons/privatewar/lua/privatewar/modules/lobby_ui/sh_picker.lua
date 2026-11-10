@@ -99,10 +99,19 @@ function lib._Picker(input, pick)
     local mode = modeOf(state, pick.mode or selection.mode)
     local maps = lib._PickerMaps(state, mode ~= nil and mode.id or nil, input.fits)
     local map = lib._PickerKeep(maps, pick.map or selection.map or state.map)
+    local cards = cardsOf(maps, selection.map or state.map)
+    if input.fits ~= nil and mode ~= nil then
+        for _, card in ipairs(cards) do
+            local eligible, reason, recheck = input.fits(mode.id, card.id)
+            if not eligible and recheck == true then
+                card.text = "Recheck required: " .. (reason or "Rejected layout")
+            end
+        end
+    end
     return {
         ready = mode ~= nil, modes = modeIds(state), mode = mode ~= nil and mode.id or nil,
         modeName = mode ~= nil and mode.name or "", maps = maps, map = map,
-        cards = cardsOf(maps, selection.map or state.map), focusIndex = indexOf(maps, map),
+        cards = cards, focusIndex = indexOf(maps, map),
         thumb = map ~= nil and lib._ThumbPath(map) or nil, summary = summaryOf(input, mode, map)
     }
 end

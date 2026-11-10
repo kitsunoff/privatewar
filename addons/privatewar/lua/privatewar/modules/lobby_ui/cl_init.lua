@@ -119,7 +119,8 @@ function lib.Input()
     local ui = kit() --[[@as PW.UILib]]
     local list = playlists()
     return {
-        state = view.state or false, selection = view.selection, fits = lib._Fits(rawget(PW, "Registries") or {}),
+        state = view.state or false, selection = view.selection,
+        fits = lib._Fits(rawget(PW, "Registries") or {}, game.GetMap()),
         playlists = list ~= nil and list.GetState() or false, players = ui.CollectPlayers(),
         maxPlayers = game.MaxPlayers(), seen = ui.SeenSet(), shortOf = shortOf, entry = entryFacts(),
         flow = flowFacts()
@@ -337,6 +338,7 @@ net.Receive("pw_lobby_error", function(length)
     lastError = reason
     notification.AddLegacy(reason, NOTIFY_ERROR, 8)
     chat.AddText(Color(255, 160, 100), "[PW] " .. reason)
+    if rootOpen() and shouldShow() then request() end
 end)
 
 ---@param phase PW.PhaseName
