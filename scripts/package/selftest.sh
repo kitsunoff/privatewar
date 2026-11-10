@@ -28,6 +28,8 @@ check "dev kit screen excluded" absent lua/privatewar/screens/dev_kit.lua
 check "no dotfiles" no_dotfiles
 check "addon.json present" present addon.json
 check "gamemode manifest present" present gamemodes/privatewar/privatewar.txt
+check "gamemode menu logo present" present gamemodes/privatewar/logo.png
+check "gamemode menu icon present" present gamemodes/privatewar/icon24.png
 check "types shipped" present lua/privatewar/types
 check "licence shipped" present data_static/privatewar/LICENSE.txt
 check "third-party notices shipped" present data_static/privatewar/THIRD_PARTY_NOTICES.txt
@@ -73,6 +75,9 @@ check "rejects missing licence" rejects 'rm "$copy/data_static/privatewar/LICENS
 check "rejects missing notices" rejects 'rm "$copy/data_static/privatewar/THIRD_PARTY_NOTICES.txt"'
 check "rejects licence in the addon root" rejects 'touch "$copy/LICENSE.txt"'
 check "rejects other data_static files" rejects 'touch "$copy/data_static/privatewar/notes.txt"'
+check "rejects unrelated png" rejects 'touch "$copy/gamemodes/privatewar/other.png"'
+check "rejects missing menu logo" rejects 'rm "$copy/gamemodes/privatewar/logo.png"'
+check "rejects missing menu icon" rejects 'rm "$copy/gamemodes/privatewar/icon24.png"'
 
 if ((failures > 0)); then
     echo "[package-selftest] $failures failed" >&2
