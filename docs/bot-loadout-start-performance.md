@@ -137,3 +137,84 @@ Work stops after these two local experiments. No asynchronous spawning, earlier 
 LIVE admission, actor-permission cache or altered `PW_MatchStart` contract was introduced. A requirement to remove
 the remaining synchronized Give/Apply spike needs an architectural escalation and an explicitly approved seam;
 it must not be implemented by silently changing the decided pre-first-spawn lifecycle.
+
+## Authorized metadata-only escalation (2026-11-10)
+
+The subsequent explicit authorization permits at most two additional targeted reworks, without changing lifecycle
+or caching actor-specific decisions. The first rework adds optional `IsSelectionCosmetic(class, slot, option)`:
+`nil` retains the original discovery fallback; a boolean answers only the cosmetic metadata question. The ARC9
+implementation reads current slot/attachment/cosmetic-category fields, calls live `Offerable`, and retains ARC9's
+public category discovery for a cosmetic option in a noncosmetic slot. Ordinary selected attachments no longer
+require caller-owned copies of complete slot/option lists. It introduces no metadata-result or player-verdict cache.
+
+The per-bot `PW_ValidateLoadout`, `PW_LoadoutCost`, wildcard modifications, owner/role policies, match bans/caps,
+static adapter validation, human class harvest/repair, weighted selection and pre-first-spawn sequencing remain
+on their existing paths. Neither generation scheduling nor weapon Give/Apply is changed. The API annotation is in
+`types/adapter.lua`; the frozen API document remains orchestrator-owned.
+
+TDD evidence retained outside the public tree:
+
+- Tests-first full run: **1959/3/0**, 204.875 seconds. The three new failing cases did not weaken inherited cases.
+  The initial dynamic fixture was corrected to dispatch its synthetic class through the actual ARC9 adapter.
+- Corrected targeted RED: **2/3/0**. It observes 76 legacy list calls for mounted selected builds, and an immediately
+  stale cosmetic answer after a blacklist replacement with unchanged identity/count.
+- Targeted GREEN after the implementation and a real `pw_reload`: **5/0/0**. Differential cases cover mounted
+  builds, unavailable/legacy adapters, warm blacklist swaps, in-place slot/category/attachment edits, memo reset,
+  changing owner-specific permissions/costs, wildcard callbacks, bans/caps and weighted selection order.
+
+The original raw failures, including lint/type-check diagnostics during test authoring, are retained, not erased.
+
+### Controlled before/after evidence
+
+The fresh pre-change baseline is `8c60c4d`; the implementation is `7f5bfc3`. The same frozen 18 definitions, two
+human ARC9 classes, nine bots, uniform weights, alternating OFF/ON order and 36-transition fixture described above
+are used. **All 36 matched trials select identical class references before and after.** Each cold arm has three
+samples; each warm arm has six. Values are medians in milliseconds; overlapping columns must not be added.
+
+| Runtime | Picks | Cache | Generated | LIVE | Think gap | PoolFor | Provider | Bot Give | Weapon Give | Apply |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before | Fixed | Cold | Off | 230.75 | 265.66 | 209.43 | 0.06 | 6.07 | 5.10 | 0.00 |
+| Before | Fixed | Cold | On | 286.70 | 325.36 | 261.91 | 11.12 | 6.19 | 4.94 | 0.00 |
+| After | Fixed | Cold | Off | 245.17 | 281.74 | 220.58 | 0.05 | 7.11 | 5.39 | 0.00 |
+| After | Fixed | Cold | On | 254.49 | 286.38 | 229.85 | 12.27 | 6.75 | 5.13 | 0.00 |
+| Before | Fixed | Warm | Off | 238.18 | 275.50 | 213.41 | 0.06 | 6.29 | 4.63 | 0.00 |
+| Before | Fixed | Warm | On | 284.48 | 321.23 | 260.43 | 7.18 | 6.33 | 4.82 | 0.00 |
+| After | Fixed | Warm | Off | 231.76 | 263.84 | 208.45 | 0.04 | 6.48 | 4.83 | 0.00 |
+| After | Fixed | Warm | On | 253.77 | 288.62 | 230.40 | 5.93 | 6.94 | 4.88 | 0.00 |
+| Before | Mixed | Cold | Off | 341.63 | 388.44 | 200.06 | 0.05 | 126.49 | 117.67 | 6.75 |
+| Before | Mixed | Cold | On | 381.88 | 453.89 | 251.31 | 11.56 | 112.32 | 96.28 | 12.34 |
+| After | Mixed | Cold | Off | 317.18 | 361.34 | 203.09 | 0.04 | 50.70 | 41.89 | 7.03 |
+| After | Mixed | Cold | On | 400.27 | 457.23 | 219.63 | 10.89 | 77.90 | 66.98 | 8.99 |
+| Before | Mixed | Warm | Off | 277.09 | 334.02 | 211.42 | 0.04 | 48.36 | 40.52 | 6.05 |
+| Before | Mixed | Warm | On | 340.45 | 396.95 | 236.71 | 5.83 | 82.39 | 69.26 | 10.37 |
+| After | Mixed | Warm | Off | 271.39 | 311.52 | 203.99 | 0.04 | 49.55 | 42.39 | 5.94 |
+| After | Mixed | Warm | On | 399.86 | 492.43 | 279.31 | 8.06 | 81.79 | 69.76 | 9.78 |
+
+Paired LIVE differences after the change (ON minus OFF within each pair):
+
+| Picks | Cache | Pairs | Median | Minimum | Maximum |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Fixed | Cold | 3 | 9.31 | -799.58 | 144.54 |
+| Fixed | Warm | 6 | 21.50 | -96.70 | 65.74 |
+| Mixed | Cold | 3 | 92.90 | -76.26 | 141.75 |
+| Mixed | Warm | 6 | 124.45 | 24.05 | 201.30 |
+
+An unchanged-runtime repeat during the tests-first full RED run selected the same 36 sets of references too. Its
+warm Fixed OFF/ON LIVE medians were 239.14/253.87 ms, and warm Mixed were 277.87/346.19 ms. Thus even the apparent
+Fixed improvement against the first baseline is not established against runtime variability. No outlier is removed.
+The new-map generation summaries were 191 frames/92.94 ms total/2.01 ms max slice before and
+261 frames/145.64 ms total/2.01 ms max slice after. Those newly generated pools are not the frozen startup dataset;
+they are descriptive samples, not an identical-input generation comparison or a generation optimization claim.
+
+Full pre-change gate: **1957/0/0**. Full post-change, unfiltered `gm_construct` gate:
+`PW_MAP=gm_construct PW_TEST_TIMEOUT=600 nix develop --command make test` **1962/0/0**, 197 groups,
+227.040 seconds. All raw timing samples and failures remain outside the public tree; roster references are private.
+`nix develop --command make check` also passes. Its final first invocation exhausted the local command's 120-second
+timeout during packaging selftests; the complete retry with a 300-second command budget passed without bypasses.
+
+**The no-added-match-start-hitch requirement is still NOT PASSED.** Eliminating redundant metadata-list calls is
+verified, but material end-to-end improvement is not. Warm Mixed ON remains slower in every after-change pair,
+and synchronous Give/Apply still costs more with the expanded mixed selection. Stop after this first authorized
+metadata-only rework rather than spend the second allowance on an unsupported cache or change lifecycle. The
+committed implementation and regression tests are retained for coordinator review, not presented as performance
+acceptance. No push, PR, merge, design edit, permission cache or spawn-timing change is part of this escalation.
