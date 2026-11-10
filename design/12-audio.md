@@ -17,9 +17,16 @@ Announcer priority queue, music states with crossfade, UI sounds.
    common chat (not team/dead channels). No semantic/toxicity filtering of installed content; apply only necessary
    safety validation (bounded plain text, safe paths, no executable templates/commands). No new awareness or hidden
    enemy coordinates: spotted events come only from normal perception. Frequency and concurrency are bounded.
-3. **Unapproved details remain open.** Supported source versions/paths, profile binding, exact template grammar,
-   enable defaults, rate/concurrency values and audibility settings must be settled before their dependent runtime
-   work. See `docs/api/feature-contracts.md`; this approval does not decide the unrelated announcer/music system.
+3. **Approved Lambda defaults and identity (additional user approval, 2026-11-11).**
+   - `bots_chatter.enabled` defaults false; after enabling, `voice` and `chat` default true. Default minimum
+     interval is 20 seconds per bot and default simultaneous voices is 2. Expose optional settings for adjustment.
+   - Voice and text profiles are chosen independently, not paired by name/index or a mandatory personal profile.
+     Keep each choice stable for the bot's connected lifetime, including death/respawn; a replacement bot is new.
+   - Supported installed sources are the finite adapter inventory in `docs/api/feature-contracts.md`, read from
+     the current chatter implementation. This is not a promise of compatibility with every Lambda version or API.
+   - Necessary technical protection is allowed without semantic censorship. Other bounds, template handling,
+     local volume and spatial fade parameters are initial adjustable implementation details, not additional
+     specially chosen product values. Announcer/music design and broader integrations remain outside this approval.
 
 ## Interfaces
 

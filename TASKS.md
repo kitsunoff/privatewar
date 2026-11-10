@@ -301,9 +301,12 @@ Runner notes: select the gamemode and map (`--gamemode privatewar --map gm_const
   no redistribution/download; absent addon/profile/asset built-in fallback; safe unique names across respawns;
   idle/spotted/kill/death eligibility and once-only life identity; no hidden perception information; spatial voice
   and common-chat recipient model; plain-text/path/template safety without semantic filtering; finite per-bot/global
-  rate and concurrency limits, bounded queues and cleanup on disconnect/match end/disable/reload. Exact source,
-  profile/template and limit/default-dependent assertions wait for the explicit open choices in
-  `docs/api/feature-contracts.md`; existing bot/name/fairness tests are not replaced.
+  rate and concurrency limits, bounded queues and cleanup on disconnect/match end/disable/reload. Additional approval
+  on 2026-11-11 requires enabled=false, voice/chat=true behind that gate, default 20-second per-bot interval and
+  2 concurrent voices; independent voice/text profile selection stable across respawns; discovery restricted to
+  the installed-source inventory in `docs/api/feature-contracts.md`. Test safe minimal template handling and initial
+  tunable engineering bounds without promoting every current numeric limit to a user-selected product requirement.
+  Existing bot/name/fairness tests are not replaced; broader source/import/template features are not prerequisites.
 - **T-2.7 Map data**: entity class → team mapping for CS:S, HL2DM, TF2 spawn classes; `GetModeData` walks the `Base` chain.
 - **T-2.8 Navmesh fallback**: sampled points are on walkable areas and respect the size/water/slope filters (synthetic area data).
 - **T-2.9 Spawns**: scoring prefers far-from-enemy, penalises enemy line of sight, rewards nearby teammates only in team modes; a recently used point is penalised; hull-blocked point is never chosen.

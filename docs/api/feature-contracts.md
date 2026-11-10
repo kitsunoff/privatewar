@@ -166,6 +166,9 @@ adapter consumes installed data only. No addon-specific entity method is a Playe
   Idle/spotted/kill require a living admitted bot during LIVE; death may use the just-ended admitted life once.
 - Identity/profile selection stays stable across respawns, with unique safe names and built-in fallback for absent
   addon/content/profile. Missing client sound falls back locally or stays silent; never auto-download/distribute.
+  Additional user approval (2026-11-11): choose voice and text profiles independently and retain both throughout
+  the bot's connected lifetime, including respawns. Do not require shared profile ids, a coupled index/random draw
+  or a personal-profile name/voice/text bundle. Life-event flags may reset without reselecting profiles.
 - Spatial voice follows the bot at event time, not a UI/global nonspatial sound; common chat is visible to all
   ordinary chat recipients, with no hidden enemy coordinates and no team/dead-chat channel introduced.
 - Text is bounded plain UTF-8; reject control/command injection and unsafe paths. No RunString, executable
@@ -176,10 +179,64 @@ adapter consumes installed data only. No addon-specific entity method is a Playe
   permitted one-shot reaction, not stale idle/combat messages. Do not read foreign private stores or scan content
   in hot loops. Clients cannot select arbitrary paths/text or forge bot events.
 
-**Blocking unapproved choices:** supported installed versions/data paths and profile formats; identity/voice/text
-binding and template grammar; exact server/client opt-in defaults; cooldown values, concurrent cap and audibility
-distance/settings. These are not license approval to redistribute, new content-filter requirements, or permission
-to infer defaults from Lambda. Freeze these before dependent APIs/code. Announcer/music remains separate draft work.
+### Approved defaults and optional settings
+
+Additional explicit user approval (2026-11-11), not defaults inferred from Lambda:
+
+| Setting | Scope | Approved default | Meaning |
+| --- | --- | --- | --- |
+| `bots_chatter.enabled` | server | `false` | Integration is opt-in |
+| `bots_chatter.voice` | server | `true` | Spatial voice when integration is enabled |
+| `bots_chatter.chat` | server | `true` | Common chat when integration is enabled |
+| `bots_chatter.interval` | server | `20` seconds | Minimum per-bot chatter interval |
+| `bots_chatter.speakers` | server | `2` | Concurrent voice limit |
+
+Optional adjustment controls are allowed; voice/chat true do not bypass enabled=false. These decisions are no
+longer blockers. Preserve normal setting validation and immediate owned-playback retirement on disable.
+
+### Approved installed-source inventory
+
+Read-only source inspection: `modules/bots_chatter/sv_content.lua` in the separately developed chatter feature;
+paths below are relative to GMod search roots, not local machine paths. Only installed/mounted content is used:
+
+| Content | Root/path | Search realm and interpretation |
+| --- | --- | --- |
+| Names | `materials/lambdaplayers/data/names.vmt` | GAME, data list, never execute as code/material |
+| Names | `lambdaplayers/customnames.json` | DATA, local data list |
+| Additional names | `materials/lambdaplayers/data/customnames/` | GAME, bounded recursive list discovery |
+| Common voice | `sound/lambdaplayers/vo/` | GAME, event subdirectories |
+| Voice profiles | `sound/lambdaplayers/voiceprofiles/<id>/` | GAME, event subdirectories |
+| Common text | `materials/lambdaplayers/data/texttypes/` | GAME, event files |
+| Additional text | `materials/lambdaplayers/texttypes/` | GAME, event files |
+| Additional text | `lambdaplayers/texttypes/` | DATA, local event files |
+| Text profiles | `materials/lambdaplayers/textprofiles/<id>/` | GAME, event files |
+
+Adapter event folders/file prefixes are `idle`, `taunt` (enemy spotted), `kill`, `death`. Data lists use parsed JSON
+tables or, for ordinary list files, newline-separated strings; invalid JSON/`.vmt` data does not become executable
+content. Discovery does not require Lambda globals/entity methods. The separate sound-path validator also allows
+`zetaplayer/custom_vo/vp_` paths, but the inspected discovery code does not enumerate that root: an allowlist entry
+alone is not an approved additional content source or a claim of Zeta profile-import support. No arbitrary source
+roots, network fetch, workshop distribution or all-version compatibility promise is added. Local Lambda JSON lists
+are unrelated to removed PW playlist JSON storage.
+
+### Initial technical safeguards, not separately selected product values
+
+The inspected implementation starts with interval adjustment 5–120 seconds, voice-cap adjustment 1–4, client volume
+0–1 (initially 1), a 3-second global gap, a 12-second playback lease and spatial fade distances 200/1800 units.
+These are initial configurable/tunable implementation bounds, not additional user-selected numeric requirements.
+Likewise finite scan/file/byte budgets, path/text lengths and event-scan cadence are bounded engineering details;
+changing them safely does not change the approved 20-second/2-speaker defaults or authorize semantic filtering.
+
+Current template handling supports literal `/keyent/` substitution with a safe event target name, rejects a missing
+required target, unresolved keyword/conditional syntax and command-like prefixes rather than executing them.
+Safe UTF-8/plain text, path traversal/URL checks and bounded queues/playback are necessary technical protection,
+not a toxicity/topic/name blacklist. This minimal handling is an implementation boundary, not approval of a full
+Lambda expression language, typing-delay product, personal-profile importer or specially selected template grammar.
+
+No product blocker remains for the defaults, source inventory or independent profile selection above. New source
+families, broader import/template features or other product behavior remain unapproved rather than prerequisites
+for this minimal integration. Native mounting/playback, independent selection and respawn stability still need
+implementation verification; read-only code inspection is not proof of conformance. Announcer/music remains draft.
 
 ## Verification boundary
 
