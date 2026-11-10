@@ -117,8 +117,8 @@ end
 local function copyList(list)
     ---@type table[]
     local result = {}
-    -- These records contain only strings/booleans (see slotsOf/optionsOf). Recursive table.Copy adds substantial
-    -- allocation/type-dispatch cost when the match validator repeatedly reads hundreds of attachment records.
+    -- These records contain only strings/booleans (see slotsOf/optionsOf); copy them directly while retaining
+    -- independent caller-owned rows. No recursive traversal is needed for this metadata.
     for i, entry in ipairs(list) do
         ---@type table<any, any>
         local copy = {}
