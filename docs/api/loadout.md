@@ -1,7 +1,8 @@
 # Loadout API: slots, validation, resolution, giving on spawn
 
 Status: added after T-4.1 (2026-11-07); extended after T-4.2 (Pick X: budget, costs, attachment cap, bans), T-4.4 (perk slots, `PW_LoadoutGiven`), T-4.5 (the equipment slots), T-4.6 (streak slots) and T-4.7
-(classes) and T-4.8 (the gunsmith flow). The code wins over any description here.
+(classes) and T-4.8 (the gunsmith flow). Read current code/types alongside this contract; decided design takes
+precedence and actual conflicts must be reported.
 
 Module `loadout` (`lua/privatewar/modules/loadout/`: `shared.lua` slots, pure rules, questions and resolution;
 `sh_budget.lua` Pick X arithmetic and rules, `sh_classes.lua` and `sh_classes_repair.lua` the pure part of classes,
@@ -12,7 +13,8 @@ Module `loadout` (`lua/privatewar/modules/loadout/`: `shared.lua` slots, pure ru
 
 The module knows nothing about perks, streaks or equipment (it does own the wildcard slot, see "Wildcards"): other modules declare their own slots
 (the equipment module declares `lethal` and `tactical`, see "Slots"; perks and streaks are T-4.4 and T-4.6). The Pick X
-rules are in "Pick X", classes in "Classes". The class editor is a later task (T-4.8, T-7.4).
+rules are in "Pick X", classes in "Classes". The class editor/gunsmith are implemented in
+`screens/loadout_editor.lua`, `screens/loadout_gunsmith.lua` and `modules/loadout_ui/`.
 
 ## Concepts
 
@@ -289,7 +291,7 @@ fields, `isUnlocked(kind, id) -> boolean` (an item whose slot kind is not unlock
 unlocked are dropped), and since T-4.8 `attachmentLimit(weaponId)`, see "Gunsmith (T-4.8)". The first two are absent (nothing is locked) when the progression module is missing. Repair marks every
 removal with the reason `locked`, shown like the other "Removed by the server" reasons. A class is re-checked on every
 `RefreshClasses`, so a new unlock or a level-up is applied the next time the classes are refreshed, not instantly. Not done
-yet: partial upload (only the full list is sent) and the class editor.
+yet: partial upload (only the full list is sent). The class editor is implemented; see the paths above.
 
 ## Gunsmith (T-4.8)
 
@@ -392,6 +394,11 @@ has `Name` and `ModifySlots(slots)` (required) and `Description`, `Cost` (Pick X
 
 `_Validate`, `_Cost` and `_RepairClass` judge the loadout by the effective slot set, so validation, the budget (a wildcard
 costs its `Cost`, and the extra picks it allows cost as usual) and the class repair agree. The perk group rule uses it too.
+`ModifySlots` uses a local `pcall` on a scratch copy, not `PW.Call`: a thrown error discards that transform's edits,
+but does not permanently disable the wildcard. It must be deterministic and side-effect-free.
+An effective new slot being valid does not prove runtime support: `PW.Loadout.Give` currently iterates declared
+slot order. A new runtime slot requires explicitly owned giving/UI/wire consumers and tests. Existing-slot count,
+filter and cap changes should not be generalized into a claim that every new effective slot is equipped.
 Stats: on `PW_LoadoutGiven` the module stores the player's wildcards and `PW.Perks.StatSource("wildcards", fn)` returns
 their `Stats` (the perks module recomputes). Samples: `overkill` (secondary also takes primary categories), `perk_greed`
 (`perk1` count +1) and `gunfighter` (`primary.maxattachments` +1, `Stats = { recoil = 0.95 }`), each costs 1. The perks module judges the group rule by the effective slots too, see `perks.md`.

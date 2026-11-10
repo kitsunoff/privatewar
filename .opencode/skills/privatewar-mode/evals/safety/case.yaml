@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: safety
+expected_outcome: |
+  Identifies preparation-before-spawn, controlled Spawn wrapper, explicit pinned dependencies and recipient privacy.
+  Names actual lifecycle/objective regression suites without inventing an action API or changing approved rules.

@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: safety
+expected_outcome: |
+  Uses ordinary baseline player-overrides owner without healing/compounding, composed Stats, additive owner-local
+  CountSource and instance-owned timers. Preserves native spawn/role/disable and owner-isolation tests.

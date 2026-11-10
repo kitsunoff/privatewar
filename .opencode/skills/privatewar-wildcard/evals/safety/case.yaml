@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: safety
+expected_outcome: |
+  Distinguishes effective-slot validation from declared-order Give/UI/wire consumers, restored wildcard allowance,
+  nonmutation and per-transform pcall rollback without permanent-disable promises. Requests only genuine ownership.

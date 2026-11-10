@@ -12,11 +12,14 @@ A casual "modern CoD in Garry's Mod" gamemode: solo or with a few friends agains
 Superseded material (do not follow): the DHTML recommendation in `notes/20-ui-tooling.md`.
 
 Handover for a new agent (including Codex): `AGENTS.md`, then `TASKS.md` "How to continue (handover)" and "Phase 11" (current queue).
+Practical coding workflows: `AGENTS.md` "Coding skills" and `docs/agent-workflow.md`; exact regression references:
+`docs/agent-test-map.md`. Skills guide implementation but do not authorize code, device access or publication.
 
 ## Repository layout
 
 - `addons/privatewar/`: the gamemode addon (`gamemodes/privatewar/`, `lua/privatewar/`, `lua/tests/`, `lua/privatewar_fixtures/`, `addon.json`). Paths such as `lua/privatewar/...` in `DESIGN.md`, `design/`, `docs/` and `TASKS.md` are relative to this folder, the same paths GMod sees in the game.
-- `addons/privatewar-arc9/`: the ARC9 integration addon; every other `addons/<name>/` folder is an integration addon too.
+- `addons/privatewar-arc9/`: the ARC9 weapon integration. Other `addons/<name>/` folders may be optional content
+  (for example Infection), integrations or development tooling; inspect each addon's purpose before copying it.
 - `addons/privatewar-dev/`: the dev-only bridge addon (never shipped; deployed to the Deck as `addons/privatewar_dev`).
 - Tooling: `scripts/` (gates, Deck loop, packaging), `tests/gates/` (gate fixtures), `nix/`, `flake.nix`, `Makefile`, `cfg/`.
 
@@ -36,7 +39,8 @@ Handover for a new agent (including Codex): `AGENTS.md`, then `TASKS.md` "How to
 
 ## Third-party code
 
-1. Do not copy third-party code into the repository, whatever its licence; write our own implementation from the design.
+1. Write original project implementations from the design; do not copy third-party addon/research implementations.
+   Deliberately vendored libraries/assets are the narrow exception governed by the compatibility/notice rule below.
 2. The gamemode is licensed under GPL-3.0-or-later (`LICENSE`; `D4`, decided 2026-11-07). Vendoring (copying a library into the tree) is allowed only for code under a GPL-compatible licence, and its copyright and licence notice must be added to `THIRD_PARTY_NOTICES.md` in the same change. Vendored so far: `Tieske/binaryheap.lua` (MIT).
 3. Font files (for example Fira Sans, OFL 1.1, GPL-compatible as a font) follow the same rule. Vendoring Fira Sans is a follow-up in `TASKS.md`; until it is done the UI uses built-in GMod fonts through the family indirection in `PW.UI.Style` (`design/10-frontend.md` d.4).
 4. Integrations with other addons (weapon bases such as ARC9) use only their public API and live in their own integration addon under `addons/`.

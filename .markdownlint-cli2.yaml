@@ -11,5 +11,6 @@ globs:
   - "*.md"
   - "design/**/*.md"
   - "docs/**/*.md"
+  - ".opencode/skills/**/*.md"
 ignores:
   - "tests/gates/fixtures/**"

@@ -12,7 +12,8 @@ performance, and visual or simulation quality is opt-in through a host setting.
 - **Bots that are real players.** Bots are created with `player.CreateNextBot` and play through the same input as
   humans, so they use the same weapons, movement, teams and scoreboard. Difficulty tiers change reaction, aim and
   decisions, never health or damage.
-- **Modes:** Team Deathmatch, Free-for-all, Domination and Kill Confirmed, grouped into playlists.
+- **Modes:** Team Deathmatch, Free-for-all, Domination, Kill Confirmed, Search and Destroy and Hardpoint;
+  Infection is a separate optional addon. Implemented features still have pending human checkpoints in TASKS.md.
 - **An in-game lobby:** party list, playlist or custom game, Game Setup, bot fill and difficulty, START, then a vote
   for the next map and mode after each match.
 - **Loadouts:** classes with a Pick-X style budget, perks, wildcards, equipment (frag and flash grenades) and
@@ -33,6 +34,7 @@ The repository holds the addons under `addons/`:
 | --- | --- | --- |
 | `addons/privatewar/` | The gamemode | Yes |
 | `addons/privatewar-arc9/` | ARC9 integration: catalogue, attachments and the performance profile for ARC9 weapons | Only with ARC9 |
+| `addons/privatewar-infection/` | Optional Infection mode | No |
 | `addons/privatewar-dev/` | Development bridge for the test loop | No, never install it on a server you play on |
 
 1. Copy `addons/privatewar/` into `garrysmod/addons/` of your Garry's Mod install.
@@ -53,6 +55,7 @@ Playing, hosting for friends and the controls are described in [docs/guide/playi
 - [DESIGN.md](DESIGN.md) and [design/](design/): the design decisions per subsystem.
 - [docs/packaging.md](docs/packaging.md): building the Workshop addons.
 - [TASKS.md](TASKS.md): the implementation plan.
+- [AGENTS.md](AGENTS.md): coding-agent entry point and four implementation skills.
 
 ## Development
 
@@ -67,6 +70,8 @@ nix develop --command make package        # stage the Workshop addons into dist/
 Tests use [GLuaTest](https://github.com/CFC-Servers/GLuaTest) and run inside a real Garry's Mod server.
 `make test` runs the suite on a Steam Deck over SSH (see `TASKS.md`, "Dev loop on the Steam Deck"); the connection
 comes from the environment (`DECK_HOST`, `DECK_USER`) or a git-ignored `.deck.env`.
+Agents require explicit permission and confirmation that the Deck is free before accessing it; game tests reload
+the map. See [agent workflow](docs/agent-workflow.md) for TDD, static guidance checks and incomplete-gate reporting.
 
 Repository layout:
 

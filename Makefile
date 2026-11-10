@@ -1,4 +1,4 @@
-.PHONY: lint types markdown rules check test test-selftest package package-selftest export-selftest
+.PHONY: lint types markdown rules agent-guides check test test-selftest package package-selftest export-selftest
 
 # Quality gates (same scripts as nix flake check and the git hooks).
 lint:
@@ -14,7 +14,11 @@ markdown:
 rules:
 	bash scripts/check/rules.sh
 
-check: lint types markdown rules
+agent-guides:
+	bash scripts/check/agent-guides.sh
+	bash scripts/check/agent-guides-selftest.sh
+
+check: lint types markdown rules agent-guides
 	bash scripts/check/selftest.sh
 	bash scripts/package/selftest.sh
 	bash scripts/deck/publish-selftest.sh

@@ -1,6 +1,7 @@
 # Perks API: the `perks` kind, slots, `PW.Stat`
 
-Status: added after T-4.4 (2026-11-07). The code wins over any description here.
+Status: added after T-4.4 (2026-11-07), extended for the approved twelve-perk expansion. Read current code/types
+alongside this contract; decided design takes precedence and actual conflicts must be reported.
 
 Module `perks` (`lua/privatewar/modules/perks/`: `shared.lua` slots, group rule, multiplier chain, `PW.Stat`; `init.lua`
 server state, instances and hooks). Kind: `lua/privatewar/kinds/perks.lua`. Perks: `lua/privatewar/perks/`. Types:

@@ -2,6 +2,10 @@
 
 Shared contracts between lanes (`TASKS.md`, "Parallelism rules"). Each file documents one area: hook names and
 arguments, class table fields, blackboard fields. Only the orchestrator changes a frozen contract.
+Documentation sync may be delegated with explicit ownership; it does not grant permission to change the contract.
+Decided design takes precedence over implementation. Report real conflicts; historical "Open in design" sections
+are not a current task queue. Start implementation with [agent guidance](../agent-workflow.md), the relevant
+[coding skill](../../AGENTS.md#coding-skills) and [mandatory test map](../agent-test-map.md).
 
 Paths such as `lua/privatewar/...` and `gamemodes/privatewar/...` are relative to the addon folder: the gamemode addon
 is `addons/privatewar/` in the repository, the integration and dev addons are the other `addons/<name>/` folders.
