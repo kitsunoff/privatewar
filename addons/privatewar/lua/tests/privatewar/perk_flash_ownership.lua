@@ -23,9 +23,22 @@ local function packets(body)
     ---@type { ply: Player, value: integer, bits: integer }[]
     local sent = {}
     local value, bits = 0, 0
-    rawset(net, "Start", function(name) assert(name == "pw_blind") end)
-    rawset(net, "WriteUInt", function(n, width) value, bits = n, width end)
-    rawset(net, "Send", function(ply) sent[#sent + 1] = { ply = ply, value = value, bits = bits } end)
+    local flash = false
+    -- Round notifications have multiple network owners; intercept only the flash protocol end to end.
+    rawset(net, "Start", function(name, unreliable)
+        flash = name == "pw_blind"
+        if not flash then return start(name, unreliable) end
+        value, bits = 0, 0
+    end)
+    rawset(net, "WriteUInt", function(n, width)
+        if not flash then return write(n, width) end
+        value, bits = n, width
+    end)
+    rawset(net, "Send", function(ply)
+        if not flash then return send(ply) end
+        sent[#sent + 1] = { ply = ply, value = value, bits = bits }
+        flash = false
+    end)
     local ok, err = pcall(body, sent)
     rawset(net, "Start", start)
     rawset(net, "WriteUInt", write)
@@ -38,6 +51,47 @@ return {
     beforeEach = function(state) state.mode = PW.ActiveMode PW.ActiveMode = nil end,
     afterEach = function(state) PW.ActiveMode = state.mode end,
     cases = {
+        {
+            name = "Flash packet fixture: unrelated stop broadcasts and integer sends pass through without capture",
+            func = function()
+                ---@type table<string, any>[]
+                local forwarded = {}
+                stub(net, "Start").with(function(name, unreliable)
+                    forwarded[#forwarded + 1] = { "start", name, unreliable }
+                end)
+                stub(net, "WriteBool").with(function(value)
+                    forwarded[#forwarded + 1] = { "bool", value }
+                end)
+                stub(net, "Broadcast").with(function() forwarded[#forwarded + 1] = { "broadcast" } end)
+                stub(net, "WriteUInt").with(function(value, bits)
+                    forwarded[#forwarded + 1] = { "uint", value, bits }
+                end)
+                stub(net, "Send").with(function(ply) forwarded[#forwarded + 1] = { "send", ply } end)
+                local human = participant(false)
+                packets(function(sent)
+                    net.Start("pw_blind")
+                    net.WriteUInt(255, 8)
+                    net.Send(human)
+                    net.Start("pw_bot_voice_stop", true)
+                    net.WriteBool(true)
+                    net.Broadcast()
+                    -- Mock-only packet exercises forwarding of the other two intercepted functions too.
+                    net.Start("pw_test_other")
+                    net.WriteUInt(7, 3)
+                    net.Send(human)
+                    net.Start("pw_blind")
+                    net.WriteUInt(0, 8)
+                    net.Send(human)
+                    expect(sent).to.deepEqual({
+                        { ply = human, value = 255, bits = 8 }, { ply = human, value = 0, bits = 8 }
+                    })
+                end)
+                expect(forwarded).to.deepEqual({
+                    { "start", "pw_bot_voice_stop", true }, { "bool", true }, { "broadcast" },
+                    { "start", "pw_test_other" }, { "uint", 7, 3 }, { "send", human }
+                })
+            end
+        },
         {
             name = "Client DSP ownership: expired weak overlay never resets DSP through the actual render callback",
             func = function()
