@@ -199,6 +199,7 @@ end
 
 function defaults.GetSlots() return {} end
 function defaults.GetOptions() return {} end
+function defaults.IsSelectionCosmetic() return nil end
 
 ---Identity: the build is returned as given, nothing rejected.
 ---@param self PW.Adapter
