@@ -49,7 +49,8 @@ return {
                 local intent, goal, path, contacts = board.intent, board.goal, board.path, board.contacts
                 local enqueues, finds, traces = 0, 0, 0
                 PW._BotTactics.hurt[bot] = { at = CurTime(), attacker = NULL }
-                stub(must(PW.Equipment), "Count").with(function() return 2 end)
+                must(PW.BotTactics).Refresh(bot, board)
+                must(board.tactics).lethal = 2 -- stale value must be refreshed even when cover is denied
                 hook.Add("PW_CanSearchBotCover", listener, function(who)
                     expect(who).to.equal(bot)
                     return false
@@ -65,7 +66,7 @@ return {
                     f.reloading, f.onGround, f.crouching }).to.deepEqual({ 37, 400, 12, 460, -1, 0, 0,
                     false, true, false })
                 expect(f.profile).to.exist()
-                expect(f.lethal).to.equal(2)
+                expect(f.lethal).to.equal(0) -- this fixture owns no equipment
                 expect(f.hurtAt).to.equal(CurTime())
                 expect(f.attacker).to.equal(NULL)
                 expect(f.at).to.equal(CurTime())
