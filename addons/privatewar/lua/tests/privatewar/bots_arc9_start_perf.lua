@@ -38,6 +38,8 @@ end
 ---@field cvars? table<string, string>
 ---@field current? PW.Arc9StartSample
 ---@field results? PW.Arc9StartSample[]
+---@field finish fun()
+---@field makeStub fun(tbl: table, key: any): GLuaTest_Stub
 
 local hookId = "PW.Arc9StartPerf"
 
@@ -56,12 +58,13 @@ end
 
 ---@param test PW.Arc9StartPerfTest
 local function instrument(test)
+    local makeStub = test.makeStub
     local bots, loadout = must(PW.BotLoadouts), must(PW.Loadout)
     local assign, pool, give = bots.Assign, bots.PoolFor, loadout.Give
     local notify, ammoGive, adapterCall = PW.Notify, PW.WeaponAmmo.Give, PW.Adapters.Call
     local phase = must(PW.Match)._SetPhase
-    stub(bots, "PoolFor").with(function(...) return timed(test, "pool", pool, ...) end)
-    stub(bots, "Assign").with(function(...)
+    makeStub(bots, "PoolFor").with(function(...) return timed(test, "pool", pool, ...) end)
+    makeStub(bots, "Assign").with(function(...)
         local entry = timed(test, "assign", assign, ...)
         if test.current ~= nil then
             test.current.assignments = test.current.assignments + 1
@@ -69,7 +72,7 @@ local function instrument(test)
         end
         return entry
     end)
-    stub(loadout, "Give").with(function(ply, ...)
+    makeStub(loadout, "Give").with(function(ply, ...)
         if not ply:IsBot() then return give(ply, ...) end
         if test.current ~= nil then
             assert(bots.PickOf(ply) ~= nil, "first spawn reached Give without an assigned class")
@@ -77,16 +80,16 @@ local function instrument(test)
         end
         return timed(test, "give", give, ply, ...)
     end)
-    stub(PW.WeaponAmmo, "Give").with(function(...) return timed(test, "weaponGive", ammoGive, ...) end)
-    stub(PW.Adapters, "Call").with(function(adapter, method, ...)
+    makeStub(PW.WeaponAmmo, "Give").with(function(...) return timed(test, "weaponGive", ammoGive, ...) end)
+    makeStub(PW.Adapters, "Call").with(function(adapter, method, ...)
         if method == "Apply" then return timed(test, "apply", adapterCall, adapter, method, ...) end
         return adapterCall(adapter, method, ...)
     end)
-    stub(PW, "Notify").with(function(name, ...)
+    makeStub(PW, "Notify").with(function(name, ...)
         if name == "PW_BotLoadoutCandidates" then return timed(test, "provider", notify, name, ...) end
         return notify(name, ...)
     end)
-    stub(must(PW.Match), "_SetPhase").with(function(to, ...)
+    makeStub(must(PW.Match), "_SetPhase").with(function(to, ...)
         if to ~= "LIVE" or test.current == nil then return phase(to, ...) end
         local sample, start = test.current, SysTime()
         local result = phase(to, ...)
@@ -123,6 +126,13 @@ local function setup(test)
     must(PW.Settings).Set("bots.classes", { "preset", "players" })
     must(PW.Settings).Set("progression.unlockall", true)
     local entries = must(PW._Arc9BotLoadouts).entries
+    local recorded = file.Read("privatewar_dev/arc9_start_dataset.json", "DATA")
+    if recorded ~= nil then
+        entries = must(util.JSONToTable(recorded)) --[[@as PW.BotClassEntry[] ]]
+        assert(#entries == 18, "invalid controlled benchmark dataset")
+        for _, entry in ipairs(entries) do assert(must(PW.Arc9BotLoadouts).Legal(entry), "stale benchmark dataset") end
+        test.makeStub(must(PW.Arc9BotLoadouts), "Candidates").with(function() return entries end)
+    end
     PW._LoadoutClasses.uploads = { [test.humans[1]] = {
         { name = "Perf human A", loadout = table.Copy(entries[1].loadout) },
         { name = "Perf human B", loadout = table.Copy(entries[4].loadout) }
@@ -147,7 +157,7 @@ local function trial(test, trials, index)
             print("[PW] ARC9 START PERF " .. util.TableToJSON(sample))
         end
         print("[PW] ARC9 START PERF complete: nine real bots; two fixed human ARC9 classes; existing enabled presets")
-        done()
+        test.finish()
         return
     end
     local match = must(PW.Match)
@@ -172,9 +182,9 @@ local function trial(test, trials, index)
         if match.GetPhase() ~= "LIVE" then timer.Simple(0.02, wait) return end
         timer.Simple(0.5, function()
             test.current = nil
-            expect(sample.assignments).to.equal(9)
-            expect(sample.spawns).to.equal(9)
-            expect(sample.phase > 0 and sample.nextTick > 0).to.beTrue()
+            assert(sample.assignments == 9, "expected exactly nine pre-spawn assignments")
+            assert(sample.spawns == 9, "expected exactly nine first bot spawns")
+            assert(sample.phase > 0 and sample.nextTick > 0, "missing real transition timing")
             table.insert(must(test.results), sample)
             PW._BotLoadouts.paused = true
             match.Abort("ARC9 startup trial complete")
@@ -210,6 +220,7 @@ return {
             end,
             ---@param test PW.Arc9StartPerfTest
             func = function(test)
+                test.makeStub, test.finish = stub, done
                 local deadline = CurTime() + 60
                 local function ready()
                     local state = PW._Arc9BotLoadouts
