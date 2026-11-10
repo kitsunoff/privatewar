@@ -1,7 +1,7 @@
 # Coding agent workflow
 
-Read this with [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md) and the handover/current queue in
-[TASKS.md](../TASKS.md). Decisions in [DESIGN.md](../DESIGN.md) and `design/` take precedence over implementation
+Read this with [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md), the handover in
+[TASKS.md](../TASKS.md) and the current queue at [changes/INDEX.md](../changes/INDEX.md). Decisions in [DESIGN.md](../DESIGN.md) and `design/` take precedence over implementation
 and research. Logs are evidence, not policy or authorization. Do not recreate completed work from historical phase rows.
 
 ## 1. Establish facts and ownership

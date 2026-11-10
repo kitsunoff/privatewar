@@ -1,8 +1,9 @@
 # Private War — implementation plan
 
-Status: draft, built from `DESIGN.md` and `design/*.md` as of 2026-11-06. Handover for a new agent: "How to continue (handover)" below; current queue: "Phase 11" at the end.
+Status: draft, built from `DESIGN.md` and `design/*.md` as of 2026-11-06. Handover for a new agent: "How to continue (handover)" below; current queue entry point: [changes/INDEX.md](changes/INDEX.md).
 
-This file is the single task list for building the gamemode. It defines:
+This file retains the implementation plan, mandatory cases and historical task records. The change index links to
+both migrated change records and the remaining queue here; it does not duplicate their statuses. This file defines:
 
 1. phases and tasks with dependencies;
 2. **human checkpoints** (`CP-*`): moments when the user runs the game and tests by hand; the next phase does not start until the checkpoint passes;
@@ -25,7 +26,7 @@ T-<phase>.<n>  Title                                  lane · agent · depends o
 
 ## How to continue (handover)
 
-For an agent that picks the work up in the middle (for example Codex after Claude): everything needed is in this repository. Read `CLAUDE.md` (project rules), `AGENTS.md` (short entry point), this file, then "Phase 11" at the end for the current queue. Task status is not stored per row in the older phase tables; inspect current code and task branches alongside "Phase 11". Pre-snapshot merge hashes and branch references are historical, not instructions to recreate implemented work.
+For an agent that picks the work up in the middle (for example Codex after Claude): everything needed is in this repository. Read `CLAUDE.md` (project rules), `AGENTS.md` (short entry point), this file, then [changes/INDEX.md](changes/INDEX.md) for the current queue and remaining Phase 11 records. For migrated items the linked change record owns current status; the Phase 11 text remains historical context. Task status is not stored per row in the older phase tables; inspect current code and task branches alongside the queue. Pre-snapshot merge hashes and branch references are historical, not instructions to recreate implemented work.
 Use `AGENTS.md` "Coding skills" for mode, weapon-adapter, perk and wildcard implementation workflows;
 `docs/agent-test-map.md` maps their foundation mandatory clauses to exact current regression cases.
 The historical playtest-followup PR-pending references below are superseded by merged commit `b1f69fc`;
@@ -68,23 +69,9 @@ The local manual checklist (not published; its path is listed in `scripts/export
 
 ## Toolchain
 
-Lint, type and test tools come from `flake.nix` (`nix develop`, or direnv `use flake`). Agents run these commands through `nix develop --command <cmd>` because their shells are non-interactive. Run ordinary git commands directly in your own worktree.
-
-**Rule: nothing is built from source.** A tool missing from nixpkgs is packaged from its **release binary** under the nixpkgs naming convention `<name>-bin`.
-
-| Tool | Source | Notes |
-| --- | --- | --- |
-| `lua-language-server` (LuaLS) | nixpkgs (3.19.2, verified 2026-11-08) | Language server and **type checker** (`--check`) on every platform |
-| `markdownlint-cli2` | nixpkgs (0.24.0, verified 2026-11-08) | Docs |
-| `luajit` | nixpkgs | Same Lua as GMod for quick scripts |
-| `glualint-bin` | Release binary `FPtje/GLuaFixer` 1.30.0 | Assets: `OSX-x86_64` (runs through Rosetta on Apple Silicon), `x86_64-linux`; no native arm64 macOS build |
-| `glua-ls-bin` (optional, editor only) | Release binary `Pollux12/gmod-glua-ls` | Only `glua_ls` has macOS builds (`darwin-arm64-experimental`); `glua_check` ships for linux-x64 and win32 only, so it is **not** the gate |
-| GMod annotations | Pinned non-flake input `luttje/glua-api-snippets` (data, not built) | Fed to LuaLS via `.luarc.json` |
-| GLuaTest | Pinned non-flake input `CFC-Servers/GLuaTest` | Docker runner script; Docker itself (Colima) stays in nix-darwin |
-| Git hooks | `cachix/git-hooks.nix` (Apache-2.0) | Installed by the devShell; all four `pre-commit` fast checks; no automatic `pre-push` tests (user decision 2026-11-08). Manual `make check` / `make test` acceptance/merge gates remain mandatory |
-| CI (later) | `nix flake check` | Same checks as the hooks |
-
-Outside the flake (system level): Colima/Docker, Garry's Mod itself.
+The tool inventory, source rules and hook policy are in [docs/task-toolchain.md](docs/task-toolchain.md).
+Use `nix develop --command` for lint, type and test tools; run ordinary git commands directly. Nothing is built
+from source. This heading remains as a stable entry point for existing references.
 
 ## Dev loop on the Steam Deck
 
@@ -478,15 +465,9 @@ D1..D4 design tasks: anytime; each blocks the phase it names.
 
 ## Design tasks still open
 
-These are not implementation tasks. Each one blocks the phase named.
-
-| Id | Topic | Blocks | Where |
-| --- | --- | --- | --- |
-| ~~D1~~ | Frontend: widget kit, fonts (open licence), operator scene, input (mouse/keyboard/gamepad). Decided 2026-11-07, see `design/10-frontend.md`; font files pending D4 | — | `design/10-frontend.md` d.3–d.13 |
-| D2 | Camera and killcam: single `CalcView` owner, camera stack, killcam recording on the server | P9 | `design/11-camera.md` |
-| D3 | Audio: announcer, music states, UI sounds, asset licensing | P9 | `design/12-audio.md` |
-| ~~D4~~ | Licence of the gamemode: **GPL-3.0-or-later**. Decided 2026-11-07. Vendoring is allowed only for code under a GPL-compatible licence, with its notice in `THIRD_PARTY_NOTICES.md` | — | `LICENSE`, `THIRD_PARTY_NOTICES.md` |
-| ~~D5~~ | Gamemode name: **Private War**, folder `privatewar`, Lua prefix `PW` (hooks `PW_*`, ConVars `pw_*`). Decided 2026-11-06 | — | — |
+The original D1–D5 table is in [docs/task-design-questions.md](docs/task-design-questions.md). These are not
+implementation tasks: D2 and D3 block Phase 9; D1, D4 and D5 are recorded as decided. This heading remains as a
+stable entry point for existing references. Do not infer new design decisions from the tracking table.
 
 ---
 
@@ -781,6 +762,9 @@ Killcam plays after death; announcer lines and music transitions in the right mo
 Fresh Steam account subscribes from the Workshop, starts solo with bots following only the in-game hints, and plays a full match without errors.
 
 ## Phase 11 — Playtest follow-ups (2026-11-07)
+
+For current tracking start at [changes/INDEX.md](changes/INDEX.md); where an item has a change record, that record
+owns its current status and the text below is retained as historical context and requirements.
 
 Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decisions approved by the user in chat. Decisions are in `design/05-loadout.md` d.11 (revision), `design/06-progression.md` d.2 (revision), `design/07-bots.md` d.13 (revision) and `design/09-hud.md` (revision); the details first taken by recommendation (the local manual checklist (not published) section 7, items 64-67) were confirmed by the user on 2026-11-07, with one change: dying while cooking drops the live grenade (item 66.3). Older branch and merge references record pre-snapshot history. Current implementation and follow-up status for T-11.8 to T-11.10 is recorded below; inspect current code and task branches before starting work.
 

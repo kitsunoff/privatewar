@@ -45,8 +45,9 @@ addons are `addons/<name>/`; the dev-only addon is `addons/privatewar-dev/`. Pat
 5. If green: request authorization to push the feature branch if not already granted. Show the complete
    PR title and body and obtain the user's approval before `gh pr create --draft`. After review, merging
    requires separate explicit user approval; once the PR is ready, use `gh pr merge --squash --delete-branch`.
-   Never commit or merge locally on main. Update TASKS.md only when the agent found a fact that
-   contradicts it (one short commit `docs(plan): ...` on a branch, reviewed through the same PR workflow).
+   Never commit or merge locally on main. When a change status changes, move its record into the matching
+   `changes/<status>/` directory and update the record, index and inbound links together. Preserve TASKS.md
+   requirements and historical evidence.
    If red: send the agent back with the concrete failure (SendMessage), at most 2 rounds; then stop and
    report to the user. If a gate cannot run (including when the user has not confirmed the Deck is free),
    report it as skipped and the merge gate as incomplete; do not push, create a PR or merge automatically.
@@ -180,6 +181,7 @@ Report back: branch name, commits, the list of mandatory cases → test names, `
 
 ## Current queue and known gaps
 
-Use TASKS.md "How to continue (handover)" and "Phase 11" for the current queue, known follow-ups and
-items blocked on the user. Use its recorded checkpoint results and design-task decisions; do not infer
-pending work from older phase plans. This command does not maintain a separate status list.
+Use TASKS.md "How to continue (handover)" and changes/INDEX.md for the current queue, known follow-ups and
+items blocked on the user. Follow its links to change records and remaining TASKS.md entries. Use the recorded
+checkpoint results and design-task decisions; do not infer pending work from older phase plans. This command
+does not maintain a separate status list.
