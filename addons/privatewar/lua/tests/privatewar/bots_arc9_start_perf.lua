@@ -128,7 +128,8 @@ local function setup(test)
     local entries = must(PW._Arc9BotLoadouts).entries
     local recorded = file.Read("privatewar_dev/arc9_start_dataset.json", "DATA")
     if recorded ~= nil then
-        entries = must(util.JSONToTable(recorded)) --[[@as PW.BotClassEntry[] ]]
+        -- ARC9 slot addresses are strings: GMod's default JSON conversion would turn "1" into numeric 1.
+        entries = must(util.JSONToTable(recorded, false, true)) --[[@as PW.BotClassEntry[] ]]
         assert(#entries == 18, "invalid controlled benchmark dataset")
         for _, entry in ipairs(entries) do assert(must(PW.Arc9BotLoadouts).Legal(entry), "stale benchmark dataset") end
         test.makeStub(must(PW.Arc9BotLoadouts), "Candidates").with(function() return entries end)
