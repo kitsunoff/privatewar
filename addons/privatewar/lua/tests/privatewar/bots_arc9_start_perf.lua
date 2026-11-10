@@ -145,6 +145,9 @@ local function setup(test)
         test.created[#test.created + 1], test.bots[#test.bots + 1] = bot, bot
     end
     for _, bot in ipairs(test.bots) do must(PW.BotInput).SetScripted(bot, { buttons = 0 }) end
+    -- Hold category weights uniform in both arms; mixed trials sweep the same real weighted-pick function.
+    -- Match-owned personality rerolls must not change the before/after Give/Apply weapon mix.
+    test.makeStub(must(PW.BotLoadouts), "WeightsOf").with(function() return nil end)
     instrument(test)
 end
 
