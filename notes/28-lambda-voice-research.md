@@ -16,16 +16,15 @@ the **content and its category format**, with a separately implemented Private W
 
 ## Evidence and boundaries
 
-With permission and confirmation the Deck was free, we copied the installed Steam Workshop item
-[Lambda Players: Reborn | YerMash Edition](https://steamcommunity.com/workshop/filedetails/?id=3058063563), ID
-`3058063563`. Its `gmpublisher.gma` was 43,878,508 bytes: 1,083 entries including 95 Lua files. We inspected its Lua
-and archive index, and copied and inspected `garrysmod/data/lambdaplayers`. No game was started, no integration or
-playback tested, and audio was not listened to. Findings describe this installed archive and DATA folder only; other
-Workshop archives, mounted assets, user subscriptions and their versions were not inventoried.
+The source reference is
+[Lambda Players: Reborn | YerMash Edition](https://steamcommunity.com/workshop/filedetails/?id=3058063563).
+This note describes its inspected Lua behavior and content formats, not any user's installed content or settings.
+Integration and playback have not been tested, and audio has not been evaluated by listening. Compatibility with
+other versions or content packs is unverified.
 
 References such as `lua/...` in sections 2–7 mean paths **inside that third-party archive**, not repository files.
-The retrieved third-party material remains outside this repository. Counts are archive entries, not a claim that all
-files play or that every client has them. Workshop distribution alone is not permission to redistribute content.
+Third-party material remains outside this repository. Format support is not a claim that matching files exist or play
+on every client. Workshop distribution alone is not permission to redistribute content.
 
 ## 1. The four different things called a profile
 
@@ -151,27 +150,15 @@ An independent PW text integration would need to define supported placeholders a
 team rules, formatting, delays, rate limits and moderation. It must handle missing targets, unknown syntax and external
 links safely. Voice and text are distinct features: importing a text profile does not synthesize voice.
 
-## 7. What was actually present on this Deck
+## 7. Packaged content formats
 
-### Mutable DATA
+Lambda's packaged static lists live under `materials/lambdaplayers/data/`, as JSON content in files named `.vmt`.
+They include names and category-specific text lists, as well as Sandbox content lists. Text requires a moderation
+review before use; no full review is claimed here.
 
-`data/lambdaplayers/profiles.json` was absent; `modelvoiceprofiles.json` was empty. The observed `texttypes`, presets
-and import/export directories were empty. Other JSON files contained 399 props, 33 NPCs, 15 entities, four team entries
-and two grenade entries; NPC-fear and model-bodygroup files were empty. These are installation observations, not proof
-that no profile exists anywhere else or that the user cannot create one later.
-
-### Packaged static data
-
-There was no loose `garrysmod/data_static` directory and no `data_static/` entry in the inspected base GMA. Lambda's
-packaged static lists instead live under `materials/lambdaplayers/data/`, as JSON content in files named `.vmt`:
-993 names, 411 idle lines, 176 responses, 55 kill lines, 71 death-by-player lines, 40 death lines and 18 witness
-lines. Some are insulting; we did not perform a full moderation review. The archive also contains default lists of
-399 props, 33 NPCs, 15 entities and 42 materials.
-
-The base GMA contains **846** files under `sound/lambdaplayers/vo/`: 647 idle, 51 death, 34 kill, 32 fall,
-30 assist, 16 taunt, 14 panic, 11 laugh and 11 witness. This is the shared pool, not 846 personal profiles. There
-are no `sound/lambdaplayers/voiceprofiles/` or `materials/lambdaplayers/textprofiles/` entries in that base archive.
-Other Workshop addons may provide them; they have not been searched or tested.
+The shared voice pool uses `sound/lambdaplayers/vo/`. This is distinct from named personal voice profiles under
+`sound/lambdaplayers/voiceprofiles/` and text profiles under `materials/lambdaplayers/textprofiles/`.
+An integration must discover available content rather than infer profile availability from support for these formats.
 
 ## 8. Names and text chat: requested expansion
 
@@ -185,8 +172,8 @@ combined is still to be chosen.
 
 `GetNameTable` in Lambda's `autorun_includes/shared/filesystem.lua` merges the packaged
 `materials/lambdaplayers/data/names.vmt`, optional `DATA/lambdaplayers/customnames.json` and content found under
-`materials/lambdaplayers/data/customnames/`. The inspected base pack has 993 names; the observed DATA tree did not
-contain `customnames.json`. Other addon-provided names were not inventoried. A personal profile can also have a name.
+`materials/lambdaplayers/data/customnames/`. A personal profile can also have a name. These are possible sources,
+not a guarantee that a particular installation provides any optional names.
 
 PW currently selects unique names before `player.CreateNextBot(name)` in
 `addons/privatewar/lua/privatewar/modules/bots_manager/init.lua`; its `sh_names.lua` and `sh_name_pool.lua` implement
