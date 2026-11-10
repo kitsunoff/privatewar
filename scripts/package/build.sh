@@ -59,6 +59,7 @@ src="$root/addons/privatewar"
 gm="$output/privatewar"
 rm -rf "$gm"
 stage "$src/gamemodes" "$gm/gamemodes"
+cp "$src/gamemodes/privatewar/logo.png" "$src/gamemodes/privatewar/icon24.png" "$gm/gamemodes/privatewar/"
 stage "$src/lua/privatewar" "$gm/lua/privatewar"
 cp "$src/addon.json" "$gm/addon.json"
 notices "$gm" privatewar

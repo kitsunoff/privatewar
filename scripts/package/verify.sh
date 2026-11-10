@@ -51,13 +51,15 @@ while IFS= read -r found; do
     fail "dotfile or dot-directory present: ${found#"$root"/}"
 done < <(find "$root" -name '.*' -not -path "$root")
 
-# Only Lua sources, plain text gamemode manifests, the addon manifest and the licence texts ship.
+# Only Lua sources, gamemode manifests and menu images, the addon manifest and licence texts ship.
 while IFS= read -r found; do
     rel="${found#"$root"/}"
     case "$rel" in
         addon.json) ;;
         *.lua) ;;
         gamemodes/*/*.txt) ;;
+        gamemodes/privatewar/logo.png | gamemodes/privatewar/icon24.png)
+            if [[ "$kind" != gamemode ]]; then fail "gamemode menu image in integration: $rel"; fi ;;
         data_static/"$name"/LICENSE.txt | data_static/"$name"/THIRD_PARTY_NOTICES.txt) ;;
         *) fail "file type not allowed: $rel" ;;
     esac
@@ -82,7 +84,8 @@ for required in LICENSE.txt THIRD_PARTY_NOTICES.txt; do
 done
 
 if [[ "$kind" == gamemode ]]; then
-    for required in gamemodes/privatewar/privatewar.txt gamemodes/privatewar/gamemode/shared.lua \
+    for required in gamemodes/privatewar/privatewar.txt gamemodes/privatewar/logo.png \
+        gamemodes/privatewar/icon24.png gamemodes/privatewar/gamemode/shared.lua \
         gamemodes/privatewar/gamemode/init.lua gamemodes/privatewar/gamemode/cl_init.lua lua/privatewar; do
         if [[ ! -e "$root/$required" ]]; then fail "required path is missing: $required"; fi
     done
