@@ -55,6 +55,7 @@ Playing, hosting for friends and the controls are described in [docs/guide/playi
 - [DESIGN.md](DESIGN.md) and [design/](design/): the design decisions per subsystem.
 - [docs/packaging.md](docs/packaging.md): building the Workshop addons.
 - [TASKS.md](TASKS.md): the implementation plan.
+- [changes/INDEX.md](changes/INDEX.md): the change queue and links to remaining plan entries.
 - [AGENTS.md](AGENTS.md): coding-agent entry point and four implementation skills.
 
 ## Development

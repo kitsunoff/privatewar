@@ -5,7 +5,7 @@ Entry point for coding agents. Read the rules before changing files; a skill is 
 ## Read in this order
 
 1. `CLAUDE.md`: project rules, repository layout, platform facts, third-party code rules.
-2. `TASKS.md`: section "How to continue (handover)" (orchestration loop, gates, Deck rules), then "Phase 11" at the end (current queue).
+2. `TASKS.md`: section "How to continue (handover)" (orchestration loop, gates, Deck rules), then `changes/INDEX.md` (current queue and legacy pointers).
 3. `DESIGN.md` and `design/NN-*.md`: decisions, cited as `<file> d.<n>`.
 4. `.claude/commands/orchestrate.md`: the orchestration rules and brief template, valid for any agent.
 5. [Agent workflow](docs/agent-workflow.md): concrete TDD, verification, failure and reporting steps. Then load the relevant skill below and its API contracts.
@@ -35,3 +35,13 @@ Validate guidance with `nix develop --command bash scripts/check/agent-guides.sh
 6. Develop directly in this canonical repository (`kitsunoff/privatewar`), on feature branches. Never commit or merge locally on `main`; use reviewed PRs, draft by default. Push only with the user's authorization. Show the PR title and body and obtain approval before creating it. Merge only with separate explicit user approval, using `gh pr merge --squash --delete-branch`.
 7. Steam Deck: obtain explicit permission and confirmation that it is free before any access; use only the locked `scripts/deck/*.sh`. Never run `cp1.sh` unless asked. Without permission, report game tests skipped and the merge gate incomplete.
 8. Licence: GPL-3.0-or-later (`LICENSE`). Vendor third-party code only under a GPL-compatible licence and add its notice to `THIRD_PARTY_NOTICES.md` in the same change (`CLAUDE.md`, "Third-party code").
+
+## Change tracking
+
+Start with [changes/INDEX.md](changes/INDEX.md). Each migrated change has one thematic record in exactly one of
+`changes/planned/`, `changes/in-progress/`, `changes/blocked/` or `changes/done/`; its status must match its directory.
+On a status change move the record, update its evidence, index and inbound links in the same change. Update blockers
+in the record. `done` does not waive gates or imply human acceptance.
+Unmigrated work remains in `TASKS.md`, linked from the index; do not infer its status from old phase rows.
+Keep mandatory test clauses, checkpoint rules and historical evidence in `TASKS.md` until references and tooling
+can be migrated safely. A tracking entry is not authorization to implement, access the Deck or publish.

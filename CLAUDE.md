@@ -11,7 +11,7 @@ A casual "modern CoD in Garry's Mod" gamemode: solo or with a few friends agains
 
 Superseded material (do not follow): the DHTML recommendation in `notes/20-ui-tooling.md`.
 
-Handover for a new agent (including Codex): `AGENTS.md`, then `TASKS.md` "How to continue (handover)" and "Phase 11" (current queue).
+Handover for a new agent (including Codex): `AGENTS.md`, then `TASKS.md` "How to continue (handover)" and `changes/INDEX.md` (current queue and legacy pointers).
 Practical coding workflows: `AGENTS.md` "Coding skills" and `docs/agent-workflow.md`; exact regression references:
 `docs/agent-test-map.md`. Skills guide implementation but do not authorize code, device access or publication.
 
