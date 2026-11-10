@@ -93,6 +93,23 @@ return {
     end,
     cases = {
         {
+            name = "Infected cover search: mode opts out only infected, not survivor waiting or missing role state",
+            skip = absent,
+            func = function()
+                local lib, f = activate(), fixture()
+                for _, role in ipairs({ "infected", "survivor", "waiting" }) do
+                    local roleStub = stub(lib, "Role").with(function()
+                        if role ~= "waiting" then return role end
+                    end)
+                    if role == "infected" then expect(PW.Ask("PW_CanSearchBotCover", f.bot)).to.beFalse()
+                    else expect(PW.Ask("PW_CanSearchBotCover", f.bot)).to.beNil() end
+                    roleStub:Restore()
+                end
+                lib.State = nil
+                expect(PW.Ask("PW_CanSearchBotCover", f.bot)).to.beNil()
+            end
+        },
+        {
             name = "Infected rush: mode prohibits retaliate cover reload fight and escape"
                 .. " but permits pursuit search hunt",
             skip = absent,
