@@ -34,6 +34,7 @@
 ---@field canStart boolean
 
 ---@class PW.PlaylistAttempt
+---@field accepted? boolean acceptance belongs to this request, surviving synchronous phase cleanup
 ---@field id string
 ---@field mode string
 ---@field map string
@@ -123,7 +124,6 @@
 ---@field selectedActive boolean
 ---@field spent boolean one expired attempt per selection/lobby, including backward clock samples
 ---@field attempt? PW.PlaylistAttempt
----@field accepted? boolean
 ---@field pendingAttempt? PW.PlaylistAttempt
 ---@field bootReady boolean
 ---@field startupResolved? boolean

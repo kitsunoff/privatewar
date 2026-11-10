@@ -248,6 +248,7 @@ end
 
 function lib.Start(id)
     local st = store()
+    if st.attempt ~= nil then return false, "playlist start already in progress" end
     if PW.NavGen ~= nil and PW.NavGen.IsGenerating() then return false, "navmesh generation running" end
     if st.phase() ~= "LOBBY" then return false, "playlist start requires LOBBY" end
     if PW.MapChange ~= nil and PW.MapChange.IsChanging() then return false, "a map change is in progress" end
@@ -270,17 +271,18 @@ function lib.Start(id)
     st.retained, st.selectedActive = false, false
     st.spent = not available.active
     st.setActive(id)
-    st.attempt = { id = id, mode = pick.mode, map = pick.map }
+    local attempt = { id = id, mode = pick.mode, map = pick.map } --[[@as PW.PlaylistAttempt]]
+    st.attempt = attempt
     local ok = st.start(pick.mode, pick.map)
     if not ok and st.phase() == "LOBBY" and (PW.MapChange == nil or not PW.MapChange.IsChanging())
-        and not st.accepted then
+        and not attempt.accepted then
         -- A core preflight refusal is not activation; the core marks accepted attempts below.
         st.retained = grant
         st.spent = spent
         st.selectedActive = selectedActive
         st.setActive(previousId)
     end
-    st.attempt, st.accepted = nil, nil
+    st.attempt = nil
     changed()
     return ok, not ok and "playlist start refused" or nil
 end
@@ -292,7 +294,7 @@ function lib._AcceptStart(mode, map)
         attempt = { id = lib.GetActive(), mode = mode, map = map }
     end
     if attempt == nil or attempt.mode ~= mode or attempt.map ~= map then return end
-    st.accepted = true
+    attempt.accepted = true
     st.pendingAttempt = table.Copy(attempt)
 end
 

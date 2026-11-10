@@ -41,6 +41,13 @@ local function entry(state)
         end }
 end
 
+---@param state table<string, any>
+---@param phase PW.PhaseName
+local function enterPhase(state, phase)
+    state.phase = phase
+    PW.Call(assert(PW.Modules.GetStored("playlists")), "PW_PhaseChange", phase)
+end
+
 ---@param state PW.PlaylistListState
 ---@param mutate? fun(tokens: any[])
 ---@return PW.PlaylistListState?
@@ -215,6 +222,93 @@ return {
                 expect(assert(lib().Start)("event")).to.beFalse()
                 state.now = 1100 assert(lib().RefreshAvailability)(state.now)
                 expect(assert(lib().GetSelection)()).to.deepEqual({ id = "event", retained = true, canStart = true })
+            end
+        },
+        {
+            name = "VOTE acceptance cannot consume a later lobby grant on rejected preflight",
+            func = function(state)
+                install(state, {}) state.entries = { entry(state) }
+                assert(lib().SetActive)("event")
+                state.phase = "VOTE"
+                lib()._AcceptStart("tdm", "gm_a")
+                expect(lib()._PendingStart("tdm", "gm_a")).to.equal("event")
+                enterPhase(state, "PREMATCH")
+                enterPhase(state, "LOBBY")
+                expect(lib()._PendingStart("tdm", "gm_a")).to.beNil()
+                assert(lib().SetActive)("event")
+                state.now = 1100 assert(lib().RefreshAvailability)()
+                expect(assert(lib().GetSelection)().canStart).to.beTrue()
+                local accept = false
+                PW._Playlist.start = function(mode, map)
+                    if accept then lib()._AcceptStart(mode, map) end
+                    return false
+                end
+                expect(assert(lib().Start)("event")).to.beFalse()
+                expect(assert(lib().GetSelection)().canStart).to.beTrue()
+                expect(PW._Playlist.attempt).to.beNil()
+                -- A later, genuinely accepted failure still consumes this same grant.
+                accept = true
+                expect(assert(lib().Start)("event")).to.beFalse()
+                expect(assert(lib().GetSelection)().canStart).to.beFalse()
+            end
+        },
+        {
+            name = "Synchronous accepted activation failure survives PREMATCH and LOBBY cleanup without a refund",
+            func = function(state)
+                install(state, {}) state.entries = { entry(state) }
+                assert(lib().SetActive)("event")
+                state.now = 1100
+                PW._Playlist.start = function(mode, map)
+                    lib()._AcceptStart(mode, map)
+                    enterPhase(state, "PREMATCH")
+                    enterPhase(state, "LOBBY")
+                    return false
+                end
+                expect(assert(lib().Start)("event")).to.beFalse()
+                expect(assert(lib().GetSelection)().canStart).to.beFalse()
+                expect(PW._Playlist.attempt).to.beNil()
+                expect(lib()._PendingStart("tdm", "gm_a")).to.beNil()
+            end
+        },
+        {
+            name = "Mismatched acceptance cannot mark the current attempt or consume its grant",
+            func = function(state)
+                for _, target in ipairs({ { "ffa", "gm_a" }, { "tdm", "gm_b" } }) do
+                    install(state, {}) state.entries = { entry(state) }
+                    assert(lib().SetActive)("event")
+                    state.now = 1100
+                    PW._Playlist.start = function()
+                        lib()._AcceptStart(target[1], target[2])
+                        return false
+                    end
+                    expect(assert(lib().Start)("event")).to.beFalse()
+                    expect(assert(lib().GetSelection)().canStart).to.beTrue()
+                    expect(PW._Playlist.pendingAttempt).to.beNil()
+                    expect(PW._Playlist.attempt).to.beNil()
+                end
+            end
+        },
+        {
+            name = "Reentrant start cannot replace the synchronous attempt awaiting acceptance",
+            func = function(state)
+                install(state, {}) state.entries = { entry(state) }
+                assert(lib().SetActive)("event")
+                state.now = 1100
+                PW._Playlist.start = function(mode, map)
+                    local attempt = PW._Playlist.attempt
+                    -- Avoid recursion on the old implementation; a nested request must be rejected before sampling.
+                    state.fits = false
+                    local ok, reason = assert(lib().Start)("event")
+                    expect(ok).to.beFalse()
+                    expect(reason).to.equal("playlist start already in progress")
+                    state.fits = true
+                    expect(PW._Playlist.attempt).to.equal(attempt)
+                    lib()._AcceptStart(mode, map)
+                    return false
+                end
+                expect(assert(lib().Start)("event")).to.beFalse()
+                expect(assert(lib().GetSelection)().canStart).to.beFalse()
+                expect(PW._Playlist.attempt).to.beNil()
             end
         },
         {
