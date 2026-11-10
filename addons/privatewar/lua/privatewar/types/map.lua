@@ -92,6 +92,7 @@
 
 ---Internal (server): state of the mapdata module. Survives pw_reload; a map change starts a new Lua state.
 ---@class PW.MapStore
+---@field generated? table<string, table> ephemeral current-map lower-priority mode data
 ---@field detected? PW.MapSpawns the cached auto-detected spawns of the current map
 ---@field reason? string what filled the cache: "InitPostEntity" or "on demand"
 ---@field nav? PW.MapNav the navmesh cache, nil until the navmesh was read (first Think after InitPostEntity)
@@ -102,6 +103,9 @@
 
 ---The map module (03-mapdata.md d.2, d.3, d.6). Shared, except the spawn functions (server).
 ---@class PW.MapLib
+---@field _ResolveModeData fun(a: any, g: table<string, table>?, c: string[]): any, boolean
+---@field SetGeneratedModeData fun(modeId: string, data: table?) server: set or clear ephemeral current-map data
+---@field IsNavReady fun(): boolean server: nav load has completed, including an empty result
 ---Team index of spawn points that belong to no team (FFA and deathmatch spawns): 0.
 ---@field AnyTeam integer
 ---Pure: the map data file id of a map name: lowercase, every character outside [a-z0-9_] replaced by "_"

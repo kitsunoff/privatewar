@@ -22,6 +22,10 @@ local function send(state, ply)
         if view.pos ~= nil then net.WriteVector(view.pos) end
         net.WriteUInt(view.action == "plant" and 1 or (view.action == "defuse" and 2 or 0), 2)
         net.WriteUInt(math.floor(view.progress * 255 + 0.5), 8)
+        for _, site in ipairs(assert(view.sites)) do
+            net.WriteString(site.id)
+            net.WriteVector(site.pos)
+        end
     end
     net.Send(ply)
 end

@@ -5,7 +5,7 @@ MODE.Description = "Plant or defuse one bomb. One life per round."
 MODE.Base = "round_base"
 MODE.Teams = 2
 MODE.Dependencies = { objective_actions = { "collect", "hold", "plant", "defuse" },
-    modules = { "bots_objectives", "snd", "lobby" } }
+    modules = { "bots_objectives", "snd", "lobby", "mapdata" } }
 MODE.TeamPolicy = "managed"
 MODE.BotQuotaPolicy = "rounds"
 MODE.MapData = true
@@ -21,6 +21,13 @@ local function base() return assert(PW.Modes.GetStored("round_base")) --[[@as PW
 ---@return boolean, string?
 function MODE:ValidateMapData(data) return lib().Validate(data) end
 
+---@param mapName string
+---@return boolean
+function MODE:MapCandidate(mapName)
+    return string.sub(string.lower(mapName), 1, 3) == "de_"
+        and (PW.MapList == nil or not PW.MapList.IsJunk(mapName))
+end
+
 ---@param self PW.SNDMode
 ---@return boolean
 local function playing(self)
@@ -31,10 +38,8 @@ end
 function MODE:Start()
     local lobby = assert(PW.Modules.Get("lobby"), "S&D needs the spectator policy owner")
     assert(lobby:IsValid() and assert(PW.Jip).RefreshSpectator ~= nil, "S&D needs the spectator policy owner")
-    local data = assert(PW.Map).GetModeData(self.ClassName)
-    local valid, reason = lib().Validate(data)
-    if not valid then error(reason or "invalid S&D map") end
-    lib().Activate(data --[[@as PW.SNDMapData]])
+    local data, reason = lib().PrepareMap(self.ClassName)
+    if data == nil then error(reason or "invalid S&D map") end
     base().Start(self)
 end
 

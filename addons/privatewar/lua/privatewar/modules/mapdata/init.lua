@@ -137,9 +137,20 @@ function lib.GetNavAreas()
 end
 
 PW.HookFor(MODULE, "InitPostEntity", function()
+    PW._Map.generated = nil
     lib._Refresh("InitPostEntity")
     PW._Map.navCheckAt = 0
     PW._Map.navTries = 0
+end)
+
+---@return boolean
+function lib.IsNavReady()
+    return PW._Map.nav ~= nil and not PW._Map.navPaused
+end
+
+PW.HookFor(MODULE, "PostCleanupMap", function()
+    PW._Map.generated = nil
+    lib._Refresh("PostCleanupMap")
 end)
 
 function lib._NavThink()

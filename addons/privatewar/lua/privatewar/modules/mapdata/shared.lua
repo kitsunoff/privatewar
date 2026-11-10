@@ -260,10 +260,33 @@ end
 ---@return table?
 function lib.GetModeData(modeId)
     local entry = lib.Get()
-    if entry == nil then return nil end
     local modes = rawget(PW, "Modes") --[[@as PW.Registry?]]
     local mode = modes ~= nil and modes.Get(modeId) or nil
-    return lib._FindModeData(entry.Modes, lib._ModeChain(mode, modeId))
+    local data = lib._ResolveModeData(entry ~= nil and entry.Modes or nil, PW._Map.generated,
+        lib._ModeChain(mode, modeId))
+    return istable(data) and data or nil
+end
+
+---@param authored any
+---@param generated table<string, table>?
+---@param chain string[]
+---@return any, boolean
+function lib._ResolveModeData(authored, generated, chain)
+    if istable(authored) then
+        for _, id in ipairs(chain) do
+            local value = (authored --[[@as table<string, any>]])[id]
+            if value ~= nil then return value, true end
+        end
+    end
+    return lib._FindModeData(generated, chain), false
+end
+
+---@param modeId string
+---@param data table?
+function lib.SetGeneratedModeData(modeId, data)
+    assert(SERVER, "generated map data is server-owned")
+    PW._Map.generated = PW._Map.generated or {}
+    PW._Map.generated[modeId] = data
 end
 
 ---One log line per map and mode for map data a mode rejects (03-mapdata.md d.6).
@@ -289,9 +312,12 @@ function lib.ModeFits(mode, mapName)
     if mode.MapData ~= true then return true end
     local modeId = tostring(mode.ClassName)
     local entry = lib.Get(mapName)
-    if entry == nil then return false, "no map data" end
-    local data = lib._FindModeData(entry.Modes, lib._ModeChain(mode, modeId))
-    if data == nil then return false, "no data for " .. modeId end
+    local data, authored = lib._ResolveModeData(entry ~= nil and entry.Modes or nil,
+        mapName == game.GetMap() and PW._Map.generated or nil, lib._ModeChain(mode, modeId))
+    if data == nil and not authored then
+        if isfunction(mode.MapCandidate) and PW.Call(mode, "MapCandidate", mapName) == true then return true end
+        return false, entry == nil and "no map data" or ("no data for " .. modeId)
+    end
     if not isfunction(mode.ValidateMapData) then return true end
     local ok, reason = PW.Call(mode, "ValidateMapData", data)
     if ok == true then return true end

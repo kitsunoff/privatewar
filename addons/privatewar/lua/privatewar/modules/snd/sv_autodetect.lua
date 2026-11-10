@@ -1,0 +1,88 @@
+-- Register before map entity creation. Never replace a class owned by another addon.
+local lib = PW.SND --[[@as PW.SNDLib]]
+if scripted_ents.GetStored("func_bomb_target") == nil then
+    ---@type table<string, any>
+    local definition = { Type = "brush", Base = "base_brush", Spawnable = false, pwSNDAutoTarget = true }
+    ---@param self PW.SNDBombTarget
+    function definition:Initialize()
+        self:SetNotSolid(true)
+        self:SetNoDraw(true)
+    end
+    ---@param self PW.SNDBombTarget
+    ---@param key string
+    ---@param value string
+    function definition:KeyValue(key, value)
+        if string.lower(key) == "startdisabled" then self.pwSNDDisabled = tonumber(value) == 1 end
+    end
+    ---@param self PW.SNDBombTarget
+    ---@param name string
+    function definition:AcceptInput(name)
+        name = string.lower(name)
+        if name == "disable" then self.pwSNDDisabled = true return true end
+        if name == "enable" then self.pwSNDDisabled = false return true end
+    end
+    scripted_ents.Register(definition, "func_bomb_target")
+end
+
+function lib.Detect()
+    local map = assert(PW.Map)
+    if not map.IsNavReady() then return nil, "S&D is waiting for navmesh readiness" end
+    local areas = assert(map.GetNavAreas)()
+    if #areas == 0 then return nil, "S&D requires a navmesh; generate one or choose another map" end
+    if #areas > 4096 then return nil, "S&D automatic nav area limit exceeded" end
+    local stored = scripted_ents.GetStored("func_bomb_target")
+    if stored == nil or stored.t.pwSNDAutoTarget ~= true then
+        return nil, "S&D cannot verify bomb targets owned by another addon"
+    end
+    ---@type PW.SNDTarget[]
+    local targets = {}
+    for _, ent in ipairs(ents.FindByClass("func_bomb_target")) do
+        ---@cast ent PW.SNDBombTarget
+        local lo, hi = ent:WorldSpaceAABB()
+        local disabled = ent.pwSNDDisabled == true
+        targets[#targets + 1] = { mins = lo, maxs = hi, name = ent:GetName(), disabled = disabled }
+    end
+    ---@type Vector[]
+    local points = {}
+    ---@type CNavArea[]
+    local sorted = {}
+    for i, area in ipairs(areas) do sorted[i] = area end
+    table.sort(sorted, function(a, b) return a:GetID() < b:GetID() end)
+    for _, area in ipairs(sorted) do
+        if not area:IsUnderwater() and not area:HasAttributes(NAV_MESH_CROUCH) then
+            points[#points + 1] = area:GetCenter()
+        end
+    end
+    ---@type table<integer, PW.SpawnPoint[]>
+    local spawns = { {}, {} }
+    for side, class in ipairs({ "info_player_terrorist", "info_player_counterterrorist" }) do
+        for _, ent in ipairs(ents.FindByClass(class)) do
+            spawns[side][#spawns[side] + 1] = { pos = ent:GetPos(), yaw = ent:GetAngles().y }
+        end
+    end
+    return lib.Derive({ targets = targets, spawns = spawns, points = points,
+        safe = lib._AutoSafe, mutual = lib._AutoMutual })
+end
+
+function lib.PrepareMap(modeId)
+    local map = assert(PW.Map)
+    map.SetGeneratedModeData("snd", nil)
+    local data = map.GetModeData(modeId)
+    local mode = PW.Modes.Get(modeId)
+    if mode == nil then return nil, "S&D mode is unavailable" end
+    local entry = map.Get()
+    local _, authored = map._ResolveModeData(entry ~= nil and entry.Modes or nil, nil,
+        map._ModeChain(mode, modeId))
+    if not authored then
+        if PW.Call(mode, "MapCandidate", game.GetMap()) ~= true then return nil, "No S&D map data" end
+        local reason
+        data, reason = lib.Detect()
+        if data == nil then return nil, reason end
+    end
+    local valid, reason = lib.Validate(data)
+    if not valid then return nil, reason end
+    local ok, failure = pcall(lib.Activate, data --[[@as PW.SNDMapData]])
+    if not ok then return nil, tostring(failure) end
+    if not authored then map.SetGeneratedModeData("snd", data) end
+    return data --[[@as PW.SNDMapData]]
+end

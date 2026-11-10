@@ -86,7 +86,9 @@ end
 ---@return PW.SNDMode?
 local function active()
     local mode = PW.ActiveMode
-    if mode == nil or mode.ClassName ~= "snd" or assert(PW.Match).GetPhase() ~= "LIVE" then return nil end
+    if mode == nil or assert(PW.Match).GetPhase() ~= "LIVE" then return nil end
+    local chain = assert(PW.Map)._ModeChain(mode, mode.ClassName)
+    if not table.HasValue(chain, "snd") then return nil end
     return mode --[[@as PW.SNDMode]]
 end
 
@@ -107,4 +109,5 @@ PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
 end)
 
 include("privatewar/modules/snd/sv_world.lua")
+include("privatewar/modules/snd/sv_autodetect.lua")
 include("privatewar/modules/snd/sv_snapshot.lua")

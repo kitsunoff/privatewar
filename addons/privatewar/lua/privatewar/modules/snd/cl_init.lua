@@ -35,10 +35,9 @@ PW.HookFor(MODULE, "Think", function()
     if view == nil then return end
     display.title, display.line = lib.HudText(view, now)
     display.progress = view.action ~= nil and view.progress or 0
-    local data = PW.Map ~= nil and PW.Map.GetModeData("snd") or nil
     local count = 0
-    if data ~= nil then
-        for _, site in ipairs(data.sites --[[@as PW.SNDSite[] ]]) do
+    if view.sites ~= nil then
+        for _, site in ipairs(view.sites) do
             count = count + 1
             marker(site.pos, site.id, count)
         end
@@ -51,7 +50,7 @@ PW.HookFor(MODULE, "Think", function()
 end)
 
 net.Receive("pw_snd_state", function(length)
-    if length < 67 or length > 1024 then return end
+    if length < 67 or length > 2048 then return end
     local nextGeneration, nextSerial, phase = net.ReadUInt(32), net.ReadUInt(32), net.ReadUInt(3)
     if nextGeneration < generation or (nextGeneration == generation and nextSerial <= serial) then return end
     if phase == 0 then
@@ -75,6 +74,11 @@ net.Receive("pw_snd_state", function(length)
     local action = net.ReadUInt(2)
     view.action = action == 1 and "plant" or (action == 2 and "defuse" or nil)
     view.progress = net.ReadUInt(8) / 255
+    ---@type PW.SNDPublicSite[]
+    local sites = {}
+    for _ = 1, 2 do sites[#sites + 1] = { id = net.ReadString(), pos = net.ReadVector() } end
+    view.sites = lib.PublicSites(sites)
+    if view.sites == nil then return end
     generation, serial, current = nextGeneration, nextSerial, view
 end)
 
