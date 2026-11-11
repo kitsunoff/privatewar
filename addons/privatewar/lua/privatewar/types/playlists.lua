@@ -10,6 +10,7 @@
 ---@field Maps? string[]|fun(self: PW.Playlist): string[]?
 ---@field Settings? table<string, any>|fun(self: PW.Playlist): table<string, any>?
 ---@field IsActive? fun(self: PW.Playlist, nowUTC: number): boolean, number?
+---@field _RotationData? PW.PlaylistData author-owned copied startup content for shipped definitions
 
 ---Copied and validated startup data; no functions or availability state.
 ---@class PW.PlaylistData
@@ -17,6 +18,12 @@
 ---@field Modes table<string, number>
 ---@field Maps? string[]
 ---@field Settings table<string, any> validated, clamped values
+
+---@class PW.RotationFacts
+---@field maps string[] installed curated maps plus shipped base maps and installed Shipment candidates
+---@field modes table<string, boolean> enabled, concrete mode ids
+---@field infection boolean optional addon modules, native fists and multiplayer slots are available
+---@field fits fun(mode: string, map: string): boolean
 
 ---One listed playlist.
 ---@class PW.PlaylistEntry : PW.PlaylistData
@@ -152,6 +159,12 @@
 ---@field activeName? string the name of the active playlist
 
 ---@class PW.PlaylistLib
+---@field _BuildRotation fun(id: string, facts: PW.RotationFacts): PW.PlaylistData?, string?
+---@field _RotationWindow fun(id: string, nowUTC: number): boolean, number
+---@field _RotationFacts fun(): PW.RotationFacts
+---@field _RotationContentActive fun(id: string, d: PW.PlaylistData, t: number, f: PW.RotationFacts): boolean, number?
+---@field _ResolveRotation fun(definition: PW.Playlist, id: string): table<string, number>
+---@field _ShippedActive fun(definition: PW.Playlist, id: string, nowUTC: number): boolean, number?
 ---Privilege to pick and start a playlist: "pw.match.start" (the lobby's privilege).
 ---@field Privilege string
 ---@field _MaxEntries integer bounded startup admission and snapshot codec limit (128)

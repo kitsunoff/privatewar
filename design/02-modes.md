@@ -175,6 +175,14 @@ Inherited from `01-extensibility.md`:
     and votes, then validate after load under `03-mapdata.md` d.10. Failure returns to lobby with a visible reason,
     never to another mode or an automatic retry loop; no persistent failure cache.
 
+### Shipped content authorization (2026-11-11)
+
+The user explicitly delegated concrete playlist compositions, installed map choices, settings and UTC calendars
+within the existing design. This resolves decision 9's deferred shipped-content choices only; it does not authorize
+new modes, map layouts, health rules, shared schedules or XP effects. Concrete author policy is documented in
+[shipped playlists](../docs/playlists.md). Hardcore remains blocked on missing gameplay/schema, not represented
+by a falsely labelled ordinary TDM preset. One in the Chamber remains future work.
+
 ## Interfaces
 
 TBD.

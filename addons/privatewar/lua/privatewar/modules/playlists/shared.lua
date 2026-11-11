@@ -12,6 +12,9 @@ MODULE.Name = "Playlists"
 local lib = (rawget(PW, "Playlist") or {}) --[[@as PW.PlaylistLib]]
 PW.Playlist = lib
 
+if SERVER then AddCSLuaFile("privatewar/modules/playlists/sh_content.lua") end
+include("privatewar/modules/playlists/sh_content.lua")
+
 lib.Privilege = "pw.match.start"
 lib._MaxEntries = 128
 
