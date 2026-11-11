@@ -14,6 +14,17 @@ local function layout()
     } }
 end
 
+---@param previous table<string, PW.Registry>
+---@param modes PW.Registry
+---@return table<string, PW.Registry>
+local function withModes(previous, modes)
+    ---@type table<string, PW.Registry>
+    local registries = {}
+    for kind, registry in pairs(previous) do registries[kind] = registry end
+    registries.modes = modes
+    return registries
+end
+
 ---@param state table<string, any>
 ---@param replacement? boolean
 ---@param remove? boolean
@@ -29,7 +40,8 @@ local function definitions(state, replacement, remove)
         state.liveMap = self._SNDMap
     end, Cleanup = function() end }, "round_base")
     registry.Register({ Base = "round_base", MapData = true, MapReadiness = true,
-        Start = state.start, Cleanup = state.cleanup, PrepareRound = state.prepareRound }, "snd")
+        Start = state.start, Cleanup = state.cleanup, PrepareRound = state.prepareRound,
+        Dependencies = state.dependencies }, "snd")
     if not remove then
         registry.Register({ Base = replacement and state.invalidChild and "missing_pin_base" or "snd",
             Name = "Pinned child", Teams = 2 }, "pin_child")
@@ -46,7 +58,7 @@ local function reloadDefinitions(state, remove)
     local active = PW.ActiveMode
     local keep = PW.Loader._KeepFor(previous, active ~= nil and { active } or {})
     assert(previous.modes)._Release(keep.modes)
-    PW.Modes, PW.Registries = nextModes, { modes = nextModes, modules = previous.modules }
+    PW.Modes, PW.Registries = nextModes, withModes(previous, nextModes)
 end
 
 return {
@@ -58,15 +70,19 @@ return {
         local source = assert(PW.Modes.Get("snd"))
         state.start, state.cleanup = source.Start, source.Cleanup
         state.prepareRound = source.PrepareRound
+        -- Real Start requires the real declared owners. An empty bound snapshot intentionally has no fallback.
+        local dependencies = assert(source.Dependencies) --[[@as table<string, string[]>]]
+        state.dependencies = table.Copy(dependencies)
         state.tracked, state.current, state.started, state.prepares = {}, layout(), 0, 0
         state.now, state.utc, state.active, state.nav = 1000, 1000, "", true
         state.classification = "authored"
+        state.activationCalls = 0
         PW.ActiveMode = nil
         PW._Call = { log = function() end, failed = setmetatable({}, { __mode = "k" }), profile = {} }
         PW._Settings = PW.Settings._NewStore()
         PW._Enable = assert(PW.Enable)._NewStore({ registries = function() return {} end })
         PW.Modes = definitions(state)
-        PW.Registries = { modes = PW.Modes, modules = state.previous.registries.modules }
+        PW.Registries = withModes(state.previous.registries, PW.Modes)
         state.mode = assert(PW.Modes.Get("pin_child"))
         PW._Match = match()._NewStore({ log = function() end, clock = function() return state.now end,
             players = function() return {} end, settings = function()
@@ -97,6 +113,7 @@ return {
             return not state.rejected and state.current or nil
         end)
         stub(snd(), "Activate").with(function(data)
+            state.activationCalls = state.activationCalls + 1
             assert(not state.blocked, "pinned world geometry is now blocked")
             state.activated = data
         end)
@@ -121,6 +138,29 @@ return {
         PW.ActiveMode, PW.Modes, PW.Registries = state.previous.active, state.previous.modes, state.previous.registries
     end,
     cases = {
+        {
+            name = "SND PREMATCH fixture binds all real declared owners and retains their snapshot across reload",
+            func = function(state)
+                expect(state.mode.Dependencies).to.deepEqual(state.dependencies)
+                expect(match().Start(state.mode)).to.beTrue()
+                local owners = match()._DependencyEntities()
+                for kind, ids in pairs(state.dependencies --[[@as table<string, string[]>]]) do
+                    for _, id in ipairs(ids) do
+                        local expected = assert(state.previous.registries[kind].Get(id))
+                        expect(match().Dependency(kind, id)).to.equal(expected)
+                        expect(table.HasValue(owners, expected)).to.beTrue()
+                    end
+                end
+                local lobby = assert(match().Dependency("modules", "lobby"))
+                reloadDefinitions(state)
+                expect(match().Dependency("modules", "lobby")).to.equal(lobby)
+                expect(lobby:IsValid()).to.beTrue()
+                match()._SetPhase("LIVE")
+                expect(match().GetAbortReason()).to.beNil()
+                expect(match().GetPhase()).to.equal("LIVE")
+                expect(state.activationCalls).to.equal(1)
+            end
+        },
         {
             name = "SND preflight pins an isolated map before PREMATCH including vectors and both spawn pools",
             func = function(state)
@@ -156,6 +196,7 @@ return {
                 expect(state.usedNewBase).to.beFalse()
                 expect(state.liveMap).to.equal(pinned)
                 expect(state.activated).to.equal(pinned)
+                expect(state.activationCalls).to.equal(1)
                 expect(state.prepares).to.equal(1)
                 match().Finish({})
                 match()._SetPhase("LOBBY")
@@ -175,6 +216,7 @@ return {
                 expect(match().GetPhase()).to.equal("LIVE")
                 expect(state.liveMap).to.equal(pinned)
                 expect(state.usedNewBase).to.beFalse()
+                expect(state.activationCalls).to.equal(1)
             end
         },
         {
@@ -190,6 +232,7 @@ return {
                 expect(match().GetPhase()).to.equal("LIVE")
                 expect(state.liveMap).to.equal(pinned)
                 expect(state.usedNewBase).to.beFalse()
+                expect(state.activationCalls).to.equal(1)
                 match().Finish({})
                 match()._SetPhase("LOBBY")
                 expect(match().Start(state.mode)).to.beFalse()
@@ -215,6 +258,8 @@ return {
                 rawset(state, "current", nil)
                 match()._SetPhase("LIVE")
                 expect(state.started).to.equal(1)
+                expect(match().GetPhase()).to.equal("LIVE")
+                expect(state.activationCalls).to.equal(1)
             end
         },
         {
@@ -266,6 +311,9 @@ return {
                 match()._SetPhase("LIVE")
                 expect(match().GetPhase()).to.equal("LOBBY")
                 expect(state.started).to.equal(0)
+                expect(state.activationCalls).to.equal(1)
+                local reason = assert(match().GetAbortReason())
+                expect(string.find(reason, "pinned world geometry is now blocked", 1, true)).to.exist()
                 expect(state.mode._SNDMap).to.beNil()
                 expect(playlists.GetSelection().canStart).to.beFalse()
             end
@@ -289,6 +337,8 @@ return {
                 expect(state.usedNewBase).to.beTrue()
                 expect(state.liveMap == old).to.beFalse()
                 expect(state.liveMap.sites[1].radius).to.equal(96)
+                expect(state.activationCalls).to.equal(2)
+                expect(match().GetAbortReason()).to.beNil()
             end
         }
     }
