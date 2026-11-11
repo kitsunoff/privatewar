@@ -38,6 +38,9 @@ pre-existing always-active Free for all and TDM & FFA playlists remain unchanged
   Applied enable snapshots and hard failures are respected; re-enabling a ConVar does not repair a hard failure.
   Pending enable-ConVar edits still take effect at core's existing boot/new-match boundary, not immediately on
   availability polling. This check does not mutate live registries or bind a match dependency snapshot.
+  The server's default `Pick` eligibility repeats the core dependency check for every sampled candidate, so loss
+  of one mode's requirement cannot select that mode while another mode keeps the rotation active. Recovery can
+  sample that mode again without changing the frozen pool. Custom injected sampling predicates remain unchanged.
 - Infection requires the separate `privatewar-infection` addon, its enabled `pw_infection` mode,
   `pw_infection_rules`, `teams`, `loadout`, `operators`, `player_overrides`, `match_rules`, `lobby`, native
   `weapon_fists` and at least two server slots. No substitute infection mode or melee weapon is supplied.
@@ -66,5 +69,7 @@ is separate work; labelling normal TDM as Hardcore would be misleading. One in t
 repeat/clock-jump, Wednesday availability and reserved-slot quota assertions. Existing mandatory playlist and
 entitlement suites are unchanged. `playlists_dependencies.lua` adds initial-disable/re-enable, applied runtime
 toggles, failed-definition repair, inherited/action/malformed dependencies and nonrecursive-core regressions.
+Its fixed-RNG real `Pick` regression covers partial DOM dependency loss, Hardpoint fallback, restoration,
+total dependency loss and an unaffected ordinary playlist without injecting a replacement `fits` predicate.
 Engine RED/GREEN, installed map mounting, actual lobby cards, controller and
 multiplayer checkpoints still require an authorized game run; static checks alone do not establish them.

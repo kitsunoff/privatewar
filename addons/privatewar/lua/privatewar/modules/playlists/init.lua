@@ -40,6 +40,7 @@ local function defaultFits(id, map)
     local modes = (PW.Registries or {}).modes
     local mode = modes ~= nil and modes.Get(id) or nil
     if mode == nil or not table.HasValue(modes.GetEnabledList(), mode) then return false end
+    if assert(PW.Match)._CheckDependencies(mode, PW.Registries or {}) == nil then return false end
     return mode.MapData ~= true or (PW.Map ~= nil and PW.Map.ModeFits(mode, map))
 end
 

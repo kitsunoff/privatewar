@@ -18,13 +18,17 @@ return {
     groupName = "PW playlist dependency admission",
     beforeEach = function(state)
         state.registries, state.enable, state.call = PW.Registries, PW._Enable, PW._Call
+        state.playlist = PW._Playlist
         state.modules, state.modes = registry("modules"), registry("modes")
         state.actions = registry("objective_actions")
         PW.Registries = { modules = state.modules, modes = state.modes, objective_actions = state.actions }
         PW._Call = { log = function() end, failed = {}, profile = {} }
         state.disabled = false
         PW._Enable = assert(PW.Enable)._NewStore({ registries = function() return PW.Registries end,
-            read = function(name) return not (state.disabled and name == "pw_module_bots_objectives_enabled") end,
+            read = function(name)
+                return not ((state.disabled and name == "pw_module_bots_objectives_enabled")
+                    or (state.domDisabled and name == "pw_module_dom_flags_enabled"))
+            end,
             exists = function() return true end })
         state.modules.Register({ Dependencies = { modules = { "not_a_transitive_requirement" } } }, "bots_objectives")
         state.actions.Register({}, "capture")
@@ -39,9 +43,50 @@ return {
     end,
     afterEach = function(state)
         PW.Registries, PW._Enable, PW._Call = state.registries, state.enable, state.call
+        PW._Playlist = state.playlist
         state.modules._Release() state.actions._Release() state.modes._Release()
     end,
     cases = {
+        {
+            name = "Real Pick skips a lost DOM dependency with fixed RNG and restores DOM without resolving again",
+            func = function(state)
+                state.modules.Register({}, "dom_flags")
+                state.modes.Register({ Name = "DOM", Dependencies = { modules = { "bots_objectives", "dom_flags" },
+                    objective_actions = { "capture" } } }, "dom")
+                state.modules.ResolveAll() state.modes.ResolveAll()
+                local data = assert(lib()._BuildRotation("objective_chaos", content()))
+                local source = assert(assert(PW.Playlists).GetStored("objective_chaos"))
+                local definition = { ClassName = "objective_chaos", Name = data.Name, Modes = data.Modes,
+                    Maps = data.Maps, Settings = data.Settings, _RotationData = data, IsActive = source.IsActive }
+                local plain = { ClassName = "plain", Name = "Plain", Modes = { tdm = 1 }, Maps = { "gm_construct" } }
+                local pickFrom = assert(lib().Pick)
+                -- Deliberately omit fits: the production server default must gate actual Pick sampling.
+                PW._Playlist = assert(lib()._NewStore)({ luaEntries = function() return { definition, plain } end,
+                    facts = function() return {} end, rng = function() return 0 end,
+                    phase = function() return "LOBBY" end, time = function() return 1794355200 end,
+                    broadcast = function() end, getActive = function() return "" end })
+                expect(pickFrom("objective_chaos")).to.deepEqual({ mode = "dom", map = "gm_construct" })
+                state.domDisabled = true
+                assert(PW.Enable)._NewMatch()
+                assert(lib().RefreshAvailability)(1794355200)
+                expect(assert(assert(lib().GetAvailability)("objective_chaos")).active).to.beTrue()
+                expect(pickFrom("objective_chaos")).to.deepEqual({ mode = "hardpoint", map = "gm_construct" })
+                expect(pickFrom("plain")).to.deepEqual({ mode = "tdm", map = "gm_construct" })
+                state.domDisabled = false
+                assert(PW.Enable)._NewMatch()
+                expect(pickFrom("objective_chaos")).to.deepEqual({ mode = "dom", map = "gm_construct" })
+                state.disabled = true
+                assert(PW.Enable)._NewMatch()
+                local pick, reason = pickFrom("objective_chaos")
+                expect(pick).to.equal(nil)
+                expect(isstring(reason)).to.beTrue()
+                expect(pickFrom("plain")).to.deepEqual({ mode = "tdm", map = "gm_construct" })
+                state.disabled = false
+                assert(PW.Enable)._NewMatch()
+                expect(pickFrom("objective_chaos")).to.deepEqual({ mode = "dom", map = "gm_construct" })
+                expect(assert(assert(lib().Get)("objective_chaos")).Modes).to.deepEqual({ dom = 1, hardpoint = 1 })
+            end
+        },
         {
             name = "Initially disabled required module rejects Objective Chaos while unrelated TDM and FFA survive",
             func = function(state)

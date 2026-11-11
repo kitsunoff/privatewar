@@ -25,6 +25,11 @@ static inspection alone. Concrete policy and dependency details: [shipped playli
   `playlists_dependencies.lua` covers applied soft toggles, hard failures/repair, Base inheritance and core's
   nonrecursive declaration semantics. All five cases passed a pure Lua smoke using real core registry/checker/
   enable code with mocked engine glue, not GLuaTest. Pending ConVar changes retain core's boot/new-match timing.
+- Follow-up review correction: server default sampling also runs the core dependency checker. A tests-first real
+  `Pick` regression with RNG=0 fails before the fix and passes after it in the pure Lua harness; all six dependency
+  cases pass with actual server store/sampling/core code and mocked engine glue. Partial DOM loss selects
+  Hardpoint, restoration selects DOM again, total loss returns no pair and a plain TDM playlist stays unaffected.
+  No replacement `fits` predicate is injected; engine GLuaTest remains unobserved.
 - Added `playlists_content.lua` tests first, retaining all mandatory infrastructure suites unchanged.
 - Hardcore is blocked on absent gameplay/schema, not on calendar choice. No fake mode/map or unsupported
   setting is shipped. Shipment still requires a mounted matching BSP; Infection requires its optional addon.
