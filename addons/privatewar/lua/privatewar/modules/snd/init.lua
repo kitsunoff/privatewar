@@ -2,6 +2,40 @@
 local lib = PW.SND --[[@as PW.SNDLib]]
 PW._SND = PW._SND or { generation = 0, serial = 0, nextSnapshot = 0 }
 
+---Copy only validated layout data, including native mutable vectors; never retain registry/cache aliases.
+---@param data PW.SNDMapData
+---@return PW.SNDMapData
+function lib.CopyMap(data)
+    local valid, reason = lib.Validate(data)
+    assert(valid, reason)
+    ---@param pos Vector
+    ---@return Vector
+    local function copy(pos) return Vector(pos.x, pos.y, pos.z) end
+    ---@type PW.SNDMapData
+    local out = { bomb = copy(data.bomb), sites = {}, spawns = { [1] = {}, [2] = {} } }
+    for _, site in ipairs(data.sites) do
+        out.sites[#out.sites + 1] = { id = site.id, pos = copy(site.pos), approach = copy(site.approach),
+            radius = site.radius, above = site.above, below = site.below }
+    end
+    for side = 1, 2 do
+        for _, spawn in ipairs(data.spawns[side]) do
+            out.spawns[side][#out.spawns[side] + 1] = { pos = copy(spawn.pos), yaw = spawn.yaw }
+        end
+    end
+    return out
+end
+
+---@param mode table<string, any>
+---@param data PW.SNDMapData
+function lib.PinMap(mode, data)
+    mode._SNDMap = lib.CopyMap(data)
+end
+
+---@param mode table<string, any>
+function lib.ReleaseMap(mode)
+    mode._SNDMap = nil
+end
+
 function lib.Identity(ply)
     return ply:IsBot() and ("bot:" .. ply:UserID()) or ("human:" .. ply:SteamID64())
 end

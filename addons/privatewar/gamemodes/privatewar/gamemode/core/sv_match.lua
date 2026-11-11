@@ -152,6 +152,7 @@ end
 ---@param countdown? boolean
 local function transition(store, from, to, duration, countdown)
     exitPhase(store, from)
+    if to == "LOBBY" or to == "POSTMATCH" then match._ReleaseStartMap() end
     -- Leave the running-match interval before sampling predicates, but decide the final destination before
     -- publishing or notifying listeners (in particular before the vote module can open a session).
     store.phase = to --[[@as PW.PhaseName]]
@@ -245,7 +246,7 @@ local function beginMatch(store, mode, duration, map)
         return false
     end
     if PW.MapChange ~= nil and PW.MapChange.IsChanging() then return false end
-    local readiness = match._StartPreflight(resolved, map, function()
+    local readiness, layout = match._StartPreflight(resolved, map, function()
         return beginMatch(store, resolved, duration, map)
     end)
     if readiness ~= "ready" then return readiness == "pending" end
@@ -263,9 +264,12 @@ local function beginMatch(store, mode, duration, map)
             return accepted
         end
     end
+    if not match._PinStartMap(resolved, layout) then return false end
     store.mode = resolved
     if PW.Playlist ~= nil then PW.Playlist._AcceptStart(resolved.ClassName, map or game.GetMap()) end
-    return match._SetPhase("PREMATCH", duration)
+    local begun = match._SetPhase("PREMATCH", duration)
+    if not begun then match._ReleaseStartMap() end
+    return begun
 end
 
 ---@param mode table

@@ -15,8 +15,21 @@ MODE.SwapSidesEvery = 3
 
 ---@return PW.SNDLib
 local function lib() return assert(PW.SND) end
+---@param self table<string, any>
 ---@return PW.RoundBase
-local function base() return assert(PW.Modes.GetStored("round_base")) --[[@as PW.RoundBase]] end
+local function base(self)
+    ---@type table<string, any>?
+    local current = self.BaseClass
+    ---@type table<table, true>
+    local seen = {}
+    while istable(current) and not seen[current] do
+        local definition = current --[[@as table<string, any>]]
+        if definition.ClassName == "round_base" then return definition --[[@as PW.RoundBase]] end
+        seen[definition] = true
+        current = definition.BaseClass --[[@as table<string, any>?]]
+    end
+    error("S&D has no pinned round_base definition")
+end
 
 ---@param data any
 ---@return boolean, string?
@@ -37,12 +50,13 @@ local function playing(self)
 end
 
 function MODE:Start()
-    local lobby = assert(PW.Modules.Get("lobby"), "S&D needs the spectator policy owner")
+    local lobby = assert(assert(PW.Match).Dependency("modules", "lobby"), "S&D needs the spectator policy owner")
     assert(lobby:IsValid() and assert(PW.Jip).RefreshSpectator ~= nil, "S&D needs the spectator policy owner")
-    local data, reason = lib().PrepareMap(self.ClassName)
-    if data == nil then error(reason or "invalid S&D map") end
-    self._SNDMap = data
-    base().Start(self)
+    local data = assert(self._SNDMap, "S&D has no accepted preflight map") --[[@as PW.SNDMapData]]
+    local valid, reason = lib().Validate(data)
+    assert(valid, reason)
+    lib().Activate(data) -- Final world safety check, never a new layout/definition lookup after acceptance.
+    base(self).Start(self)
 end
 
 ---@param _round integer
@@ -203,8 +217,8 @@ function MODE:Cleanup()
     local state = self._SND --[[@as PW.SNDState?]]
     if state ~= nil then lib().Invalidate(state) end
     self._SND = nil
-    self._SNDMap = nil
+    lib().ReleaseMap(self)
     for _, ply in ipairs(player.GetAll()) do ply:Freeze(false) ply:SetNW2Bool("pw_snd_alive", false) end
     lib().Clear()
-    base().Cleanup(self)
+    base(self).Cleanup(self)
 end

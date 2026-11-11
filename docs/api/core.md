@@ -416,6 +416,10 @@ Source: `sh_reload.lua` (shared), `sv_reload.lua` (server), `sh_loader.lua`, `sv
   enable and settings snapshots are kept. The next match (`Start` or a rotation) uses the reloaded definition of
   the mode; if the mode no longer exists, `Start` logs `match start ignored: mode <id> is no longer registered
   (reloaded)` and returns `false`, and a rotation aborts to `LOBBY` with that reason.
+  This includes accepted PREMATCH, not only LIVE. S&D's successful preflight pins an isolated layout before
+  PREMATCH; LIVE world validation uses that layout and the accepted mode's old resolved Base chain. Changed or
+  removed authored/child definitions affect only the next match. PREMATCH cancellation and normal completion
+  discard the owner pin even when MODE:Start never ran; an invalid world can still abort without a replacement map.
 - Every other entity of the old registries turns invalid at once: modules are replaced immediately (old ones lose
   their subscriptions, new ones are subscribed). A reload also clears disables after an error (new registries); the
   enable snapshot is re-applied. Existing instances keep their old definition tables.

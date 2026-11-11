@@ -14,6 +14,7 @@ end
 function match._RefuseStart(reason)
     local store = PW._Match
     store.startWait, store.startReady = nil, nil
+    match._ReleaseStartMap()
     store.abortReason = match._StartReason(reason)
     store.log("match preflight refused: " .. store.abortReason)
     PW.Notify("PW_MatchStartRefused", store.abortReason)
@@ -24,7 +25,7 @@ end
 ---@param mode table
 ---@param target string?
 ---@param prepared? boolean
----@return PW.MapReadinessState, string?, boolean?
+---@return PW.MapReadinessState, string?, boolean?, PW.SNDMapData?
 local function check(mode, target, prepared)
     local map, snd = PW.Map, PW.SND
     if map == nil or snd == nil then return "rejected", "S&D map preparation is unavailable" end
@@ -34,25 +35,31 @@ local function check(mode, target, prepared)
         return fits and "ready" or "rejected", reason
     end
     if not map.IsNavReady() then return "pending", nil, false end
+    ---@type PW.SNDMapData?
+    local data
     if not prepared then
         local status = map.GetModeAvailability(mode.ClassName)
         if status.readiness == "rejected" then
             if not status.canRetry then return "rejected", status.reason end
-            snd.RetryMap(mode.ClassName)
+            data = snd.RetryMap(mode.ClassName)
         else
-            snd.PrepareMap(mode.ClassName)
+            data = snd.PrepareMap(mode.ClassName)
         end
     end
     local state, reason = map.GetModeReadiness(mode.ClassName)
-    return state, reason, true
+    if state == "ready" then
+        local accepted = assert(data or map.GetModeData(mode.ClassName), "S&D ready map has no layout")
+        data = snd.CopyMap(accepted --[[@as PW.SNDMapData]])
+    end
+    return state, reason, true, data
 end
 
 ---@param mode table
 ---@param target string?
 ---@param prepared? boolean
----@return PW.MapReadinessState, string?, boolean?
+---@return PW.MapReadinessState, string?, boolean?, PW.SNDMapData?
 local function safeCheck(mode, target, prepared)
-    local ok, state, reason, done = pcall(check, mode, target, prepared)
+    local ok, state, reason, done, data = pcall(check, mode, target, prepared)
     if not ok then
         PW._Match.log("map preparation error: " .. tostring(state))
         return "rejected", "S&D map preparation failed; choose another map"
@@ -60,26 +67,49 @@ local function safeCheck(mode, target, prepared)
     if state ~= "ready" and state ~= "pending" and state ~= "rejected" then
         return "rejected", "S&D map preparation returned invalid readiness"
     end
-    return state, reason, done
+    return state, reason, done, data
 end
 
 ---@param mode table
 ---@param target string?
 ---@param resume fun(): boolean, string?
----@return PW.MapReadinessState
+---@return PW.MapReadinessState, PW.SNDMapData?
 function match._StartPreflight(mode, target, resume)
     if mode.MapReadiness ~= true then return "ready" end
     local store = PW._Match
     local ready = store.startReady
     store.startReady = nil
-    if ready ~= nil and ready.mode == mode and ready.map == target then return "ready" end
-    local state, reason, prepared = safeCheck(mode, target)
+    if ready ~= nil and ready.mode == mode and ready.map == target then return "ready", ready.layout end
+    local state, reason, prepared, data = safeCheck(mode, target)
     if state == "rejected" then match._RefuseStart(reason or "S&D map layout was rejected") end
-    if state ~= "pending" then return state end
+    if state ~= "pending" then return state, data end
     local queued = PW.Playlist ~= nil and PW.Playlist._QueueStart(mode.ClassName, target) or nil
     store.startWait = { mode = mode, map = target, current = PW._MapChange.map(), phase = store.phase,
         deadline = store.clock() + 120, prepared = prepared, resume = queued or resume }
     return "pending"
+end
+
+function match._ReleaseStartMap()
+    local release = PW._Match.startMapRelease
+    PW._Match.startMapRelease = nil
+    if release ~= nil then release() end
+end
+
+---@param mode table
+---@param data PW.SNDMapData?
+---@return boolean
+function match._PinStartMap(mode, data)
+    match._ReleaseStartMap()
+    if data == nil then return true end
+    local owner = assert(PW.SND)
+    local ok, reason = pcall(owner.PinMap, mode, data)
+    if not ok then
+        PW._Match.log("map pin failed: " .. tostring(reason))
+        return match._RefuseStart("S&D accepted map could not be pinned")
+    end
+    local release = owner.ReleaseMap
+    PW._Match.startMapRelease = function() release(mode) end
+    return true
 end
 
 ---@param request PW.StartWait
@@ -102,11 +132,12 @@ function match._TickStart()
         fail(request, "S&D map readiness timed out; choose another map")
         return true
     end
-    local state, reason, prepared = safeCheck(request.mode, request.map, request.prepared)
+    local state, reason, prepared, data = safeCheck(request.mode, request.map, request.prepared)
     request.prepared = prepared
     if state == "pending" then return true end
     store.startWait = nil
     if state == "rejected" then fail(request, reason or "S&D map layout was rejected") return true end
+    request.layout = data
     store.startReady = request
     local ran, ok, why = pcall(request.resume)
     store.startReady = nil

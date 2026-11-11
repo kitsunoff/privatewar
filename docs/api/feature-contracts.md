@@ -251,6 +251,19 @@ is still pending; the following describes the implementation, not a native or hu
   `GetModeReadiness` to be ready. Rejected sources use `PW.SND.RetryMap(modeId)` only when `canRetry` permits;
   other initial preparation uses `PW.SND.PrepareMap(modeId)`. A non-retryable rejection never prepares geometry.
   No settings snapshot, playable phase or active next mode is published before this gate passes.
+- Successful loaded-map preflight copies the accepted S&D layout, including every mutable vector. The core pins
+  an isolated copy on the accepted mode definition **before** entering PREMATCH or notifying its consumers.
+  Readiness-only/remote eligibility never creates a pin. Queued continuations carry their isolated checked data
+  until acceptance; a rejected or cancelled continuation discards it without modifying a mode.
+- PREMATCH is already the accepted match for reload semantics (`01-extensibility.md` d.12). Its mode and resolved
+  Base chain stay the old definitions; S&D Start/Cleanup traverse that chain, not the current registry. At LIVE,
+  S&D structurally validates and world-checks the pinned map, without rerunning PrepareMap, consulting current
+  authored/generated stores or substituting newly loaded geometry. A newly unsafe world still aborts normally.
+  The spectator owner comes from the match dependency snapshot, not a fresh module lookup.
+- Owner cleanup retires the pin on PREMATCH cancellation/timeout/dependency failure, match completion or abort.
+  It is idempotent even if MODE:Start never ran or MODE:Cleanup already retired it. The next start resolves the
+  current definition and performs fresh preflight; a removed child cannot reuse its former pin. No geometry is
+  persisted in pending-match JSON: the destination map validates and pins its own layout before PREMATCH.
 - A pending readiness request stays in its original LOBBY/VOTE phase, with one fixed mode/map and no timer-driven
   repeat or new vote resolution. A second start is refused. Think checks readiness; 120 monotonic seconds is an
   initial technical timeout, not a new calendar/product rule. Abort, changed map/mode or a preparation error ends
@@ -308,6 +321,11 @@ Pre-case and post-suite checks detect process-wide leaks. A dedicated case chang
 and verifies real S&D/Domination/Hardpoint rejection on a map with no authored data. Incoming native recovery
 and protocol-scoped flash tests are preserved. These regressions are prepared for the next full engine run,
 not evidence that it has already passed.
+
+`snd_prematch_pin.lua` covers isolated authored/generated data, the pre-PREMATCH notification boundary, removed
+and changed-invalid children during PREMATCH registry retirement, old Base behavior at LIVE, direct/vote/pending
+and asynchronous entry, cancelled waits, expiry entitlement and final-world failure, pin cleanup and next-match
+refresh. Engine RED/GREEN and native timing remain unobserved for this correction.
 
 TASKS.md defines mandatory additions and the narrow T-2.6 replacement. Existing T-11.12, other objective-mode,
 spawn, navgen, pending-map JSON, privilege/network, bot fairness/name and UI cases are retained unchanged.

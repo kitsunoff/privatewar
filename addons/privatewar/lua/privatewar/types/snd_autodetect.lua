@@ -17,6 +17,9 @@
 ---@field mutual fun(from: Vector, to: Vector): boolean directed routes in both directions
 
 ---@class PW.SNDLib
+---@field CopyMap fun(data: PW.SNDMapData): PW.SNDMapData isolated layout and vectors; no engine/readiness queries
+---@field PinMap fun(mode: table, data: PW.SNDMapData) copy and attach a validated preflight map before PREMATCH
+---@field ReleaseMap fun(mode: table) clear only the accepted pin; safe before MODE:Start or after Cleanup
 ---@field PublicSites fun(raw: any): PW.SNDPublicSite[]? shared: bounded public presentation facts only
 ---@field GroupTargets fun(targets: PW.SNDTarget[]): PW.SNDTarget[][]?, string?
 ---@field SitesOverlap fun(a: PW.SNDSite, b: PW.SNDSite): boolean touching counts as ambiguous overlap

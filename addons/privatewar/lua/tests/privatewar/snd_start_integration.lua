@@ -43,6 +43,13 @@ return {
         state.prepares, state.accepts, state.events, state.messages = 0, 0, {}, {}
         state.active, state.map, state.predicates = "", game.GetMap(), 0
         state.mode = { ClassName = "snd", MapData = true, MapReadiness = true }
+        state.layout = { bomb = Vector(-200, 0, 0), spawns = {
+            [1] = { { pos = Vector(-200, 0, 0), yaw = 0 } },
+            [2] = { { pos = Vector(1500, 0, 0), yaw = 180 } }
+        }, sites = {
+            { id = "A", pos = Vector(0, 0, 0), approach = Vector(0, 0, 0), radius = 64, above = 72, below = 16 },
+            { id = "B", pos = Vector(1000, 0, 0), approach = Vector(1000, 0, 0), radius = 64, above = 72, below = 16 }
+        } }
         PW.ActiveMode = nil
         PW._Settings = PW.Settings._NewStore()
         PW._Enable = assert(PW.Enable)._NewStore({ registries = function() return {} end })
@@ -81,10 +88,11 @@ return {
         stub(assert(PW.Map), "GetModeReadiness").with(function()
             return state.readiness, "S&D plant volume is blocked"
         end)
+        stub(assert(PW.Map), "GetModeData").with(function() return state.layout end)
         stub(assert(PW.SND), "PrepareMap").with(function()
             state.prepares = state.prepares + 1
             if state.explode then error("private detector failure") end
-            return state.readiness == "ready" and {} or nil
+            return state.readiness == "ready" and state.layout or nil
         end)
         stub(PW, "Notify").with(function(name, ...)
             local events = state.events --[[@as table[] ]]
@@ -107,6 +115,7 @@ return {
         stub(net, "Send").with(function() end)
     end,
     afterEach = function(state)
+        if PW._Match ~= state.previous.match then match()._ReleaseStartMap() end
         if state.releaseFits ~= nil then state.releaseFits() end
         assert(assert(PW.Map).ModeFits == originalFits, "fixture cleanup did not restore ModeFits")
         file.Delete(path)
