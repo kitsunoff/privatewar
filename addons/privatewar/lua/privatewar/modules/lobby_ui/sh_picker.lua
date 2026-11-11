@@ -102,9 +102,11 @@ function lib._Picker(input, pick)
     local cards = cardsOf(maps, selection.map or state.map)
     if input.fits ~= nil and mode ~= nil then
         for _, card in ipairs(cards) do
-            local eligible, reason, recheck = input.fits(mode.id, card.id)
+            local eligible, reason, recheck, rejected = input.fits(mode.id, card.id)
             if not eligible and recheck == true then
                 card.text = "Recheck required: " .. (reason or "Rejected layout")
+            elseif not eligible and rejected == true then
+                card.locked, card.reason, card.text = true, reason, reason
             end
         end
     end

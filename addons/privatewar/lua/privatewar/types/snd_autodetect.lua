@@ -23,6 +23,7 @@
 ---@field Derive fun(input: PW.SNDDeriveInput): PW.SNDMapData?, string?
 ---@field Detect fun(): PW.SNDMapData?, string? server: inspect the loaded map, no persistent cache
 ---@field PrepareMap fun(modeId: string): PW.SNDMapData?, string? server: rederive/validate before start
+---@field RetryMap fun(modeId: string): PW.SNDMapData?, string? server: explicit rejected-map retry, LOBBY/VOTE only
 ---@field _AutoSafe fun(pos: Vector): boolean
 ---@field _AutoMutual fun(from: Vector, to: Vector): boolean
 ---@field _ReadinessThink fun() server: one readiness resolution after entities/nav are available

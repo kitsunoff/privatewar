@@ -41,6 +41,7 @@ function MODE:Start()
     assert(lobby:IsValid() and assert(PW.Jip).RefreshSpectator ~= nil, "S&D needs the spectator policy owner")
     local data, reason = lib().PrepareMap(self.ClassName)
     if data == nil then error(reason or "invalid S&D map") end
+    self._SNDMap = data
     base().Start(self)
 end
 
@@ -49,7 +50,7 @@ end
 function MODE:PrepareRound(_round, _swapped)
     local previous = self._SND --[[@as PW.SNDState?]]
     if previous ~= nil then lib().Invalidate(previous) end
-    local data = assert(assert(PW.Map).GetModeData(self.ClassName)) --[[@as PW.SNDMapData]]
+    local data = assert(self._SNDMap, "S&D has no pinned match map") --[[@as PW.SNDMapData]]
     local actors = lib().Roster()
     ---@type string[]
     local attackers = {}
@@ -202,6 +203,7 @@ function MODE:Cleanup()
     local state = self._SND --[[@as PW.SNDState?]]
     if state ~= nil then lib().Invalidate(state) end
     self._SND = nil
+    self._SNDMap = nil
     for _, ply in ipairs(player.GetAll()) do ply:Freeze(false) ply:SetNW2Bool("pw_snd_alive", false) end
     lib().Clear()
     base().Cleanup(self)

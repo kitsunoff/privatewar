@@ -247,7 +247,9 @@ is still pending; the following describes the implementation, not a native or hu
 
 - `PW.Match.Start` and vote continuation share a pre-PREMATCH readiness gate for `MapReadiness` modes (currently
   S&D and its descendants). Remote targets use `ModeFits` eligibility, never the loaded map's geometry. On the
-  loaded map wait for `IsNavReady()`, call `PW.SND.PrepareMap(modeId)`, then require `GetModeReadiness` to be ready.
+  loaded map wait for `IsNavReady()`, consult `GetModeAvailability(modeId)`, then prepare and require
+  `GetModeReadiness` to be ready. Rejected sources use `PW.SND.RetryMap(modeId)` only when `canRetry` permits;
+  other initial preparation uses `PW.SND.PrepareMap(modeId)`. A non-retryable rejection never prepares geometry.
   No settings snapshot, playable phase or active next mode is published before this gate passes.
 - A pending readiness request stays in its original LOBBY/VOTE phase, with one fixed mode/map and no timer-driven
   repeat or new vote resolution. A second start is refused. Think checks readiness; 120 monotonic seconds is an
@@ -278,14 +280,20 @@ its reason instead of collapsing the multiple returns to a boolean or a generic 
 request on the loaded map only**, `PW.Lobby._Fits(registries, currentMap)` may additionally return third-result
 `true` for a rejected S&D descendant. The first return stays false. Manual picker/model consumers keep that pair
 visible, display the rejection and label the action `RECHECK MAP`; they do not silently select a different map.
+The fourth result marks a displayed current rejection. If the source denies retry, the card and its reason stay
+visible but the card and Start are locked; the fourth result alone never authorizes a start.
 Server validation must opt in with `allowRecheck`, after ordinary map installation/id/mode/privilege checks. The
 request still runs full core preflight and cannot enter PREMATCH without fresh successful preparation/readiness.
 No rejection reset, geometry mutation, remote-map retry or automatic playlist/vote inclusion is authorized.
 
-Consumer/source coordination seam: the already implemented shared read-only queries `PW.Map._ModeChain` and
-`PW.Map._ReadModeReadiness` supply ancestry and replicated current-map rejection metadata. This use does not read
-foreign stores or duplicate authored/generated geometry rules. Changes to those source helpers need coordination
-with this consumer; `GetModeReadiness` remains server-only. No new mapdata API or implementation is assumed.
+Consumer/source coordination now uses the implemented public read-only
+`PW.Map.GetModeAvailability(modeId, mapName?) -> { fits, reason?, classification?, readiness?, canRetry }`.
+It replaces the consumer's former inference from internal ancestry/readiness helpers; malformed authored data
+cannot become retryable merely because its readiness is rejected. `PW.SND.RetryMap` is a server-owned explicit
+preparation operation limited to LOBBY/VOTE, not a permission or entitlement grant. Core calls it before start
+acceptance, behind the existing lobby/vote request privilege, phase, length and rate validation. There is no new
+client retry command. Failed preflight preserves an expired lobby grant; accepted pending continuation cannot
+regain one. Automatic pools remain strict and do not initiate retries.
 
 The six reported integration failures exposed test-fixture errors: GLuaTest's case-local `expect` was referenced
 from a file-level helper, and pending fixtures were older than the required 120-second limit. The correction passes
@@ -293,6 +301,13 @@ the case-local assertion function explicitly and validates a fresh pending file 
 Existing assertions and production age checks remain intact. `snd_start_consumers.lua` and the Custom-path case
 cover reason propagation and explicit recheck without weakening strict eligibility. These corrections still need
 an authorized engine rerun; static gates cannot establish their runtime result.
+
+The subsequent fixture-isolation correction leaves exactly one controlled `ModeFits` stub in the integration
+suite, changes its behavior through case state and restores the captured original explicitly in cleanup.
+Pre-case and post-suite checks detect process-wide leaks. A dedicated case changes the stub policy, releases it
+and verifies real S&D/Domination/Hardpoint rejection on a map with no authored data. Incoming native recovery
+and protocol-scoped flash tests are preserved. These regressions are prepared for the next full engine run,
+not evidence that it has already passed.
 
 TASKS.md defines mandatory additions and the narrow T-2.6 replacement. Existing T-11.12, other objective-mode,
 spawn, navgen, pending-map JSON, privilege/network, bot fairness/name and UI cases are retained unchanged.

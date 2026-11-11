@@ -191,6 +191,7 @@ local function startAction(state, model, active, summary, entryReason)
     if reason == nil and state ~= nil and state.nav ~= nil and state.nav.generating then reason = reasons.navgen end
     local missing = model == nil or model.mode == nil or model.map == nil
     if reason == nil and active == nil and missing then reason = reasons.nothing end
+    if reason == nil and active == nil and model ~= nil then reason = model.blockedReason end
     reason = entryReason or reason
     if active ~= nil then
         local start = action("start", "Start playlist", "Start the playlist " .. active.name .. ".", reason)
@@ -287,7 +288,8 @@ local function choiceCards(state, model, input)
         }
     end
     for _, entry in ipairs(model.maps) do
-        maps[#maps + 1] = { id = entry.id, title = entry.label, locked = reason ~= nil, reason = reason }
+        maps[#maps + 1] = { id = entry.id, title = entry.label, locked = reason ~= nil or entry.locked == true,
+            reason = reason or entry.reason }
     end
     return modes, maps
 end

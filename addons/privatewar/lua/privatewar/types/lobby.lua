@@ -65,7 +65,13 @@
 
 ---The client's choice on the lobby screen.
 ---Whether a mode (by id) is offered on a map.
----@alias PW.LobbyFits fun(modeId: string, map: string): boolean, string?, boolean?
+---@alias PW.LobbyFits fun(modeId: string, map: string): boolean, string?, boolean?, boolean?
+
+---@class PW.LobbyMapChoice
+---@field id string
+---@field label string
+---@field locked? boolean rejected current entry with no source-owned retry permission
+---@field reason? string
 
 ---@class PW.LobbySelection
 ---@field mode? string
@@ -74,10 +80,11 @@
 ---What the lobby screen draws (PW.Lobby._Model).
 ---@class PW.LobbyModel
 ---@field modes { id: string, label: string }[]
----@field maps { id: string, label: string }[]
+---@field maps PW.LobbyMapChoice[]
 ---@field mode? string selected mode id (nil when there is none)
 ---@field map? string selected map
 ---@field retryReason? string rejected current S&D map stays selected for explicit preflight recheck
+---@field blockedReason? string non-retryable current rejection remains visible but cannot start
 ---@field sections PW.UIFormSection[] Game Setup of the selected mode
 ---@field toggles PW.LobbyToggle[]
 ---@field canStart boolean true when the player may start and a mode and a map are selected

@@ -332,7 +332,9 @@ function lib.ModeFits(mode, mapName)
     local readiness = mapName == game.GetMap() and mode.MapReadiness == true
         and lib._ReadModeReadiness(modeId) or nil
     if data == nil and not authored then
-        if readiness ~= nil and readiness.state == "rejected" then return false, readiness.reason end
+        if readiness ~= nil and readiness.state == "rejected" then
+            return false, readiness.reason or "Map layout was rejected"
+        end
         if lib._ProvisionalMode(mode, mapName) then
             local generated = readiness ~= nil and readiness.state == "ready" and readiness.source == "generated"
             return true, nil, generated and "generated" or "provisional"
@@ -340,13 +342,18 @@ function lib.ModeFits(mode, mapName)
         return false, entry == nil and "no map data" or ("no data for " .. modeId)
     end
     if not istable(data) then return false, "Authored map data is invalid" end
-    if readiness ~= nil and readiness.state == "rejected" then return false, readiness.reason end
-    if not isfunction(mode.ValidateMapData) then return true, nil, "authored" end
-    local ok, reason = PW.Call(mode, "ValidateMapData", data)
-    if ok == true then return true, nil, "authored" end
-    reason = isstring(reason) and reason or "ValidateMapData failed"
-    reportInvalid(mapName, modeId, reason)
-    return false, reason
+    if isfunction(mode.ValidateMapData) then
+        local ok, reason = PW.Call(mode, "ValidateMapData", data)
+        if ok ~= true then
+            reason = isstring(reason) and reason or "ValidateMapData failed"
+            reportInvalid(mapName, modeId, reason)
+            return false, reason
+        end
+    end
+    if readiness ~= nil and readiness.state == "rejected" then
+        return false, readiness.reason or "Map layout was rejected"
+    end
+    return true, nil, "authored"
 end
 
 if SERVER then AddCSLuaFile("privatewar/modules/mapdata/sh_readiness.lua") end

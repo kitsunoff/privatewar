@@ -3,6 +3,7 @@ local path = "privatewar/pw_test_snd_start.json"
 local function match() return assert(PW.Match) end
 local function playlist() return assert(PW.Playlist) end
 local function changer() return assert(PW.MapChange) end
+local originalFits = assert(PW.Map).ModeFits
 
 ---@param state table<string, any>
 ---@param expect fun(value: any): any case-local GLuaTest environment, never a file-global
@@ -27,9 +28,17 @@ end
 
 return {
     groupName = "PW SND start integration",
+    beforeAll = function()
+        -- Capture at group entry: unrelated earlier reload tests may legitimately replace the module function.
+        originalFits = assert(PW.Map).ModeFits
+    end,
     beforeEach = function(state)
         state.previous = { match = PW._Match, change = PW._MapChange, playlist = PW._Playlist,
             settings = PW._Settings, enable = PW._Enable, mode = PW.ActiveMode, lobby = PW._Lobby }
+        assert(assert(PW.Map).ModeFits == originalFits, "previous fixture leaked ModeFits")
+        state.originalFits = originalFits
+        state.releaseFits = function() rawset(assert(PW.Map), "ModeFits", originalFits) end
+        state.fitAllowed, state.retryable, state.fitCalls = true, true, {}
         state.now, state.utc, state.nav, state.readiness = 1000, 1000, true, "ready"
         state.prepares, state.accepts, state.events, state.messages = 0, 0, {}, {}
         state.active, state.map, state.predicates = "", game.GetMap(), 0
@@ -58,7 +67,17 @@ return {
             setActive = function(id) state.active = id end,
             start = function(_, map) return match().Start(state.mode, map) end })
         stub(assert(PW.Map), "IsNavReady").with(function() return state.nav end)
-        stub(assert(PW.Map), "ModeFits").with(function() return true end)
+        stub(assert(PW.Map), "ModeFits").with(function(mode, map)
+            local calls = state.fitCalls --[[@as table[] ]]
+            calls[#calls + 1] = { mode = mode, map = map }
+            return state.fitAllowed, state.fitReason, state.fitClassification
+        end)
+        stub(assert(PW.Map), "GetModeAvailability").with(function()
+            local readiness = state.availabilityReadiness or state.readiness
+            return { fits = state.fitAllowed, readiness = readiness,
+                reason = state.fitReason or "S&D plant volume is blocked",
+                canRetry = readiness == "rejected" and state.retryable == true }
+        end)
         stub(assert(PW.Map), "GetModeReadiness").with(function()
             return state.readiness, "S&D plant volume is blocked"
         end)
@@ -88,22 +107,53 @@ return {
         stub(net, "Send").with(function() end)
     end,
     afterEach = function(state)
+        if state.releaseFits ~= nil then state.releaseFits() end
+        assert(assert(PW.Map).ModeFits == originalFits, "fixture cleanup did not restore ModeFits")
         file.Delete(path)
         PW._Match, PW._MapChange, PW._Playlist = state.previous.match, state.previous.change, state.previous.playlist
         PW._Settings, PW._Enable, PW.ActiveMode = state.previous.settings, state.previous.enable, state.previous.mode
         PW._Lobby = state.previous.lobby
     end,
+    afterAll = function()
+        assert(assert(PW.Map).ModeFits == originalFits, "SND fixture left a process-wide eligibility override")
+    end,
     cases = {
+        {
+            name = "SND fixture releases ModeFits after policy changes and real objective eligibility stays strict",
+            func = function(state)
+                local map = assert(PW.Map)
+                state.fitAllowed, state.fitReason = false, "fixture rejection"
+                expect(map.ModeFits(state.mode, state.map)).to.beFalse()
+                state.fitAllowed, state.fitReason = true, nil
+                expect(map.ModeFits(state.mode, state.map)).to.beTrue()
+                state.releaseFits()
+                expect(map.ModeFits).to.equal(state.originalFits)
+                for _, id in ipairs({ "snd", "dom", "hardpoint" }) do
+                    local mode = { ClassName = id, MapData = true }
+                    expect(map.ModeFits(mode, "gm_pw_start_fixture_missing")).to.beFalse()
+                end
+            end
+        },
+        {
+            name = "SND non-retryable source rejection never prepares geometry or spends an expired grant",
+            func = function(state)
+                selectExpired(state, expect)
+                state.readiness, state.retryable, state.fitAllowed = "rejected", false, false
+                state.fitReason = "Authored map data is invalid"
+                expect(playlist().Start("event")).to.beFalse()
+                expect(state.prepares).to.equal(0)
+                expect(playlist().GetSelection().retained).to.beTrue()
+                expect(match().GetPhase()).to.equal("LOBBY")
+                expect(match().GetAbortReason()).to.equal("Authored map data is invalid")
+            end
+        },
         {
             name = "SND Custom can explicitly recheck a loaded rejected map without discarding its reason",
             func = function(state)
                 local lobby = assert(PW.Lobby)
-                local map = assert(PW.Map)
                 stub(lobby, "_StartableModes").with(function() return { state.mode } end)
-                stub(map, "ModeFits").with(function() return false, "S&D plant volume is blocked" end)
-                stub(map, "_ReadModeReadiness").with(function()
-                    return { state = "rejected", reason = "S&D plant volume is blocked" }
-                end)
+                state.fitAllowed, state.fitReason = false, "S&D plant volume is blocked"
+                state.availabilityReadiness = "rejected" -- cached failure, independent of the next preparation outcome
                 PW._Lobby = lobby._NewStore({ readStart = function() return "snd", state.map end,
                     map = function() return state.map end, mapExists = function() return true end,
                     registries = function() return { modes = { Get = function() return state.mode end } } end,
@@ -143,12 +193,12 @@ return {
                 local target = "de_pw_start_fixture"
                 local scheduled = ""
                 stub(changer(), "Schedule").with(function(_, map) scheduled = map return true end)
-                stub(assert(PW.Map), "ModeFits").with(function(mode, map)
-                    expect(mode).to.equal(state.mode)
-                    expect(map).to.equal(target)
-                    return true, nil, "provisional"
-                end)
+                state.fitClassification = "provisional"
                 expect(match().Start(state.mode, target)).to.beTrue()
+                local calls = state.fitCalls --[[@as table[] ]]
+                expect(#calls).to.equal(1)
+                expect(calls[1].mode).to.equal(state.mode)
+                expect(calls[1].map).to.equal(target)
                 expect(scheduled).to.equal(target)
                 expect(state.prepares).to.equal(0)
                 expect(match().GetPhase()).to.equal("LOBBY")

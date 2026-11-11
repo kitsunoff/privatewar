@@ -45,7 +45,8 @@ local function invalidation(reason, makeStub, check)
         return input
     end)()))
     local mode = setmetatable({ ClassName = "snd", IsValid = function() return true end,
-        _SND = lib.NewRound(data, {}, 0, 1) }, { __index = must(PW.Modes.Get("snd")) })
+        _SNDMap = data, _SND = lib.NewRound(data, {}, 0, 1) }, { __index = must(PW.Modes.Get("snd")) })
+    local previous = mode._SND
     rawset(PW, "ActiveMode", mode)
     local clears, aborts = 0, 0
     makeStub(player, "GetAll").with(function() return {} end)
@@ -57,9 +58,9 @@ local function invalidation(reason, makeStub, check)
         check(#message > 0).to.beTrue()
         return true
     end)
-    makeStub(PW, "Notify").with(function(event, message)
+    makeStub(PW, "Notify").with(function(event, message, cause)
         if event == "PW_MapDataInvalidated" then
-            PW.Call(must(PW.Modules.Get("snd")), event, message)
+            PW.Call(must(PW.Modules.Get("snd")), event, message, cause)
         end
     end)
     map().SetGeneratedModeData("snd", data)
@@ -71,12 +72,19 @@ local function invalidation(reason, makeStub, check)
         makeStub(map(), "_Refresh").with(function() return {} end)
         must(must(owner._EngineHooks).PostCleanupMap)(owner)
     end
-    check(mode._SND).to.beNil()
-    check(mode._Rounds).to.beNil()
     check(PW._Map.generated).to.beNil()
     check(map().GetModeReadiness("snd")).to.equal("pending")
-    check(clears).to.equal(1)
-    check(aborts).to.equal(1)
+    if reason == "reload" then
+        check(mode._SND).to.equal(previous)
+        check(mode._SNDMap).to.equal(data)
+        check(clears + aborts).to.equal(0)
+    else
+        check(mode._SND).to.beNil()
+        check(mode._SNDMap).to.beNil()
+        check(mode._Rounds).to.beNil()
+        check(clears).to.equal(1)
+        check(aborts).to.equal(1)
+    end
 end
 
 return { groupName = "PW SND automatic layout review regressions",
@@ -123,7 +131,7 @@ return { groupName = "PW SND automatic layout review regressions",
         end },
         { name = "SND review: map cleanup invalidates runtime rounds generated data and public snapshots",
             func = function(state) setup(state, stub) invalidation("map cleanup", stub, expect) end },
-        { name = "SND review: pw_reload invalidates generated data and requires a fresh readiness result",
+        { name = "SND review: pw_reload invalidates next-match data but preserves the active round",
             func = function(state) setup(state, stub) invalidation("reload", stub, expect) end },
         { name = "SND review: nav data alone cannot certify entities before InitPostEntity", func = function()
             PW._Map.nav = { loaded = true, areas = {}, samples = {}, eligible = 0, costMs = 0 }

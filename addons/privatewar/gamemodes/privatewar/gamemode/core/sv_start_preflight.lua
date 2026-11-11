@@ -34,7 +34,15 @@ local function check(mode, target, prepared)
         return fits and "ready" or "rejected", reason
     end
     if not map.IsNavReady() then return "pending", nil, false end
-    if not prepared then snd.PrepareMap(mode.ClassName) end
+    if not prepared then
+        local status = map.GetModeAvailability(mode.ClassName)
+        if status.readiness == "rejected" then
+            if not status.canRetry then return "rejected", status.reason end
+            snd.RetryMap(mode.ClassName)
+        else
+            snd.PrepareMap(mode.ClassName)
+        end
+    end
     local state, reason = map.GetModeReadiness(mode.ClassName)
     return state, reason, true
 end
