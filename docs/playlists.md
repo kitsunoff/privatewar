@@ -31,6 +31,13 @@ pre-existing always-active Free for all and TDM & FFA playlists remain unchanged
   fitting mode and modes with at least one fitting map survive startup. Sampling continues to filter individual
   pairs, so DOM/Hardpoint cannot be sampled on a Shipment without authored objective data. The repository ships
   their layouts on `gm_construct`; no other objective map availability is assumed.
+- Admission and availability also call the same read-only `PW.Match._CheckDependencies` used by core start.
+  Required modules/actions must be valid and not failed. Resolved Base declarations follow core's normal
+  inheritance; nested dependency declarations are not recursively traversed because core does not traverse them.
+  Malformed declarations are rejected by core, not interpreted as a new optional-dependency syntax.
+  Applied enable snapshots and hard failures are respected; re-enabling a ConVar does not repair a hard failure.
+  Pending enable-ConVar edits still take effect at core's existing boot/new-match boundary, not immediately on
+  availability polling. This check does not mutate live registries or bind a match dependency snapshot.
 - Infection requires the separate `privatewar-infection` addon, its enabled `pw_infection` mode,
   `pw_infection_rules`, `teams`, `loadout`, `operators`, `player_overrides`, `match_rules`, `lobby`, native
   `weapon_fists` and at least two server slots. No substitute infection mode or melee weapon is supplied.
@@ -57,5 +64,7 @@ is separate work; labelling normal TDM as Hardcore would be misleading. One in t
 
 `playlists_content.lua` adds composition, missing dependencies, map eligibility, schema, UTC exact-boundary,
 repeat/clock-jump, Wednesday availability and reserved-slot quota assertions. Existing mandatory playlist and
-entitlement suites are unchanged. Engine RED/GREEN, installed map mounting, actual lobby cards, controller and
+entitlement suites are unchanged. `playlists_dependencies.lua` adds initial-disable/re-enable, applied runtime
+toggles, failed-definition repair, inherited/action/malformed dependencies and nonrecursive-core regressions.
+Engine RED/GREEN, installed map mounting, actual lobby cards, controller and
 multiplayer checkpoints still require an authorized game run; static checks alone do not establish them.

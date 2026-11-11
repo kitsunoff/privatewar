@@ -136,6 +136,9 @@ function lib._RotationFacts()
     return { maps = maps, modes = modes, infection = infectionReady(), fits = function(id, map)
         if not modes[id] or not file.Exists("maps/" .. map .. ".bsp", "GAME") then return false end
         local mode = registry ~= nil and registry.Get(id) or nil
+        -- Use the exact start-time checker: validity/failure state and declaration semantics belong to core.
+        -- This is read-only and does not apply pending enable ConVars or bind a match dependency snapshot.
+        if mode == nil or assert(PW.Match)._CheckDependencies(mode, PW.Registries or {}) == nil then return false end
         return mode ~= nil and PW.Map ~= nil and PW.Map.ModeFits(mode, map)
     end }
 end

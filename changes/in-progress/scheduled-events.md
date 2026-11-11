@@ -21,6 +21,10 @@ static inspection alone. Concrete policy and dependency details: [shipped playli
   Objective Chaos and FFA Frenzy. Wednesday has three immediately active stock-content rotations.
 - Startup resolution filters installed eligible map/mode pairs; missing optional content rejects only its entry.
   Availability rechecks dependencies without publishing known upcoming boundaries for empty content.
+- Review correction: both checks delegate mode dependency admission to `PW.Match._CheckDependencies`;
+  `playlists_dependencies.lua` covers applied soft toggles, hard failures/repair, Base inheritance and core's
+  nonrecursive declaration semantics. All five cases passed a pure Lua smoke using real core registry/checker/
+  enable code with mocked engine glue, not GLuaTest. Pending ConVar changes retain core's boot/new-match timing.
 - Added `playlists_content.lua` tests first, retaining all mandatory infrastructure suites unchanged.
 - Hardcore is blocked on absent gameplay/schema, not on calendar choice. No fake mode/map or unsupported
   setting is shipped. Shipment still requires a mounted matching BSP; Infection requires its optional addon.
