@@ -2,7 +2,8 @@
 # Temporarily unmount only the dev bridge and GLuaTest on the next game start.
 # Usage: nix develop --command bash scripts/deck/playtest.sh
 # Requires explicit Deck access permission and confirmation that it is free.
-# Backups stay in garrysmod/.privatewar-playtest-disabled/<addon>, outside addons.
+# Backups stay in garrysmod/.privatewar-playtest-disabled/run.*/<addon>.
+# Legacy backups directly under .privatewar-playtest-disabled remain untouched.
 # No game commands, restarts, deployment, deletion or automatic restore.
 if [[ "$#" != 0 ]]; then
     echo 'Usage: nix develop --command bash scripts/deck/playtest.sh' >&2
@@ -37,33 +38,42 @@ if [[ -e "$backup" || -L "$backup" ]]; then
     [[ -d "$backup" && ! -L "$backup" ]] || fail 'unsafe backup directory; stopped'
 fi
 
-# Check both names before making any changes. A prior completed move is a no-op.
+# Check both names and legacy backups before making any changes.
 needed=0
 for name in privatewar_dev gluatest; do
     src="$addons/$name"
     dst="$backup/$name"
-    if [[ -e "$src" || -L "$src" ]]; then
-        [[ -d "$src" && ! -L "$src" ]] || fail "unsafe addon: $name; stopped"
-        [[ ! -e "$dst" && ! -L "$dst" ]] || fail "backup collision: $name; stopped"
-        needed=1
-    elif [[ -e "$dst" || -L "$dst" ]]; then
+    if [[ -e "$dst" || -L "$dst" ]]; then
         [[ -d "$dst" && ! -L "$dst" ]] || fail "unsafe backup: $name; stopped"
     fi
+    if [[ -e "$src" || -L "$src" ]]; then
+        [[ -d "$src" && ! -L "$src" ]] || fail "unsafe addon: $name; stopped"
+        needed=1
+    fi
 done
-if [[ "$needed" == 1 && ! -d "$backup" ]]; then
-    mkdir --mode=700 -- "$backup" || fail 'cannot create backup directory'
+if [[ "$needed" == 1 ]]; then
+    if [[ ! -d "$backup" ]]; then
+        mkdir --mode=700 -- "$backup" || fail 'cannot create backup directory'
+    fi
+    [[ -d "$backup" && ! -L "$backup" ]] || fail 'unsafe backup directory; stopped'
+    # Atomic exclusive creation, never a guessed name or a reused legacy backup.
+    # Keep moves relative to this directory rather than traversing its path again.
+    cd -- "$backup" || fail 'cannot enter backup directory'
+    saved="$(mktemp --directory ./run.XXXXXXXXXX)" || fail 'cannot create unique backup directory'
+    [[ -d "$saved" && ! -L "$saved" ]] || fail 'unsafe unique backup directory; stopped'
+    echo "[playtest] backup directory: $backup/${saved#./}"
 fi
 for name in privatewar_dev gluatest; do
     src="$addons/$name"
-    dst="$backup/$name"
-    if [[ -d "$src" ]]; then
+    if [[ -e "$src" || -L "$src" ]]; then
+        [[ -d "$src" && ! -L "$src" ]] || fail "unsafe addon: $name; stopped"
+        [[ "$needed" == 1 ]] || fail 'addon appeared after preflight; retry'
+        dst="$saved/$name"
         # Never overwrite or nest into an existing backup, including a racing one.
         mv --no-clobber --no-target-directory -- "$src" "$dst" \
             || fail "move failed: $name; stopped"
         [[ ! -e "$src" && ! -L "$src" ]] || fail "move refused: $name; stopped"
         echo "[playtest] backed up: $name"
-    elif [[ -d "$dst" ]]; then
-        echo "[playtest] already backed up: $name"
     else
         echo "[playtest] not installed: $name"
     fi
