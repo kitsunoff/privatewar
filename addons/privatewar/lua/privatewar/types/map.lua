@@ -105,6 +105,7 @@
 
 ---The map module (03-mapdata.md d.2, d.3, d.6). Shared, except the spawn functions (server).
 ---@class PW.MapLib
+---@field GetModeAvailability fun(modeId: string, mapName?: string): PW.MapModeAvailability read-only picker status
 ---@field _ModeDataSource fun(modeId: string): string, boolean effective authored id or generated S&D source
 ---@field _ReadinessKey fun(field: "state"|"reason"|"source", id: string): string collision-free metadata key
 ---@field _ClearReadinessKeys fun(id: string) server: clear all metadata fields without aliasing mode ids
@@ -113,7 +114,7 @@
 ---@field _DropGeneratedReadiness fun(sourceId: string) server: invalidate shared generated-source certifications
 ---@field SetModeReadiness fun(id: string, state: PW.MapReadinessState, reason?: string, source?: string)
 ---@field GetModeReadiness fun(modeId: string): PW.MapReadinessState, string? server only
----@field _ResetGenerated fun(reason: string) server: invalidate geometry, nav handles and active consumers
+---@field _ResetGenerated fun(reason: string, cause?: string) invalidate caches; reload preserves the pinned match
 ---@field _ResolveModeData fun(a: any, g: table<string, table>?, c: string[]): any, boolean
 ---@field SetGeneratedModeData fun(modeId: string, data: table?) server: set or clear ephemeral current-map data
 ---@field IsNavReady fun(): boolean server: nav load has completed, including an empty result

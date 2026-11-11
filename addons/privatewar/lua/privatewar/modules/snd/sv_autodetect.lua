@@ -107,8 +107,10 @@ function lib.PrepareMap(modeId)
 end
 
 ---@param reason string
-function MODULE:PW_MapDataInvalidated(reason)
+---@param cause? string
+function MODULE:PW_MapDataInvalidated(reason, cause)
     PW._SND.mapChecked = nil
+    if cause == "reload" then return end -- Definitions/readiness change for the next match, not the pinned visit.
     local mode = PW.ActiveMode
     if mode == nil or not table.HasValue(assert(PW.Map)._ModeChain(mode, mode.ClassName), "snd") then return end
     -- Cleanup is idempotent. Retire rounds and snapshots synchronously even if Abort is deferred by the core.
@@ -118,6 +120,8 @@ end
 
 function lib._ReadinessThink()
     local map = assert(PW.Map)
+    local phase = assert(PW.Match).GetPhase()
+    if phase == "PREMATCH" or phase == "LIVE" or phase == "POSTMATCH" then return end
     if PW._SND.mapChecked or not map.IsNavReady() then return end
     PW._SND.mapChecked = true
     ---@type PW.Entity[]
@@ -140,6 +144,14 @@ function lib._ReadinessThink()
             lib.PrepareMap(mode.ClassName)
         end
     end
+end
+
+function lib.RetryMap(modeId)
+    local phase = assert(PW.Match).GetPhase()
+    if phase ~= "LOBBY" and phase ~= "VOTE" then return nil, "S&D retry is only available outside a match" end
+    local status = assert(PW.Map).GetModeAvailability(modeId)
+    if not status.canRetry then return nil, status.reason or "This map cannot be retried" end
+    return lib.PrepareMap(modeId)
 end
 
 PW.HookFor(MODULE, "Think", function() lib._ReadinessThink() end)

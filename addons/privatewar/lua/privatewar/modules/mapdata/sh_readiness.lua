@@ -109,3 +109,35 @@ function lib.GetModeReadiness(modeId)
     local current = lib._ReadModeReadiness(modeId)
     return current.state, current.reason
 end
+
+---@param mode PW.Entity
+---@param mapName string
+---@return boolean
+local function retryableSource(mode, mapName)
+    if mode.MapReadiness ~= true or not table.HasValue(lib._ModeChain(mode, mode.ClassName), "snd") then
+        return false
+    end
+    local entry = lib.Get(mapName)
+    local data, authored = lib._ResolveModeData(entry ~= nil and entry.Modes or nil, nil,
+        lib._ModeChain(mode, mode.ClassName))
+    if not authored then return lib._ProvisionalMode(mode, mapName) end
+    return istable(data) and (not isfunction(mode.ValidateMapData)
+        or PW.Call(mode, "ValidateMapData", data) == true)
+end
+
+function lib.GetModeAvailability(modeId, mapName)
+    mapName = mapName or game.GetMap()
+    local mode = PW.Modes.Get(modeId)
+    if mode == nil then return { fits = false, reason = "Mode is unavailable", canRetry = false } end
+    local fits, reason, classification = lib.ModeFits(mode, mapName)
+    ---@type PW.MapModeAvailability
+    local status = { fits = fits, reason = reason, classification = classification, canRetry = false }
+    if mapName ~= game.GetMap() or mode.MapReadiness ~= true then return status end
+    local current = lib._ReadModeReadiness(modeId)
+    status.readiness = current.state
+    if not fits then
+        status.reason = reason or current.reason or "Map layout was rejected"
+        status.canRetry = current.state == "rejected" and retryableSource(mode, mapName)
+    end
+    return status
+end

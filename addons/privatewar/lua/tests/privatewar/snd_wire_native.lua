@@ -5,14 +5,18 @@ if CLIENT then
     net.Receive(request, function(length)
         if length < 16 or length > 2048 then return end
         local token = net.ReadUInt(16)
-        net.Start(reply)
-        net.WriteUInt(token, 16)
+        ---@type { value: integer, bits: integer }[]
+        local chunks = {}
         local remaining = length - 16
         while remaining > 0 do
             local count = math.min(32, remaining)
-            net.WriteUInt(net.ReadUInt(count), count)
+            chunks[#chunks + 1] = { value = net.ReadUInt(count), bits = count }
             remaining = remaining - count
         end
+        -- Finish incoming reads before opening an outgoing message; do not depend on interleaved engine buffers.
+        net.Start(reply)
+        net.WriteUInt(token, 16)
+        for _, chunk in ipairs(chunks) do net.WriteUInt(chunk.value, chunk.bits) end
         net.SendToServer()
     end)
     return { groupName = "PW SND native wire client relay", cases = {} }
@@ -34,30 +38,25 @@ local pending
 ---@field bucketSaved? boolean
 ---@field previousBucket? PW.NetBucket
 ---@field failed? boolean relay timeout; do not repeat a missing-client fixture failure
+---@field pooled boolean both channel ids existed before test registration
+---@field ready? boolean explicit echo handshake succeeded
+---@field waiting? boolean handshake in flight
+---@field timer? string owned fixture timer
 
 ---@param state table<string, any>
+---@param host Player
 ---@param done fun()
 ---@param check fun(value: any): table<string, any>
 ---@param write fun()
 ---@param read fun(length: integer)
-local function roundtrip(state, done, check, write, read)
+local function sendPayload(state, host, done, check, write, read)
     local transport = state.transport --[[@as PW.SNDNativeTransport]]
-    ---@type Player?
-    local host
-    for _, ply in ipairs(player.GetHumans()) do if ply:IsListenServerHost() then host = ply break end end
-    if transport.failed or host == nil or must(PW.Match).GetPhase() ~= "LOBBY" then
-        print("[PW] native S&D wire fixture needs a responding loaded listen host in LOBBY")
-        check(false).to.beTrue() -- A missing loaded client/LOBBY is a fixture failure, not engine RED.
-        done()
-        return
-    end
-    transport.host = host
     if not transport.bucketSaved then
         local buckets = PW._Net.buckets[host]
         transport.previousBucket = buckets ~= nil and buckets[reply] or nil
         transport.bucketSaved = true
     end
-    transport.token = (transport.token + 1) % 65536
+    transport.token = transport.token % 65535 + 1 -- Zero is reserved for the fixture handshake.
     pending = { host = host, token = transport.token, read = function(length)
         local ok, failure = pcall(read, length)
         if not ok then print("[PW] native S&D wire assertion: " .. tostring(failure)) check(ok).to.beTrue() end
@@ -78,6 +77,47 @@ local function roundtrip(state, done, check, write, read)
     end
     local _, after = net.BytesWritten()
     state.writtenBits = after - before -- Measured delta: no assumption about native message overhead.
+    net.Send(host)
+end
+
+---@param state table<string, any>
+---@param done fun()
+---@param check fun(value: any): table<string, any>
+---@param write fun()
+---@param read fun(length: integer)
+local function roundtrip(state, done, check, write, read)
+    local transport = state.transport --[[@as PW.SNDNativeTransport]]
+    ---@type Player?
+    local host
+    for _, ply in ipairs(player.GetHumans()) do if ply:IsListenServerHost() then host = ply break end end
+    local native = type(net.Start) == "function" and type(net.Send) == "function"
+        and type(receivers[reply]) == "function"
+    if transport.failed or not transport.pooled or not native or host == nil
+        or must(PW.Match).GetPhase() ~= "LOBBY" then
+        print("[PW] native S&D fixture unavailable: check early pooling, native net functions, host and LOBBY")
+        check(false).to.beTrue() -- A failed fixture is not a decoder RED.
+        done()
+        return
+    end
+    transport.host = host
+    if transport.ready then sendPayload(state, host, done, check, write, read) return end
+    transport.waiting = true
+    transport.timer = "PW_SND_Native_Handshake"
+    local deadline = SysTime() + 3
+    timer.Create(transport.timer, 0.02, 0, function()
+        if transport.ready then
+            timer.Remove(must(transport.timer))
+            transport.waiting = nil
+            sendPayload(state, must(transport.host), done, check, write, read)
+        elseif SysTime() >= deadline then
+            timer.Remove(must(transport.timer))
+            print("[PW] native S&D fixture handshake timed out; the client relay did not acknowledge")
+            check(false).to.beTrue()
+            done()
+        end
+    end)
+    net.Start(request)
+    net.WriteUInt(0, 16)
     net.Send(host)
 end
 
@@ -245,20 +285,28 @@ end
 
 return { groupName = "PW SND native compressed net vectors", cases = cases,
     beforeAll = function(state)
-        state.transport = { token = os.time() % 65536 }
+        local transport = { token = os.time() % 65536,
+            pooled = util.NetworkStringToID(request) > 0 and util.NetworkStringToID(reply) > 0 }
+        state.transport = transport
         state.previousDef, state.previousReceiver = PW._Net.defs[reply], receivers[reply]
-        util.AddNetworkString(request)
         must(PW.Net).Receive(reply, { owner = must(PW.Modules.Get("snd")), who = "pw.match.start",
             phases = { "LOBBY" }, rate = 128, maxLen = 256 }, function(ply, length)
             if length < 16 then return end
             local token = net.ReadUInt(16)
+            if token == 0 and transport.waiting and transport.host == ply then
+                transport.ready = true
+                print("[PW] native S&D relay handshake acknowledged")
+                return
+            end
             local current = pending
             if current == nil or current.host ~= ply or current.token ~= token then return end
             current.read(length - 16)
         end)
     end,
     afterEach = function(state)
-        if pending ~= nil then (state.transport --[[@as PW.SNDNativeTransport]]).failed = true end
+        local transport = state.transport --[[@as PW.SNDNativeTransport]]
+        if pending ~= nil or transport.waiting then transport.failed = true end
+        if transport.timer ~= nil then timer.Remove(transport.timer) end
         pending = nil
     end,
     afterAll = function(state)
@@ -266,6 +314,7 @@ return { groupName = "PW SND native compressed net vectors", cases = cases,
         PW._Net.defs[reply] = state.previousDef
         receivers[reply] = state.previousReceiver --[[@as function?]]
         local transport = state.transport --[[@as PW.SNDNativeTransport]]
+        if transport.timer ~= nil then timer.Remove(transport.timer) end
         local host = transport.host
         local buckets = host ~= nil and PW._Net.buckets[host] or nil
         if buckets ~= nil then buckets[reply] = transport.previousBucket end

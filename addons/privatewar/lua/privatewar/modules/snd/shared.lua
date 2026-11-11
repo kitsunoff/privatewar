@@ -120,5 +120,8 @@ include("privatewar/modules/snd/sh_wire.lua")
 
 -- Test-only native transport fixture. This path is excluded from published addons.
 if SERVER and file.Exists("tests/privatewar/snd_wire_native.lua", "LUA") then
+    -- Pool before clients connect, not in GLuaTest's beforeAll after the host has already loaded.
+    util.AddNetworkString("pw_test_snd_wire_echo")
+    util.AddNetworkString("pw_test_snd_wire_reply")
     AddCSLuaFile("tests/privatewar/snd_wire_native.lua")
 end
