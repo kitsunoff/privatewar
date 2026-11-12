@@ -247,7 +247,8 @@ return {
                 local hub = lobby()._Hub(input)
                 expect(hub.start.locked).to.beFalse()
                 expect(cardOf(hub.cards, "night").locked).to.beFalse()
-                expect(string.find(cardOf(hub.cards, "ship").text, "ends in 1m", 1, true)).to.exist()
+                expect(cardOf(hub.cards, "ship").timer).to.equal("Ends in 1m")
+                expect(cardOf(hub.cards, "ship").text).to.equal(snapshot.list[2].summary)
                 snapshot.canStart = false
                 hub = lobby()._Hub(input)
                 expect(lockedWithReason(hub.start)).to.beTrue()
