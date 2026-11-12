@@ -666,6 +666,14 @@ matching check is skipped. The result is a clean copy (`Name`, `Modes`, `Maps`, 
 
 ### Custom
 
+Current playlist presentation extends the Lua contract in [feature contracts](feature-contracts.md#lua-playlists-and-availability):
+optional static `PLAYLIST.Description` is bounded plain UTF-8 (256 bytes, no controls), trimmed and copied through
+startup resolution and server entries. Missing or blank text falls back to the generated mode/map summary;
+invalid text rejects the definition. The existing wire `summary` carries the result; clients validate the same
+UTF-8/control/byte bounds. `#localization.key` descriptions are resolved by the client. No wire fields/version
+change is needed for author text. Availability uses the versioned snapshot documented in feature contracts,
+superseding the older payload description below. Event timing is a separate card chip, never summary content.
+
 The host picks one mode and one map and edits Game Setup by hand (`02-modes.md` d.1). Custom is the lobby row `@custom`
 (`PW.Playlist.CustomRow`) and the state "no active playlist" (`pw_playlist_active` empty). The lobby shows the playlist
 list and the generated Game Setup form (`ui.md`). A mode with `MapData = true` is offered on a map only if the map data

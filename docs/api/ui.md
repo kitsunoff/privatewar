@@ -919,6 +919,18 @@ screens read, sends the requests and opens and closes the root; it decides nothi
 
 #### Playlists (T-2.6)
 
+- Current presentation: `PW.Lobby._Hub` uses the server's `summary` as description (author `Description` or
+  generated fallback). A leading `#` resolves through `language.GetPhrase`. Timing lives only in `PW.UICard.timer`,
+  a bottom-right rectangular chip visible both collapsed and expanded, in its own reserved 34-design-unit row.
+  The text uses registered `pw.playlist.*` phrases: `Ends in 1h 0m`, `Starts in 1d 11h 50m`, explicit unknown
+  start/end, unavailable, or updating at/past a boundary. Durations round up to minutes from server `sampledAt`;
+  no client UTC clock/predicate is consulted. Chip geometry and text fitting are cached at layout time and
+  clamped to narrow widths; description and bot-fill footer never share its row. Custom has no chip.
+  `PW.UI.Cards.Height(base, detail, timer)` reserves this row in design units;
+  `RowHeight(cards, base)` provides the largest collapsed row height for safe mixed-list paging;
+  `TimerRect(w, h, textWidth, rowHeight, pad)` returns its clamped pixel rectangle for the drawing wrapper.
+  Active/retained/upcoming visibility and broadcasts follow [feature contracts](feature-contracts.md#lua-playlists-and-availability),
+  superseding the older request-only update description below.
 - The left column of the hub lists the playlists as cards (`PW.Playlist._Items` data, `modes.md`), then the Custom game
   card (`@custom`). The selected card is expanded; without an active playlist it is Custom. A card carries the playlist
   summary and, when the playlist fills bots, the footer `Fills to N with bots`.

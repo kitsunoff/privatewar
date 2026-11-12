@@ -1,5 +1,6 @@
 -- Only existing Domination/Hardpoint layouts; sampling still filters each individual map/mode pair.
 PLAYLIST.Name = "Objective Chaos"
+PLAYLIST.Description = "Capture flags in Domination and fight over the rotating Hardpoint. Play the objective."
 function PLAYLIST:Modes() return assert(PW.Playlist)._ResolveRotation(self, "objective_chaos") end
 function PLAYLIST:Maps() return assert(self._RotationData).Maps end
 function PLAYLIST:Settings() return assert(self._RotationData).Settings end

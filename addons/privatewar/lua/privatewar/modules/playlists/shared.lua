@@ -20,6 +20,12 @@ lib._MaxEntries = 128
 
 local maxName = 64
 
+---@param value any
+---@return boolean
+local function validDescription(value)
+    return isstring(value) and #value <= 256 and not string.find(value, "%c") and not not utf8.len(value)
+end
+
 ---@param text string
 ---@return boolean
 local function validId(text)
@@ -125,18 +131,27 @@ function lib.Normalize(raw, facts)
     local fields = raw --[[@as table<string, any>]]
     local nameErr = checkName(fields.Name)
     if nameErr ~= nil then return nil, nameErr end
+    local description = fields.Description
+    if description ~= nil then
+        if not validDescription(description) then
+            return nil, "Description must be plain UTF-8 text, at most 256 bytes"
+        end
+        description = string.Trim(description)
+        if description == "" then description = nil end
+    end
     local modes, modesErr = checkModes(fields.Modes, facts)
     if modes == nil then return nil, modesErr end
     local maps, mapsErr = checkMaps(fields.Maps)
     if mapsErr ~= nil then return nil, mapsErr end
     local settings, settingsErr = checkSettings(fields.Settings, facts)
     if settings == nil then return nil, settingsErr end
-    return { Name = fields.Name --[[@as string]], Modes = modes, Maps = maps, Settings = settings }
+    return { Name = fields.Name --[[@as string]], Description = description,
+        Modes = modes, Maps = maps, Settings = settings }
 end
 
 function lib.Resolve(definition, facts)
     if not istable(definition) then return nil, "a playlist must be a table" end
-    local resolved = { Name = definition.Name } --[[@as table<string, any>]]
+    local resolved = { Name = definition.Name, Description = definition.Description } --[[@as table<string, any>]]
     for _, field in ipairs({ "Modes", "Maps", "Settings" }) do
         local value = definition[field]
         if isfunction(value) then
@@ -232,7 +247,8 @@ end
 
 function lib._Summary(entry, fill)
     local where = entry.Maps ~= nil and (#entry.Maps .. (#entry.Maps == 1 and " map" or " maps")) or "all maps"
-    return { id = entry.id, name = entry.Name, summary = string.sub(modeNames(entry) .. " on " .. where, 1, 256),
+    return { id = entry.id, name = entry.Name,
+        summary = entry.Description or string.sub(modeNames(entry) .. " on " .. where, 1, 256),
         fill = fill, active = false, valid = false }
 end
 
@@ -274,7 +290,8 @@ function lib._Decode(reader)
     local seen = {}
     for index = 1, count do
         local id, name, summary = reader.string(), reader.string(), reader.string()
-        if #id > 64 or not validId(id) or seen[id] or #name == 0 or #name > 64 or #summary > 256 then return nil end
+        if #id > 64 or not validId(id) or seen[id] or #name == 0 or #name > 64
+            or not validDescription(summary) then return nil end
         seen[id] = true
         local fill, active, valid = reader.uint(fillBits), reader.bool(), reader.bool()
         if active and not valid then return nil end

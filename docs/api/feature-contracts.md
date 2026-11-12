@@ -91,6 +91,11 @@ The old JSON contract and JSON-specific mandatory tests are explicitly supersede
 - `PW.Playlist.Normalize(resolvedData, facts?)` remains pure and applies all existing name/id/weight/map/settings
   constraints. `PW.Playlist.Resolve(definition, facts?) -> data?, reason?` runs startup resolvers and Normalize.
   Keep the source definition associated server-side for its availability method; never lose it by copying only data.
+- Optional static `PLAYLIST.Description` is author-owned plain UTF-8 text, at most 256 bytes, without control
+  characters. Wrong types, malformed UTF-8, controls and oversized input reject only that definition. Trim outer
+  whitespace; absent/empty/blank text uses the generated mode/map summary. Copy it through Resolve and the server
+  entry; transmit it in the existing bounded `summary` string, not a new field or unbounded message. A leading
+  `#localization.key` is translated client-side using `language.GetPhrase`, like other UI descriptions.
 - `PLAYLIST:IsActive(nowUTC: number) -> boolean, number?`: host UTC Unix seconds. Absent method = true, nil.
   Nonboolean first return or exception = inactive, unknown boundary, invalid evaluation; log the failure without
   disabling other entries. Retained expiry entitlement cannot bypass an invalid evaluation. A valid false result
@@ -152,6 +157,13 @@ Start refusals and activation failures must reach the UI, not just logs; no new 
 
 Model all concurrent active entries, retained selection even when expired, upcoming entries only with known start
 `0 < nextChange - now <= 48 * 3600`, and Custom last. Active known end shows countdown; unknown is not zero.
+The lobby card keeps its description separate from its timer. Show a compact rectangular bottom-right timer chip
+on both collapsed and expanded playlist cards; reserve its own row so it cannot cover title, description, tags,
+bot-fill footer or lock/NEW badges. Custom has no timer. Format rounded-up minutes as `1m`, `1h 0m`, or
+`1d 11h 50m`, never a total-minute value such as `2150m`. Direction, unknown start/end, invalid availability and
+elapsed-boundary wording use registered `pw.playlist.*` language phrases. Use authoritative `sampledAt`, not a
+client UTC clock or predicate; an elapsed boundary says updating, never negative time or invented availability.
+Fit translated text at layout time to the chip width; clamp its rectangle within narrow cards.
 Do not invent exact calendars, shipped compositions, biweekly anchors or annual/leap-day author policies.
 Ordering/visual treatment among playlist cards and concrete wire encoding/version constants remain integration
 details to freeze with their implementation; this file fixes required state and validation, not an invented codec.

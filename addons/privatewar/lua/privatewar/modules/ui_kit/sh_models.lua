@@ -10,6 +10,24 @@ PW.UI = lib
 local cards = (rawget(lib, "Cards") or {}) --[[@as PW.UICardsLib]]
 lib.Cards = cards
 
+function cards.Height(base, detail, timer)
+    return base + detail + (timer and 34 or 0)
+end
+
+function cards.RowHeight(list, base)
+    local height = base
+    for _, card in ipairs(list) do height = math.max(height, cards.Height(base, 0, card.timer ~= nil)) end
+    return height
+end
+
+function cards.TimerRect(w, h, textWidth, rowHeight, pad)
+    local inset = math.min(pad, math.max(0, w / 2))
+    local width = math.max(0, math.min(textWidth + pad * 2, w - inset * 2))
+    local height = math.min(rowHeight, h)
+    return { x = math.max(0, w - inset - width), y = math.max(0, h - height - pad / 2),
+        w = width, h = height }
+end
+
 ---@param list PW.UICard[]
 ---@param id? string
 ---@return PW.UICard?

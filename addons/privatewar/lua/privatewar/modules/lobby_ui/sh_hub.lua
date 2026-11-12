@@ -11,6 +11,53 @@ local customId = "@custom" -- PW.Playlist.CustomRow; repeated so the model works
 local fillId = "bots.fill"
 local matchRows = 3
 
+local timerPhrases = {
+    ["pw.playlist.ends"] = "Ends in %s", ["pw.playlist.starts"] = "Starts in %s",
+    ["pw.playlist.end_unknown"] = "End time unknown", ["pw.playlist.start_unknown"] = "Start time unknown",
+    ["pw.playlist.updating"] = "Updating schedule", ["pw.playlist.unavailable"] = "Unavailable",
+    ["pw.playlist.minutes"] = "%dm", ["pw.playlist.hours"] = "%dh %dm",
+    ["pw.playlist.days"] = "%dd %dh %dm"
+}
+if CLIENT then
+    for key, text in pairs(timerPhrases) do language.Add(key, text) end
+end
+
+---@param key string
+---@return string
+local function timerPhrase(key)
+    return CLIENT and language.GetPhrase(key) or timerPhrases[key]
+end
+
+function lib._PlaylistTimer(item, sampledAt, phrase)
+    phrase = phrase or timerPhrase
+    if not item.valid then return phrase("pw.playlist.unavailable") end
+    local boundary = item.nextChange
+    if boundary == nil or boundary ~= boundary or math.abs(boundary) == math.huge then
+        return phrase(item.active and "pw.playlist.end_unknown" or "pw.playlist.start_unknown")
+    end
+    local seconds = boundary - sampledAt
+    if seconds <= 0 then return phrase("pw.playlist.updating") end
+    local minutes = math.ceil(seconds / 60)
+    ---@type string
+    local duration
+    if minutes >= 1440 then
+        duration = string.format(phrase("pw.playlist.days"), math.floor(minutes / 1440),
+            math.floor(minutes / 60) % 24, minutes % 60)
+    elseif minutes >= 60 then
+        duration = string.format(phrase("pw.playlist.hours"), math.floor(minutes / 60), minutes % 60)
+    else
+        duration = string.format(phrase("pw.playlist.minutes"), minutes)
+    end
+    return string.format(phrase(item.active and "pw.playlist.ends" or "pw.playlist.starts"), duration)
+end
+
+---@param text string
+---@return string
+local function description(text)
+    if CLIENT and string.sub(text, 1, 1) == "#" then return language.GetPhrase(string.sub(text, 2)) end
+    return text
+end
+
 local reasons = {
     waiting = "Waiting for the server",
     start = "Only the host can start the match",
@@ -158,15 +205,11 @@ local function playlistCards(input, canPick)
         if item.active or (playlists ~= nil and item.id == playlists.active) or upcoming then
             local key = lib._SeenKey(item.id)
             keys[#keys + 1] = key
-            local timing = ""
-            if playlists ~= nil and item.nextChange ~= nil then
-                timing = string.format(" - %s in %dm", item.active and "ends" or "starts",
-                    math.ceil((item.nextChange - playlists.sampledAt) / 60))
-            elseif not item.active then timing = " - unavailable" end
             local allowed = canPick and (item.active or
                 (playlists ~= nil and playlists.active == item.id and playlists.canStart))
             cards[#cards + 1] = {
-                id = item.id, title = item.name, text = item.summary .. timing, new = input.seen[key] ~= true,
+                id = item.id, title = item.name, text = description(item.summary), new = input.seen[key] ~= true,
+                timer = playlists ~= nil and lib._PlaylistTimer(item, playlists.sampledAt) or nil,
                 footer = item.fill > 0 and string.format("Fills to %d with bots", item.fill) or nil,
                 locked = not allowed,
                 reason = not canPick and reasons.playlist or (not allowed and "Playlist is inactive" or nil)

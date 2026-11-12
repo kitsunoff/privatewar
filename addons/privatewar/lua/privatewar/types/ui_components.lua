@@ -4,6 +4,7 @@
 
 ---One card of a card list (playlist, lobby action, ...).
 ---@class PW.UICard
+---@field timer? string compact bottom-right timer chip, visible collapsed and expanded in its own row
 ---@field id string
 ---@field title string
 ---@field text? string description shown while expanded
@@ -28,6 +29,9 @@
 ---@field reason? string
 
 ---@class PW.UICardsLib
+---@field Height fun(base: number, detail: number, timer: boolean): number design-unit height with reserved timer row
+---@field RowHeight fun(list: PW.UICard[], base: number): number maximum collapsed row height for safe paging
+---@field TimerRect fun(w: number, h: number, textWidth: number, rowHeight: number, pad: number): PW.UIRect
 ---Card states for a selection: the selected card (if it exists) is the only expanded one.
 ---@field View fun(cards: PW.UICard[], selected?: string): PW.UICardView[]
 ---Id of the expanded card: the selected one when it is in the list, else nil.

@@ -6,6 +6,7 @@
 ---The class table of a Lua playlist; resolvers and availability execute only on the server.
 ---@class PW.Playlist : PW.Entity
 ---@field Name string display name
+---@field Description? string plain UTF-8 text or #localization.key, at most 256 bytes; blank uses generated summary
 ---@field Modes table<string, number>|fun(self: PW.Playlist): table<string, number>
 ---@field Maps? string[]|fun(self: PW.Playlist): string[]?
 ---@field Settings? table<string, any>|fun(self: PW.Playlist): table<string, any>?
@@ -15,6 +16,7 @@
 ---Copied and validated startup data; no functions or availability state.
 ---@class PW.PlaylistData
 ---@field Name string
+---@field Description? string validated, trimmed author description; nil uses generated summary
 ---@field Modes table<string, number>
 ---@field Maps? string[]
 ---@field Settings table<string, any> validated, clamped values
@@ -69,7 +71,7 @@
 ---@class PW.PlaylistSummary
 ---@field id string
 ---@field name string
----@field summary string for example "tdm, ffa on 2 maps"
+---@field summary string author Description or generated fallback, plain UTF-8, at most 256 bytes
 ---@field fill integer the playlist's bots.fill, 0 when it sets none
 ---@field active boolean
 ---@field valid boolean

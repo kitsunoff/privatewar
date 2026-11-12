@@ -104,8 +104,8 @@ local function initialize()
             data, reason = nil, "invalid playlist id"
         end
         if data ~= nil then
-            local entry = { id = id, source = "lua", Name = data.Name, Modes = data.Modes,
-                Maps = data.Maps, Settings = data.Settings }
+            local entry = { id = id, source = "lua", Name = data.Name, Description = data.Description,
+                Modes = data.Modes, Maps = data.Maps, Settings = data.Settings }
             st.entries[#st.entries + 1], st.definitions[id] = entry, definition
         else
             st.log("playlist " .. tostring(id) .. " rejected: " .. tostring(reason))
