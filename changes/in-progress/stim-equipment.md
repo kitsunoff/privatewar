@@ -5,7 +5,14 @@ Status: `in-progress`
 Recorded: 2026-11-21
 
 Implementation started 2026-11-22 on `feat/stim-equipment` from `226330a`. Scope is the approved three stims,
-equipment input, bot and HUD support, and optional animation integration. Gates and human acceptance are pending.
+equipment input, bot and HUD support, and optional animation integration.
+
+Task branch verification (2026-11-22, `8ba534a`): `nix develop --command make check` passed, including packaging.
+The coordinator checked scope, all 51 required test names and the assertion bodies, and independently ran the
+full Deck suite with `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test`: 2185 passed,
+0 failed, 1 skipped. The skip checks restoring the Arctic vial ConVar; that optional addon was not installed.
+The corrected Deck screenshot shows the Speed Stim countdown clear of the ready UAV square and its key hint.
+Task gates are green; integration gates and the human checklist remain pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
