@@ -394,9 +394,12 @@ PW.StimsArctic._ShouldSwap(current: string?) -> boolean
 - [ ] HUD equipment line: no code change. `P/hud/equipment.lua` already draws weapon-less items from the NW2 count
   (`[4] HEAL STIM x1`, dimmed at 0). Verify at the checkpoint, including the gamepad glyph `[D-LEFT]`.
 - [ ] Active-effect indicator: new HUD element `P/hud/stims.lua` (ui lane), `HUDELEMENT.Order = 31`, phases `LIVE`,
-  bottom right above the equipment lines (design units: right 1880, baseline 830). Lines: `SPEED 4.2` while the speed
-  effect runs (one decimal), `HEALING` / `ARMOR` while heal or armor ticks run. Text is rebuilt only when it changes; no allocation per
-  frame; colour token `text`, font `PW.UI.FontName("small")` as in `P/hud/equipment.lua`.
+  bottom right above the equipment lines (design units: right 1660, baseline 830). Reserve the right-edge streak
+  column, bar and key hints even if the streak element is disabled, so the stim lines never move when it toggles.
+  The original right anchor at 1880 overlapped the UAV tile in the 2026-11-22 Deck smoke check and was revised.
+  Lines: `SPEED 4.2` while the speed effect runs (one decimal), `HEALING` / `ARMOR` while heal or armor ticks run.
+  Text is rebuilt only when it changes; no allocation per frame; colour token `text`, font `PW.UI.FontName("small")`
+  as in `P/hud/equipment.lua`.
 - [ ] State reaches the client as NW2 floats on the player, written only on change through `PW.Stims.Mark`:
   `pw_stim_speed_until`, `pw_stim_heal_until`, `pw_stim_armor_until` (`CurTime` values, 0 = none).
 - [ ] Pure formatter (shared, `P/modules/stims/shared.lua`):
@@ -552,6 +555,7 @@ cases use injectable stores; in-game cases reuse shared bots (`beforeAll`/`after
 
 - [ ] `Stims HUD lines are cached until the effect state changes`
 - [ ] `Stims HUD draws nothing without active effects`
+- [ ] `Stims HUD stays left of the streak column and above the equipment rows`
 
 ### 11.6 `T/stims_bots.lua`
 
