@@ -3,37 +3,28 @@
 local lib = PW.Progression --[[@as PW.ProgressionLib]]
 local unlocks = PW.Unlocks --[[@as PW.UnlocksLib]]
 
----The curated entry of an option, or an empty table.
+---The curated entry of an option, if any.
 ---@param weapon table<string, any>
 ---@param field "Attachments"|"Camos"
 ---@param option string
----@return table<string, any>
+---@return table<string, any>?
 local function entryOf(weapon, field, option)
     local entries = weapon[field]
-    if not istable(entries) then return {} end
+    if not istable(entries) then return nil end
     local entry = (entries --[[@as table<string, any>]])[option]
     if istable(entry) then return entry --[[@as table<string, any>]] end
-    return {}
+    return nil
 end
 
 ---@param weapon table<string, any>
 ---@param option string
----@return boolean
-local function cosmetic(weapon, option)
-    return entryOf(weapon, "Attachments", option).Cosmetic == true or entryOf(weapon, "Camos", option).Unlock ~= nil
+---@return "attachments"|"camos"
+local function optionKind(weapon, option)
+    return entryOf(weapon, "Camos", option) ~= nil and "camos" or "attachments"
 end
 
 function lib._AttachmentLimit(weaponLevel, cap)
     return math.max(0, math.min(weaponLevel, cap))
-end
-
----@param view PW.ProgressionView
----@param entry table<string, any>
----@param weaponId string
----@return boolean
-local function curatedOpen(view, entry, weaponId)
-    local level = unlocks._Spec(entry.Unlock).level
-    return view.unlockAll or (level ~= false and view.weaponLevel(weaponId) >= level)
 end
 
 ---@param view PW.ProgressionView
@@ -51,7 +42,7 @@ local function resolve(view, kind, id)
         local weapon = view.lookup("weapons", weaponId)
         if weapon == nil then return nil end
         local field = name == "camos" and "Camos" or "Attachments"
-        return entryOf(weapon, field, option), name, item, weaponId
+        return entryOf(weapon, field, option) or {}, name, item, weaponId
     end
     return view.lookup(name, item), name, item
 end
@@ -141,6 +132,19 @@ local function optionsOf(build)
     return options
 end
 
+---@param view PW.ProgressionView
+---@param key string
+---@return boolean
+local function entitled(view, key)
+    return (view.granted ~= nil and view.granted(key)) or (view.owned ~= nil and view.owned(key))
+end
+
+function lib._EntitledOption(view, weaponId, option)
+    local weapon = view.lookup("weapons", weaponId)
+    if weapon == nil then return false end
+    return entitled(view, lib._OwnedKey(optionKind(weapon, option), weaponId .. ":" .. option))
+end
+
 function lib._LockedOptions(view, weaponId, build)
     ---@type table<string, boolean>
     local locked = {}
@@ -149,10 +153,12 @@ function lib._LockedOptions(view, weaponId, build)
     local limit = countLimit(view, weaponId)
     local counted = 0
     for _, option in ipairs(optionsOf(build)) do
-        local entry = entryOf(weapon, "Attachments", option)
-        if entry.Unlock ~= nil then
-            if not curatedOpen(view, entry, weaponId) then locked[option] = true end
-        elseif not cosmetic(weapon, option) then
+        local attachment = entryOf(weapon, "Attachments", option) or {}
+        local kind, id = optionKind(weapon, option), weaponId .. ":" .. option
+        if attachment.Hidden == true or not unlocks._Decide(view, kind, id) then
+            locked[option] = true
+        elseif kind == "attachments" and attachment.Unlock == nil and attachment.Cosmetic ~= true
+            and not entitled(view, lib._OwnedKey(kind, id)) then
             counted = counted + 1
             if counted > limit then locked[option] = true end
         end

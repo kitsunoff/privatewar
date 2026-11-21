@@ -249,6 +249,39 @@ return {
             end
         },
         {
+            name = "LockedOptions: a curated camo above the weapon level is locked on the server; "
+                .. "an entitled one is open",
+            func = function()
+                local progression = assert(PW.Progression)
+                local v = view()
+                local build = { ["1"] = "gold", ["2"] = "hidden", ["3"] = "optic" }
+                expect(progression._LockedOptions(v, "rifle", build)).to.deepEqual({
+                    gold = true, hidden = true, optic = true
+                })
+                v.owned = function(key) return key == "camos:rifle:gold" or key == "attachments:rifle:optic" end
+                expect(progression._LockedOptions(v, "rifle", build)).to.deepEqual({ hidden = true })
+                v.owned = nil
+                v.granted = function() return true end
+                expect(progression._LockedOptions(v, "rifle", build)).to.deepEqual({ hidden = true })
+            end
+        },
+        {
+            name = "LockedOptions: an entitled uncurated attachment does not count toward the weapon level limit",
+            func = function()
+                local progression = assert(PW.Progression)
+                local v = view()
+                v.weaponLevel = function() return 1 end
+                local build = { ["1"] = "reward", ["2"] = "owned", ["3"] = "ordinary", ["4"] = "overflow" }
+                v.granted = function(key) return key == "attachments:rifle:reward" end
+                v.owned = function(key) return key == "attachments:rifle:owned" end
+                expect(progression._LockedOptions(v, "rifle", build)).to.deepEqual({ overflow = true })
+                v.owned = nil
+                expect(progression._LockedOptions(v, "rifle", build)).to.deepEqual({
+                    ordinary = true, overflow = true
+                })
+            end
+        },
+        {
             name = "Keys: KeyOf and ParseKey accept the bundle item shape, the camo alias and attachments; "
                 .. "malformed items give nil",
             func = function()

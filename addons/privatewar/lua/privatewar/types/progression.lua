@@ -96,6 +96,8 @@
 ---@field _IsUnlocked fun(view: PW.ProgressionView, kind: string, id: string): boolean
 ---@field _LockedOptions fun(view: PW.ProgressionView, weaponId: string, build: table<string, string|false>):
 ---table<string, boolean>
+---@field _EntitledOption fun(view: PW.ProgressionView, weaponId: string, option: string): boolean
+---@field _EntitledOptionOf fun(ply: Player, weaponId: string, option: string): boolean
 ---Internal: a store over injected edges.
 ---@field _NewStore fun(opts?: PW.ProgressionStoreOpts): PW.ProgressionStore
 ---Internal: the score listener body (weapon XP only with a valid weapon; bots earn nothing).

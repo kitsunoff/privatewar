@@ -76,6 +76,10 @@ function lib.LockedOptions(ply, weaponId, build)
     return lib._LockedOptions(viewOf(ply), weaponId, build)
 end
 
+function lib._EntitledOptionOf(ply, weaponId, option)
+    return lib._EntitledOption(viewOf(ply), weaponId, option)
+end
+
 function lib.AttachmentLimit(ply, weaponId)
     local view = viewOf(ply)
     if view.unlockAll then return view.maxAttachments end
