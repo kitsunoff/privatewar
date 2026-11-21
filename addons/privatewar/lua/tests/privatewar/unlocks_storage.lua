@@ -289,6 +289,28 @@ return {
                 expect(assert(batch.granted)[item].grant).to.equal("weekly:xp")
                 expect(assert(batch.claims)["weekly:xp"] > 0).to.beTrue()
                 expect(store.pending[ply]).to.beNil()
+                ---@type PW.ProgressionLocal
+                local client = {}
+                ---@type string[]
+                local writes = {}
+                ---@type PW.UnlockClientIO
+                local io = {
+                    writeUnlocks = function(stored)
+                        writes[#writes + 1] = "unlocks.json"
+                        expect(u._HasClaim(stored.claims, "weekly:xp")).to.beTrue()
+                        expect(client.file).to.beNil()
+                    end,
+                    writeProgression = function(stored)
+                        writes[#writes + 1] = "progression.json"
+                        expect(u._HasClaim(assert(client.unlocks).claims, "weekly:xp")).to.beTrue()
+                        expect(stored.xp).to.equal(25)
+                        expect(stored.currency).to.equal(10)
+                    end,
+                    notify = function() end
+                }
+                expect(u._ClientDelta(client, batch, ply, io)).to.beTrue()
+                expect(u._ClientDelta(client, batch, ply, io)).to.beFalse()
+                expect(writes).to.deepEqual({ "unlocks.json", "progression.json" })
             end
         },
         {
@@ -339,6 +361,33 @@ return {
                     { "PW_UnlockRevoked", ply, { item }, "admin" }
                 })
                 expect(deltas[2].revoked).to.deepEqual({ [item] = "admin" })
+                ---@type PW.ProgressionLocal
+                local client = {}
+                ---@type any[][]
+                local notices = {}
+                ---@type PW.UnlockClientIO
+                local io = {
+                    writeUnlocks = function() end,
+                    writeProgression = function() end,
+                    notify = function(...) notices[#notices + 1] = { ... } end
+                }
+                expect(u._ClientDelta(client, deltas[1], ply, io)).to.beTrue()
+                local localGrants = assert(client.unlocks).grants
+                localGrants["perks:already_granted"] = { source = "event", at = 1 }
+                localGrants["models:other"] = { source = "challenge", at = 1 }
+                local incoming = table.Copy(deltas[2])
+                local revoked = assert(incoming.revoked)
+                revoked["perks:already_granted"] = "admin"
+                revoked["models:other"] = "event"
+                revoked["perks:never_granted"] = "admin"
+                expect(u._ClientDelta(client, incoming, ply, io)).to.beTrue()
+                expect(u._ClientDelta(client, incoming, ply, io)).to.beFalse()
+                expect(assert(client.unlocks).grants).to.deepEqual({})
+                expect(notices).to.deepEqual({
+                    { "PW_UnlockGranted", ply, { item }, "challenge" },
+                    { "PW_UnlockRevoked", ply, { "perks:already_granted", item }, "admin" },
+                    { "PW_UnlockRevoked", ply, { "models:other" }, "event" }
+                })
             end
         },
         {

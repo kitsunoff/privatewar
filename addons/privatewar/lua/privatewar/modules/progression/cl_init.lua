@@ -11,10 +11,12 @@
 local module = MODULE --[[@as PW.ProgressionModuleClient]]
 
 local lib = PW.Progression --[[@as PW.ProgressionLib]]
+local unlocks = PW.Unlocks --[[@as PW.UnlocksLib]]
 
 ---@type PW.ProgressionLocal
 local localState = rawget(lib, "_Local") or {}
 rawset(lib, "_Local", localState)
+include("privatewar/modules/progression/cl_entitlements.lua")
 
 ---@return PW.ProgressionFile
 local function loadFile()
@@ -24,10 +26,10 @@ local function loadFile()
     return localState.file --[[@as PW.ProgressionFile]]
 end
 
-local function saveFile()
-    if localState.file == nil then return end
+---@param stored PW.ProgressionFile
+local function saveFile(stored)
     file.CreateDir("privatewar")
-    file.Write(lib.FilePath, util.TableToJSON(lib._FileToJson(localState.file --[[@as PW.ProgressionFile]]), true))
+    file.Write(lib.FilePath, util.TableToJSON(lib._FileToJson(stored), true))
 end
 
 function lib.GetLocalFile()
@@ -50,7 +52,9 @@ function lib._LocalView()
             return stored ~= nil and stored.owned ~= nil and stored.owned[key] == true
         end
     end
-    return lib._ViewFromLevels(levels --[[@as PW.ProgressionLevels]], lib._RegistryLookup, owned)
+    return lib._ViewFromLevels(levels --[[@as PW.ProgressionLevels]], lib._RegistryLookup, owned, function(key)
+        return unlocks._LocalFile().grants[key] ~= nil
+    end)
 end
 
 function lib.GetCurrency()
@@ -71,14 +75,17 @@ local function upload()
     net.Start("pw_progression_upload")
     lib._EncodeState(lib._CheckState(loadFile(), lib.MaxWeapons), lib._NetWriter())
     net.SendToServer()
+    unlocks._UploadLocal()
 end
+
+---@type PW.UnlockClientIO
+local deltaIO = { writeUnlocks = unlocks._WriteLocal, writeProgression = saveFile, notify = PW.Notify }
 
 net.Receive("pw_progression_delta", function()
     if not IsValid(module) then return end
-    local updated, applied = lib._ApplyDelta(loadFile(), lib._DecodeDelta(lib._NetReader()))
-    if not applied then return end
-    localState.file = updated
-    saveFile()
+    loadFile()
+    unlocks._LocalFile()
+    unlocks._ClientDelta(localState, lib._DecodeDelta(lib._NetReader()), LocalPlayer(), deltaIO)
 end)
 
 net.Receive("pw_progression_levels", function()

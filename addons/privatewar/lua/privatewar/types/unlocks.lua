@@ -2,6 +2,7 @@
 -- Unlock authority types (06-progression.md d.8).
 
 ---@alias PW.UnlockField integer|false|{ level?: integer|false, hint?: string, reward?: string }
+---@alias PW.UnlockKeyCheck fun(key: string): boolean
 
 ---@class PW.UnlockSpec
 ---@field level integer|false 0 = open; false = no level path
@@ -69,6 +70,11 @@
 ---@field revoked? table<string, string> key to the revoking source
 ---@field claims? table<string, integer>
 
+---@class PW.UnlockClientIO
+---@field writeUnlocks fun(stored: PW.UnlocksFile)
+---@field writeProgression fun(stored: PW.ProgressionFile)
+---@field notify fun(name: string, ...: any)
+
 ---@class PW.UnlocksLib
 ---@field MaxHintLength integer
 ---@field MaxSourceLength integer
@@ -118,6 +124,11 @@
 ---@field HasClaim fun(ply: Player, grant: string): boolean
 ---@field Grant fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
 ---@field Revoke fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
+---@field _ClientDelta fun(state: PW.ProgressionLocal, delta: PW.ProgressionDelta, ply: Player, io: PW.UnlockClientIO):
+---boolean
+---@field _LocalFile fun(): PW.UnlocksFile client only
+---@field _WriteLocal fun(stored: PW.UnlocksFile) client only
+---@field _UploadLocal fun() client only
 
 ---@class PW
 ---@field Unlocks? PW.UnlocksLib the progression unlock authority

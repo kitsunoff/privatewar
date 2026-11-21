@@ -129,11 +129,12 @@ function lib._FileToJson(stored)
     }
 end
 
-function lib._ViewFromLevels(levels, lookup, owned)
+function lib._ViewFromLevels(levels, lookup, owned, granted)
     return {
         level = levels.level,
         weaponLevel = function(weaponId) return levels.weapons[weaponId] or 1 end,
-        lookup = lookup, unlockAll = levels.unlockAll, maxAttachments = levels.maxAttachments, owned = owned
+        lookup = lookup, unlockAll = levels.unlockAll, maxAttachments = levels.maxAttachments,
+        owned = owned, granted = granted
     }
 end
 

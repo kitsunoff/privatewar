@@ -40,6 +40,7 @@ PW.Progression = lib
 PW.Unlocks = (rawget(PW, "Unlocks") or {}) --[[@as PW.UnlocksLib]]
 
 if SERVER then
+    AddCSLuaFile("privatewar/modules/progression/cl_entitlements.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_curves.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_unlock_spec.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_entitlements.lua")

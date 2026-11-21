@@ -165,6 +165,54 @@ function lib._ApplyDelta(current, delta)
     }, true, { granted = granted, revoked = revoked }
 end
 
+---@param ply Player
+---@param changes PW.UnlockDeltaPart
+---@param notify fun(name: string, ...: any)
+local function notifyChanges(ply, changes, notify)
+    ---@type table<string, { keys: string[], meta: PW.UnlockGrantMeta }>
+    local grants = {}
+    local granted = changes.granted or {}
+    for _, key in ipairs(keysOf(granted)) do
+        local meta = granted[key]
+        local id = meta.source .. ":" .. (meta.grant or "")
+        local group = grants[id] or { keys = {}, meta = meta }
+        group.keys[#group.keys + 1] = key
+        grants[id] = group
+    end
+    for _, id in ipairs(keysOf(grants)) do
+        local group = grants[id]
+        notify("PW_UnlockGranted", ply, group.keys, group.meta.source, group.meta.grant)
+    end
+    ---@type table<string, string[]>
+    local revokes = {}
+    local revoked = changes.revoked or {}
+    for _, key in ipairs(keysOf(revoked)) do
+        local source = revoked[key]
+        local keys = revokes[source] or {}
+        keys[#keys + 1] = key
+        revokes[source] = keys
+    end
+    for _, source in ipairs(keysOf(revokes)) do
+        notify("PW_UnlockRevoked", ply, revokes[source], source)
+    end
+end
+
+function lib._ClientDelta(state, delta, ply, io)
+    local unlocks, applied, changes = lib._ApplyDelta(state.unlocks or lib._FileFromJson(nil), delta)
+    local progress, earned = progression._ApplyDelta(state.file or progression._FileFromJson(nil), delta)
+    if applied then
+        -- Persist the claim before its XP and currency; the progression file has a separate batch id.
+        io.writeUnlocks(unlocks)
+        state.unlocks = unlocks
+    end
+    if earned then
+        io.writeProgression(progress)
+        state.file = progress
+    end
+    if applied and changes ~= nil then notifyChanges(ply, changes, io.notify) end
+    return applied or earned
+end
+
 ---@param values table<string, any>
 ---@param writer PW.ProgressionWriter
 local function writeUploadKeys(values, writer)

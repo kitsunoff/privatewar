@@ -128,7 +128,7 @@
 ---@field _FileFromJson fun(decoded: any): PW.ProgressionFile
 ---@field _FileToJson fun(stored: PW.ProgressionFile): table
 ---@field _ViewFromLevels fun(levels: PW.ProgressionLevels, lookup: PW.LoadoutLookup,
----owned?: fun(key: string): boolean): PW.ProgressionView
+---owned?: PW.UnlockKeyCheck, granted?: PW.UnlockKeyCheck): PW.ProgressionView
 ---@field _RegistryLookup PW.LoadoutLookup
 ---@field _NetWriter fun(): PW.ProgressionWriter
 ---@field _NetReader fun(): PW.ProgressionReader
