@@ -7,7 +7,7 @@
 local listenerId = "PW_Test_MatchRules"
 local hookNames = { "PW_PlayerKilled", "PW_CanRespawn", "PW_RespawnDelay", "PW_SelectSpawn", "PW_ScoreEvent",
     "PW_MatchEnd" }
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---Fails the case when a value is nil; returns it narrowed for the type checker.
 ---@generic T
@@ -305,7 +305,7 @@ return {
                 must(GetConVar("pw_prematch_timeout")):SetString("0")
                 must(GetConVar("pw_countdown")):SetString("0")
                 must(GetConVar("pw_postmatch_time")):SetString("0.5")
-                must(GetConVar("pw_aftermatch")):SetString("lobby")
+                must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
                 ---@type any[]
                 local ended = {}
                 hook.Add("PW_MatchEnd", listenerId, function(result) ended[#ended + 1] = result end)

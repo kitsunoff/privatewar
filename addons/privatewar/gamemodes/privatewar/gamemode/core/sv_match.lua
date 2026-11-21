@@ -18,8 +18,6 @@ local durationVars = {
         0),
     vote = CreateConVar("pw_vote_time", "15", { FCVAR_ARCHIVE }, "Private War: VOTE duration in seconds", 0)
 }
-local afterMatchVar = CreateConVar("pw_aftermatch", "lobby", { FCVAR_ARCHIVE },
-    "Private War: after a match go back to the \"lobby\" or continue the \"rotation\" with a vote")
 
 local match = (rawget(PW, "Match") or {}) --[[@as PW.MatchLib]]
 PW.Match = match
@@ -31,7 +29,7 @@ function match._ReadSettings()
         countdown = durationVars.countdown:GetFloat(),
         postmatch = durationVars.postmatch:GetFloat(),
         vote = durationVars.vote:GetFloat(),
-        afterMatch = PW.Phase._AfterMatch(afterMatchVar:GetString())
+        afterMatch = PW.Phase._AfterMatch(PW.Ask("PW_AfterMatch", PW._Match.mode))
     }
 end
 

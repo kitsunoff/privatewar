@@ -28,6 +28,7 @@ local navWarning = "Generating a navmesh takes from about a minute to over an ho
 ---@field centre Panel holds the panels of the current section
 ---@field players PWPlayerList
 ---@field match PWInfoCard
+---@field afterMatch PWButton
 ---@field section string
 ---@field built? string the key the centre was built for (rebuilt when it changes)
 ---@field custom PW.LobbyCustom
@@ -195,6 +196,8 @@ local function refresh(view)
     view.match:SetTitle("Match")
     view.match:SetRows(custom.rows)
     view.match:SetWarning(custom.warning)
+    view.afterMatch:SetVisible(custom.afterMatch ~= nil)
+    view.afterMatch:SetText(custom.afterMatch or "")
     buildCentre(view)
     view.framed = false
     view:InvalidateLayout(true)
@@ -262,6 +265,11 @@ local function layout(view, w, h)
     view.match:SetPos(right.x, right.y)
     view.match:SetSize(right.w, view.match:WantedHeight(right.w))
     local y = right.y + view.match:GetTall() + gap
+    if view.afterMatch:IsVisible() then
+        view.afterMatch:SetPos(right.x, y)
+        view.afterMatch:SetSize(right.w, px(52))
+        y = y + view.afterMatch:GetTall() + gap
+    end
     view.players:SetPos(right.x, y)
     view.players:SetSize(right.w, math.min(view.players:WantedHeight(right.w), right.y + right.h - y))
 end
@@ -275,6 +283,7 @@ function SCREEN:Build(ctx)
     view.summary = vgui.Create("PWSummary", view) --[[@as PWSummary]]
     view.centre = vgui.Create("Panel", view) --[[@as Panel]]
     view.match = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
+    view.afterMatch = lobby()._AfterMatchButton(view)
     view.players = vgui.Create("PWPlayerList", view) --[[@as PWPlayerList]]
     view.players:SetNote("Teams are assigned when the match starts.")
     local state = lobby().Input().state

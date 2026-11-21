@@ -28,6 +28,7 @@ local guestHints = {
 ---@field operator PWOperator
 ---@field summary PWSummary
 ---@field match PWInfoCard
+---@field afterMatch PWButton
 ---@field hintCard PWInfoCard entry hint (Singleplayer, P2P off); hidden without a hint
 ---@field players PWPlayerList
 ---@field setup PWButton
@@ -98,6 +99,8 @@ local function refresh(view)
     view.match:SetTitle("Match")
     view.match:SetRows(hub.rows)
     view.match:SetWarning(hub.warning)
+    view.afterMatch:SetVisible(hub.afterMatch ~= nil)
+    view.afterMatch:SetText(hub.afterMatch or "")
     showHint(view, hub.hint)
     view.players:SetSections(hub.party)
     view.start:SetText(hub.start.label or "START MATCH")
@@ -116,6 +119,7 @@ local function fill(view)
     view.operator = vgui.Create("PWOperator", view) --[[@as PWOperator]]
     view.summary = vgui.Create("PWSummary", view) --[[@as PWSummary]]
     view.match = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
+    view.afterMatch = lobby()._AfterMatchButton(view)
     view.hintCard = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
     view.hintCard:SetVisible(false)
     view.players = vgui.Create("PWPlayerList", view) --[[@as PWPlayerList]]
@@ -145,6 +149,11 @@ local function layoutRight(view, right, px)
     view.match:SetPos(right.x, y)
     view.match:SetSize(right.w, view.match:WantedHeight(right.w))
     y = y + view.match:GetTall() + gap
+    if view.afterMatch:IsVisible() then
+        view.afterMatch:SetPos(right.x, y)
+        view.afterMatch:SetSize(right.w, px(52))
+        y = y + view.afterMatch:GetTall() + gap
+    end
     if view.hintCard:IsVisible() then
         view.hintCard:SetPos(right.x, y)
         view.hintCard:SetSize(right.w, view.hintCard:WantedHeight(right.w))

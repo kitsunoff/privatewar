@@ -38,7 +38,9 @@ local backupFile = "privatewar_dev/convars_backup.json"
 ---@type string[] FCVAR_ARCHIVE ConVars that test files shorten or switch and restore themselves. A test whose own
 ---restore never runs (an async timeout) would leave them, for example a 0.5 s POSTMATCH that jumps straight to the
 ---lobby, so the end of every run restores them from the backup too (finishRun), not only an interrupted run.
-local guardedConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch", "pw_vote_time" }
+local guardedConVars = {
+    "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch", "pw_vote_time"
+}
 
 local started = false
 

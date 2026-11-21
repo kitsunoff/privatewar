@@ -122,6 +122,23 @@ return {
     groupName = "PW ui hub",
     cases = {
         {
+            name = "After match shortcut summarizes the host setting on the playlist and Custom screens",
+            func = function()
+                local playlist = samplePlaylists("night")
+                local input = hubInput(true, { playlists = playlist, afterMatch = "auto" })
+                expect(lobby()._Hub(input).afterMatch).to.equal("After match: Rotation (auto)")
+                expect(lobby()._Custom(input).afterMatch).to.equal("After match: Lobby (auto)")
+                playlist.list[1].active = false
+                expect(lobby()._Hub(input).afterMatch).to.equal("After match: Lobby (auto)")
+                input = hubInput(true, { afterMatch = "rotation" })
+                expect(lobby()._Custom(input).afterMatch).to.equal("After match: Rotation")
+                input = hubInput(true, { playlists = playlist, afterMatch = "lobby" })
+                expect(lobby()._Hub(input).afterMatch).to.equal("After match: Lobby")
+                expect(lobby()._Hub(hubInput(false, { afterMatch = "auto" })).afterMatch).to.beNil()
+                expect(lobby()._Custom(hubInput(true)).afterMatch).to.beNil()
+            end
+        },
+        {
             name = "Hub model: a guest sees Start, Mode and Map and Game Setup locked with a reason",
             func = function()
                 local hub = lobby()._Hub(hubInput(false))

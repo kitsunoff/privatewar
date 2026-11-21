@@ -314,6 +314,18 @@ Runner notes: select the gamemode and map (`--gamemode privatewar --map gm_const
 - **T-2.11 Map list**: union of data maps, prefixes and whitelist; junk patterns always excluded.
 - **T-2.12 Navmesh generation**: marker validation (success, failure, stale marker); seeds generated for every spawn entity class; no generation without the privilege or outside `LOBBY`.
 - **T-2.13 Vote**: options sampled from the playlist; last two maps excluded unless the playlist has < 3 maps; repeat excluded unless allowed; early end when all humans voted; bots never vote; vote change replaces the previous vote; tie broken at random among tied options.
+  - `ResolveAfterMatch: auto with a playlist is rotation`
+  - `ResolveAfterMatch: auto in Custom is lobby`
+  - `ResolveAfterMatch: lobby and rotation override the playlist state`
+  - `ResolveAfterMatch: an unknown value behaves like auto`
+  - `PW_AfterMatch answers from the store`
+  - `PW_AfterMatch without the playlists module treats the game as Custom`
+  - `auto with an expired scheduled playlist goes to the lobby`
+  - `vote.aftermatch schema: enum, default auto, three options, has a description`
+  - `POSTMATCH goes to LOBBY when no module answers PW_AfterMatch`
+  - `POSTMATCH goes to VOTE when PW_AfterMatch answers rotation`
+  - `PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start`
+  - `pw_aftermatch is no longer created`
 
 ### Phase 3 — weapons
 
@@ -950,7 +962,10 @@ and host/client agreement as listed in that note. This row neither freezes these
 2. Airstrike kills give weapon XP to the weapon in hand. Needs a decision.
 3. There is no localisation file for medal and score event names. Needs a decision.
 4. Lobby leave dialog: the default button is LEAVE GAME now (Esc then Enter disconnects); CANCEL is recommended. Default button: pending confirmation.
-5. `testgate` backs up the match ConVars (`pw_prematch_timeout`, `pw_countdown`, `pw_postmatch_time`, since T-11.8 also `pw_aftermatch` and `pw_vote_time`) when a run starts and restores them at the end of every run (T-11.8) and on the next map load after an interrupted run (done in `chore/phase11-sync`).
+5. `testgate` backs up the match ConVars (`pw_prematch_timeout`, `pw_countdown`, `pw_postmatch_time`,
+   `pw_vote_aftermatch` and `pw_vote_time`) when a run starts and restores them at the end of every run (T-11.8)
+   and on the next map load after an interrupted run (done in `chore/phase11-sync`). T-11.8 guarded the former
+   `pw_aftermatch` until it was replaced by the vote module setting.
 6. `scripts/deck/lock.sh` needs GNU coreutils: run the Deck scripts through `nix develop --command` (also noted in the handover section).
 7. Prewarm bot weapons in PREMATCH to avoid ARC9 first-`Give` hitches (needs a user decision).
 8. DOM flag tiles may move up to y≈20 now that the top centre is free (needs a user decision).

@@ -190,6 +190,17 @@ local function activePlaylist(input)
 end
 
 ---@param input PW.LobbyHubInput
+---@param active? PW.PlaylistSummary
+---@return string?
+local function afterMatchText(input, active)
+    local state, setting, vote = input.state, input.afterMatch, PW.Vote
+    if not state or not state.canStart or setting == nil or vote == nil then return nil end
+    local id = active ~= nil and active.valid and active.active and active.id or ""
+    local label = vote.ResolveAfterMatch(setting, id) == "rotation" and "Rotation" or "Lobby"
+    return "After match: " .. label .. ((setting ~= "lobby" and setting ~= "rotation") and " (auto)" or "")
+end
+
+---@param input PW.LobbyHubInput
 ---@param canPick boolean
 ---@return PW.UICard[]
 ---@return string[]
@@ -297,6 +308,7 @@ function lib._Hub(input)
         setup = action("setup", "Game setup", "Score, time, bots and the other match settings.",
             lockReason(state, state ~= nil and state.canEdit, reasons.setup)),
         summary = summary, rows = rows, warning = lib._SlotWarning(fill, input.maxPlayers),
+        afterMatch = afterMatchText(input, active),
         party = partyOf(input, fill), note = not canStart and "waiting for host" or nil, model = model
     }
 end
@@ -339,6 +351,7 @@ end
 
 function lib._Custom(input)
     local custom = lib._Hub(input) --[[@as PW.LobbyCustom]]
+    custom.afterMatch = afterMatchText(input)
     local state = input.state or nil
     local model = custom.model
     custom.actions = {

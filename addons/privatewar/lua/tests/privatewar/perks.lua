@@ -4,7 +4,7 @@
 -- on death); wiring cases for the kind, the slots, the sample perks and the hooks; the last case is the in-game
 -- check: in a LIVE test match the shared bot spawns with the default perks and loses them on death.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---A recorded perk event.
 ---@class PW.PerksTestCall
@@ -416,7 +416,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             expect(match().GetPhase()).to.equal("LOBBY")
             expect(match().Start(must(PW.Modes.Get("tdm")))).to.beTrue()
             local function fail(message)

@@ -6,7 +6,7 @@
 -- T-11.4 (grenades as inventory SWEPs) removed the use message: the slot key selects the grenade SWEP and its
 -- release uses the slot (PW.Equipment._Release); the grenade cases are grenades_inventory.lua.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---A recorded OnUse call.
 ---@class PW.EquipmentTestUse
@@ -389,7 +389,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             expect(match().GetPhase()).to.equal("LOBBY")
             expect(match().Start(must(PW.Modes.Get("tdm")))).to.beTrue()
             local function fail(message)

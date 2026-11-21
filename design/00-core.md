@@ -30,9 +30,14 @@ Not in the core: the event bus (rejected, plain hooks are used), the weapon adap
    | `POSTMATCH` | Winner, final killcam, scoreboard, XP summary. |
    | `VOTE` | Vote for the next map and mode. |
 
-2. **After the match: host setting.** In the lobby the host chooses between:
+2. **After the match: host setting.** The host chooses `vote.aftermatch` in SETTINGS > Host:
+   - **auto** (default): rotation with a vote when the match was started from a playlist; back to the lobby in
+     Custom. An expired scheduled playlist is treated as Custom for this setting.
    - **back to lobby** (CoD private match style): after `POSTMATCH` the server returns to `LOBBY`; `VOTE` is skipped;
-   - **rotation with vote** (CoD public match style): `POSTMATCH → VOTE → PREMATCH` on the voted map and mode; the server returns to `LOBBY` only when the host asks for it.
+   - **rotation with vote** (CoD public match style): `POSTMATCH → VOTE → PREMATCH` on the voted map and mode.
+     The host can return to `LOBBY` from the pause menu; scheduled playlist expiry guards still apply.
+   - The core asks `PW_AfterMatch` rather than depending on vote or playlists. The answer at the end of
+     `POSTMATCH` wins; without an answer, the core returns to the lobby.
    - Rationale: almost no extra code (the setting only picks the transition after `POSTMATCH`/`VOTE`); covers both play styles (friends prefer the lobby, solo with bots prefers rotation).
 
 3. **The core owns only the outer cycle; everything inside `LIVE` belongs to the mode.**

@@ -216,13 +216,17 @@
 ---What happens after POSTMATCH (00-core.md d.2): back to the lobby, or rotation with a vote.
 ---@alias PW.AfterMatch "lobby"|"rotation"
 
+---Server question PW_AfterMatch(mode): the answer at the POSTMATCH deadline decides the route.
+---Read-only and inexpensive: the machine samples it when it reads phase settings. Nil falls back to the lobby.
+---@alias PW.AfterMatchHook fun(mode: table?): PW.AfterMatch?
+
 ---Durations (seconds) and the after-match setting the machine reads when it enters a phase (00-core.md d.5).
 ---@class PW.PhaseSettings
 ---@field prematch number PREMATCH wait for players before the countdown (pw_prematch_timeout)
 ---@field countdown number countdown at the end of PREMATCH (pw_countdown)
 ---@field postmatch number POSTMATCH duration (pw_postmatch_time)
 ---@field vote number VOTE duration (pw_vote_time)
----@field afterMatch PW.AfterMatch pw_aftermatch
+---@field afterMatch PW.AfterMatch normalized answer to PW_AfterMatch
 
 ---The part of the machine state the pure rules read.
 ---@class PW.PhaseState
@@ -253,8 +257,8 @@
 ---@field _Next fun(state: PW.PhaseState, now: number, allReady: boolean, settings: PW.PhaseSettings): PW.PhaseStep?
 ---Internal: true when every human in players is in the ready set; bots always count as ready.
 ---@field _AllReady fun(players: PW.ReadyEntry[], ready: table<any, true>): boolean
----Internal: maps a pw_aftermatch value to "lobby" or "rotation" (anything unknown is "lobby").
----@field _AfterMatch fun(value: string): PW.AfterMatch
+---Internal: normalizes a PW_AfterMatch answer (anything other than "rotation" is "lobby").
+---@field _AfterMatch fun(value: any): PW.AfterMatch
 ---Current phase from the NW2 global pw_phase (00-core.md d.10), both realms. "LOBBY" until the server published it.
 ---@field GetPhase fun(): PW.PhaseName
 ---CurTime() at which the current phase ends (NW2 global pw_phase_end), -1 if none. Both realms.
@@ -291,7 +295,7 @@
 ---@field log? PW.LogFn
 ---@field clock? fun(): number default CurTime
 ---@field players? fun(): PW.ReadyEntry[] default: every connected player
----@field settings? fun(): PW.PhaseSettings default: the ConVars (PW.Match._ReadSettings)
+---@field settings? fun(): PW.PhaseSettings default: duration ConVars and PW_AfterMatch (PW.Match._ReadSettings)
 ---@field write? PW.PhaseWriter default: SetGlobal2Float / SetGlobal2String / SetGlobal2Int by key
 
 ---Internal (00-core.md d.1-d.5): state of the phase machine.
@@ -348,7 +352,7 @@
 ---@field _SetPhase fun(phase: string, duration?: number, countdown?: boolean): boolean
 ---Internal: one machine step (the core's Think hook): timer transitions, then MODE:Think during LIVE.
 ---@field _Tick fun()
----Internal: the durations and the after-match setting from the ConVars.
+---Internal: the durations from ConVars and the normalized answer to PW_AfterMatch.
 ---@field _ReadSettings fun(): PW.PhaseSettings
 ---Internal: a fresh LOBBY store (tests swap PW._Match).
 ---@field _NewStore fun(opts?: PW.MatchStoreOptions): PW.MatchStore

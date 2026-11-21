@@ -77,6 +77,26 @@ continued infected play, synchronous relationship/effect rollback, ordinary-mode
 their existing engine assertions too. Read `role_policy.lua`, `player_overrides.lua`, `bots_input.lua`,
 `infection_runtime.lua`, `infection_melee_smoke.lua` and the full T-11.14 contract before changing those seams.
 
+## After-match routing
+
+| Task | Mandatory clause | Suite | Exact existing case name |
+| --- | --- | --- | --- |
+| T-2.13 | ResolveAfterMatch: auto with a playlist is rotation | vote.lua | ResolveAfterMatch: auto with a playlist is rotation |
+| T-2.13 | ResolveAfterMatch: auto in Custom is lobby | vote.lua | ResolveAfterMatch: auto in Custom is lobby |
+| T-2.13 | ResolveAfterMatch: lobby and rotation override the playlist state | vote.lua | ResolveAfterMatch: lobby and rotation override the playlist state |
+| T-2.13 | ResolveAfterMatch: an unknown value behaves like auto | vote.lua | ResolveAfterMatch: an unknown value behaves like auto |
+| T-2.13 | PW_AfterMatch answers from the store | vote.lua | PW_AfterMatch answers from the store |
+| T-2.13 | PW_AfterMatch without the playlists module treats the game as Custom | vote.lua | PW_AfterMatch without the playlists module treats the game as Custom |
+| T-2.13 | auto with an expired scheduled playlist goes to the lobby | vote.lua | auto with an expired scheduled playlist goes to the lobby |
+| T-2.13 | vote.aftermatch schema: enum, default auto, three options, has a description | vote.lua | vote.aftermatch schema: enum, default auto, three options, has a description |
+| T-2.13 | POSTMATCH goes to LOBBY when no module answers PW_AfterMatch | core_phases.lua | POSTMATCH goes to LOBBY when no module answers PW_AfterMatch |
+| T-2.13 | POSTMATCH goes to VOTE when PW_AfterMatch answers rotation | core_phases.lua | POSTMATCH goes to VOTE when PW_AfterMatch answers rotation |
+| T-2.13 | PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start | core_phases.lua | PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start |
+| T-2.13 | pw_aftermatch is no longer created | core_phases.lua | pw_aftermatch is no longer created |
+
+The lobby preview also has a model case in `ui_hub.lua`. Preserve the existing vote, phase machine and
+scheduled-playlist safeguards.
+
 ## Weapon adapters
 
 | Task | Mandatory clause | Suite | Exact existing case name |

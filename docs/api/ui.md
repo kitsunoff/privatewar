@@ -969,6 +969,10 @@ Decisions: `design/10-frontend.md` d.8 to d.10, `design/08-lobby.md` d.2, d.3, `
 player may not use are never hidden: they are locked (focusable, the reason in the hint bar), and the server checks every
 request again.
 
+The playlist hub and Custom show the host a read-only **After match** summary when the vote module is active and
+the player can edit host settings. The line opens **SETTINGS > Host**, where `vote.aftermatch` can be changed.
+The hub previews the selected available playlist; Custom previews a Custom start.
+
 | Function | Contract |
 | --- | --- |
 | `PW.Lobby._Hub(input) -> PW.LobbyHub` | The hub model from a `PW.LobbyHubInput` (`state`, `selection`, `fits`, `playlists`, `players`, `maxPlayers`, `seen`, `shortOf`). `cards`: playlist cards then Custom (locked with the playlist reason without `canStart`); `selected`: the active playlist id or `@custom`; `start` (a `PW.LobbyAction` with `label` `START MATCH` or `START PLAYLIST` and `request` `{ playlist }` or `{ mode, map }`); `modeMap`, `setup`; `summary` (monogram, mode, map); `rows` (the MATCH card: up to 3 fields of each mode settings group and `Bots fill`, or `Playlist` and `Bots fill` with an active playlist); `warning`; `party`; `note`; `model` |
