@@ -40,6 +40,7 @@
 ---@field locked boolean focusable, cannot be picked; see reason
 ---@field reason? string why it is locked (unlock level, store, banned, already picked)
 ---@field lockText? string short text next to the lock glyph ("LV 12", "STORE")
+---@field new? boolean granted and unseen
 
 ---@alias PW.LoadoutUIBudgetState "unlimited"|"ok"|"full"|"over"
 
@@ -74,6 +75,7 @@
 ---@field build table<string, string|false>
 ---@field slots PW.Slot[] ADAPTER:GetSlots(weaponId, build); empty = no gunsmith
 ---@field options fun(slotId: string): PW.Option[] ADAPTER:GetOptions(weaponId, slotId)
+---@field optionRequirement? fun(optionId: string): PW.UnlockRequirement
 ---@field weaponLevel integer
 ---@field unlockAll boolean
 ---@field cap integer the match cap of the weapon slot (loadout.maxattachments, wildcards included)
@@ -91,6 +93,7 @@
 ---@field reason? string
 ---@field lockText? string
 ---@field unlock? integer the weapon level of a curated option
+---@field new? boolean granted and unseen
 
 ---@class PW.LoadoutUIGunsmithSlot
 ---@field id string the adapter's build slot id

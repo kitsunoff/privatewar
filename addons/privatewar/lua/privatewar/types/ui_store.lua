@@ -16,6 +16,7 @@
 ---@field currency number the balance
 ---@field owned fun(key: string): boolean purchased ("<kind>:<id>")
 ---@field unlocked fun(kind: string, id: string): boolean unlocked for the player (level, purchase or unlockall)
+---@field requirement? fun(kind: string, id: string): PW.UnlockRequirement
 ---@field pending? string the key of a purchase request in flight
 
 ---One group of the store: a rotation (featured, weekly) or the permanent offers of one kind.
@@ -59,6 +60,8 @@
 ---@field label string the kind, singular ("Model", "Calling card")
 ---@field state "owned"|"unlocked"|"locked"
 ---@field preview? PW.UIStorePreview
+---@field requirement? PW.UnlockRequirement
+---@field new? boolean granted and unseen
 
 ---Store view model (pure). Currency is shown as "<n> CR".
 ---@class PW.UIStoreLib

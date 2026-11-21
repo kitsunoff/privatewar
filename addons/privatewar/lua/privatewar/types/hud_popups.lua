@@ -25,7 +25,7 @@
 ---@field label string "+<points>"
 ---@field startedAt number? CurTime when it started showing; nil while it waits
 ---@field played boolean? the sound was played (client glue)
----@field kind? "levelup" nil for a medal; "levelup" for the LEVEL UP popup (_LevelUpAdd)
+---@field kind? "levelup"|"unlock" nil for a medal
 ---@field level? integer the new player level of a LEVEL UP entry
 
 ---FIFO of medals; the head is the one showing.

@@ -18,6 +18,8 @@
 ---@class PW.ProgressionState
 ---@field xp number total player XP
 ---@field weapons table<string, number> total XP per weapon class
+---@field grants? table<string, PW.UnlockGrantMeta> grants are independent of the purchase wallet
+---@field claims? table<string, integer> grant id to Unix time
 
 ---What the unlock rules read about one player. Injected in tests.
 ---@class PW.ProgressionView
@@ -26,6 +28,9 @@
 ---@field lookup PW.LoadoutLookup catalogue lookup (kind, id)
 ---@field unlockAll boolean
 ---@field maxAttachments integer loadout.maxattachments
+---@field granted? fun(key: string): boolean whether the key was granted, even with economy disabled
+---@field override? fun(kind: string, id: string): boolean? first boolean decides after unknown and Hidden
+---@field hint? fun(kind: string, id: string): string? requirement hint only
 
 ---Internal (server): sessions and the injectable engine edges. T-4.10 adds the batching and match records
 ---(types/progression_storage.lua).

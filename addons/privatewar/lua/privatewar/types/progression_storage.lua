@@ -73,6 +73,7 @@
 ---Internal (client): the local player's file, the last levels and summary received.
 ---@class PW.ProgressionLocal
 ---@field file? PW.ProgressionFile
+---@field unlocks? PW.UnlocksFile
 ---@field levels? PW.ProgressionLevels
 ---@field summary? PW.ProgressionSummary
 

@@ -9,6 +9,7 @@
 ---@field path string MODEL.Model
 ---@field price? number MODEL.Price
 ---@field unlock? number MODEL.Unlock (player level)
+---@field requirement? PW.UnlockRequirement
 
 ---Input of PW.Operators.List.
 ---@class PW.OperatorListInput
