@@ -911,6 +911,6 @@ The automated cases never replace the human checkpoint (section 14).
 - Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md).
 - Dependency: [unlock entitlements](unlock-entitlements.md) and
   [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md).
-- Related: [scheduled events](scheduled-events.md) (UTC handling, playlist availability), store rotation
+- Related: [scheduled events](../in-progress/scheduled-events.md) (UTC handling, playlist availability), store rotation
   `addons/privatewar/lua/privatewar/modules/economy/sh_rotation.lua`, `design/06-progression.md` d.0, d.1, d.3, d.5, d.6.
 - No implementation, test result or game result is claimed by this record.

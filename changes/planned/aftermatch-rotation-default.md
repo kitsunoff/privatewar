@@ -96,7 +96,10 @@ So the core asks a question hook and the vote module answers.
    - `init.lua`: add `function module:PW_AfterMatch() return lib.ResolveAfterMatch(store().afterMatch(),
      store().activePlaylist()) end`, with two new store fields defaulting to `PW.Setting("vote.aftermatch")` and the
      playlists library's `GetActive()` (nil-safe: `""` when the playlists module is missing), so tests use fakes like
-     the other store fields.
+     the other store fields. The default `activePlaylist` also returns `""` when `PW.Playlist._RotationAllowed(false)`
+     is false (a scheduled playlist that expired, added by PR #12 in `modules/playlists/init.lua:361`), so `auto` goes
+     to the lobby instead of opening a vote that the existing guards (`modules/vote/init.lua`,
+     `core/sv_match.lua:238`) would abort.
    - Types: add the store fields and `ResolveAfterMatch` to `lua/privatewar/types/vote.lua`; document the hook
      `PW_AfterMatch` next to `PW_NextMatch` (types and `docs/api/core.md`).
 3. **Dev tooling and tests that set `pw_aftermatch`**: switch them to `pw_vote_aftermatch` with the same values:
@@ -137,6 +140,7 @@ machine cases). New cases (proposed file and names):
   - `ResolveAfterMatch: an unknown value behaves like auto`
   - `PW_AfterMatch answers from the store` (fake `afterMatch`, fake `activePlaylist`)
   - `PW_AfterMatch without the playlists module treats the game as Custom`
+  - `auto with an expired scheduled playlist goes to the lobby` (fake `_RotationAllowed` returning false)
   - `vote.aftermatch schema: enum, default auto, three options, has a description`
 - `lua/tests/privatewar/core_phases.lua`:
   - `POSTMATCH goes to LOBBY when no module answers PW_AfterMatch`
@@ -160,7 +164,7 @@ machine cases). New cases (proposed file and names):
    yes, a read-only line on the playlist/Custom screen "After match: Rotation (auto)" that opens SETTINGS > Host; if
    the user prefers, defer to a follow-up.
 2. Should a playlist be able to force the value (for example a "one match" event playlist)? Recommended: no for now;
-   revisit with `changes/planned/scheduled-events.md`, which already plans playlist-local behaviour.
+   revisit with `changes/in-progress/scheduled-events.md`, which owns playlist-local behaviour.
 3. Should the first match of a playlist also be voted instead of sampled at random by `PW.Playlist.Start`?
    Recommended: no (CoD starts the first match directly); separate task if wanted.
 
