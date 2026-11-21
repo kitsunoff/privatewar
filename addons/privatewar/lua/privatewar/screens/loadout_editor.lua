@@ -103,12 +103,10 @@ end
 ---@param view PWLoadoutEditorView
 ---@param options PW.LoadoutUIOption[]
 local function wireChoices(view, options)
+    local bind = assert(assert(kit().Store).BindUnlockCard)
     for index, panel in ipairs(view.picker.panels) do
-        local base, option = panel.PWOnFocus, options[index]
-        panel.PWOnFocus = function(card)
-            base(card)
-            showInfo(view, option)
-        end
+        local option = options[index]
+        bind(panel, option.key, function() showInfo(view, option) end)
     end
 end
 
@@ -125,12 +123,13 @@ local function showPicker(view)
         ---@type PW.UICard
         local card = { id = option.id == "" and noneId or option.id, title = option.name }
         card.badge = option.costText ~= "" and option.costText or nil
+        card.new = option.new
         card.locked, card.reason, card.lockText = option.locked, phrase(option.reason), option.lockText
         card.text = option.description or card.reason
         if option.selected then selected = card.id end
         cards[index] = card
     end
-    view.picker:SetCards(cards, selected)
+    assert(assert(kit().Store).UpdateCards)(view.picker, cards, selected)
     wireChoices(view, options)
     updateRows(view)
     local root = kit().CurrentRoot() --[[@as PWRoot?]]
@@ -360,6 +359,7 @@ function SCREEN:Build(ctx)
         if applyName(view) and draft.dirty then ui().SaveDraft() end
     end
     view.PWRefresh = function() if IsValid(view) then showInfo(view) end end
+    assert(assert(kit().Store).WatchUnlockView)(view, function() refresh(view) end)
     view.OnAction = function(_, action)
         if action == "tertiary" then save(view) elseif action == "secondary" then openGunsmith(view) end
     end

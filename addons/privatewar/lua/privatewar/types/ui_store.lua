@@ -17,6 +17,7 @@
 ---@field owned fun(key: string): boolean purchased or granted ("<kind>:<id>")
 ---@field unlocked fun(kind: string, id: string): boolean unlocked for the player
 ---@field requirement? fun(kind: string, id: string): PW.UnlockRequirement
+---@field isNew? fun(key: string): boolean
 ---@field pending? string the key of a purchase request in flight
 
 ---One group of the store: a rotation (featured, weekly) or the permanent offers of one kind.
@@ -64,6 +65,8 @@
 ---@field new? boolean granted and unseen
 
 ---@alias PW.UIStoreOwnershipCheck fun(kind: string, id: string): boolean
+---@alias PW.UIUnlockGrants table<string, PW.UnlockGrantMeta>
+---@alias PW.UIUnlockSeen table<string, true>
 
 ---Store view model (pure). Currency is shown as "<n> CR".
 ---@class PW.UIStoreLib
@@ -78,6 +81,9 @@
 ---@field CountdownText fun(seconds: number): string "2d 4h", "13h 20m", "4m 05s"
 ---@field OfferState fun(offer: PW.EconomyOffer, facts: PW.UIStoreFacts): PW.UIStoreState
 ---@field _OwnsKey fun(key: string, bought: PW.UIStoreOwnershipCheck, entitled: PW.UIStoreOwnershipCheck): boolean
+---@field _IsUnlockNew fun(grants: PW.UIUnlockGrants, seen: PW.UIUnlockSeen, key: string): boolean
+---@field _HasUnseenGrants fun(grants: PW.UIUnlockGrants, seen: PW.UIUnlockSeen): boolean
+---@field _FocusUnlockCard fun(grants: PW.UIUnlockGrants, seen: PW.UIUnlockSeen, key: string, card: PW.UICard): boolean
 ---@field OfferCards fun(offers: PW.EconomyOffer[], facts: PW.UIStoreFacts): PW.UICard[]
 ---@field Sections fun(store: PW.EconomyStoreView, facts: PW.UIStoreFacts, now: number): PW.UIStoreSection[]
 ---@field SectionCards fun(sections: PW.UIStoreSection[]): PW.UICard[]
@@ -107,6 +113,10 @@
 ---Client. The local player's balance, purchases, unlocks and the request in flight.
 ---@field LiveFacts? fun(): PW.UIStoreFacts
 ---@field UnlockPhrase? fun(text?: string): string? resolve a reward hint that uses a language phrase
+---@field IsUnlockNew? fun(key: string): boolean
+---@field HasUnseenGrants? fun(): boolean
+---@field BindUnlockCard? fun(card: Panel, key?: string, focus?: fun()) card: a PWCard
+---@field WatchUnlockView? fun(view: Panel, refresh: fun())
 ---Client. Pushes the bundle details screen (store_bundle) for a bundle key on the open root.
 ---@field OpenBundle? fun(key: string)
 ---@field TakeBundle? fun(): string?

@@ -71,6 +71,32 @@ function lib.SaveSeen()
     file.Write(seenPath, util.TableToJSON(lib.SeenSet()))
 end
 
+---@param root PWRoot
+local function refreshLoadoutBadge(root)
+    local store = lib.Store
+    if store == nil or store.HasUnseenGrants == nil then return end
+    for _, tab in ipairs(root.tabBar.tabs) do
+        local item = tab.item
+        if item.id == "loadout" and not item.locked then
+            local new = lib.Seen.IsNew(lib.SeenSet(), lib.Tabs.SeenKey(item.id)) or store.HasUnseenGrants()
+            if item.new ~= new then
+                item.new = new
+                tab:SetItem(item)
+                root.tabBar:InvalidateLayout(true)
+                root.focusDirty = 2
+            end
+            return
+        end
+    end
+end
+
+for _, event in ipairs({ "PW_UnlockGranted", "PW_UnlockRevoked", "PW_UI_UnlockSeen" }) do
+    hook.Add(event, "PW_UI_LoadoutUnlockBadge", function(ply)
+        local root = currentRoot
+        if ply == LocalPlayer() and root ~= nil and IsValid(root) then refreshLoadoutBadge(root) end
+    end)
+end
+
 -- Frame -------------------------------------------------------------------------------------------------------------
 
 function rootClass:Init()
@@ -142,6 +168,7 @@ function rootClass:UpdateFrame(top)
     local set = lib.SeenSet()
     if lib.Seen.Mark(set, lib.Tabs.SeenKey(self.model.active)) then lib.SaveSeen() end
     self.tabBar:SetItems(lib.Tabs.Items(self.model.tabs, self.model.active, set))
+    refreshLoadoutBadge(self)
     self.hintBar:SetEntries(top ~= nil and top.Hints or defaultHints)
     self.hintBar:SetReason(nil)
 end

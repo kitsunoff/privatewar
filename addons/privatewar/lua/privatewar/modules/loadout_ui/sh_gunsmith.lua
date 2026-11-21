@@ -18,6 +18,7 @@ local serverNote = "Conflicts between attachments are checked by the server when
 ---@field cosmetic boolean
 ---@field unlock number the weapon level of a curated option, 0 when uncurated
 ---@field requirement? PW.UnlockRequirement
+---@field kind "camos"|"attachments"
 ---@field levelCounted boolean counted toward the weapon level limit
 ---@field cost number
 
@@ -51,9 +52,20 @@ local function factsOf(input, slotCosmetic, id, optionCosmetic)
     return {
         hidden = entry.Hidden == true or curated.Hidden == true or (req ~= nil and req.reason == "hidden"),
         cosmetic = cosmetic, unlock = lib._Required(curated.Unlock), requirement = req,
+        kind = camo ~= nil and "camos" or "attachments",
         levelCounted = not cosmetic and entry.Unlock == nil and not entitled,
         cost = cosmetic and 0 or (isnumber(entry.Cost) and entry.Cost or 1)
     }
+end
+
+---@param input PW.LoadoutUIGunsmithInput
+---@param facts PW.LoadoutUIOptionFacts
+---@param option PW.LoadoutUIGunsmithOption
+local function markNew(input, facts, option)
+    local unlocks, isNew = PW.Unlocks, input.isNew
+    if unlocks == nil or isNew == nil then return end
+    local key = unlocks.KeyOf({ kind = facts.kind, weapon = input.weaponId, id = option.id })
+    option.key, option.new = key, key ~= nil and isNew(key)
 end
 
 ---@class PW.LoadoutUISlotInfo
@@ -162,6 +174,7 @@ local function makeSlot(input, info, counts)
                 selected = current == entry.id, locked = false, unlock = facts.unlock > 0 and facts.unlock or nil
             }
             lockOption(option, facts, currentFacts, input, counts)
+            markNew(input, facts, option)
             options[#options + 1] = option
         end
     end

@@ -12,6 +12,7 @@
 ---@field order string[] slot ids in declaration order (PW._Loadout.order)
 ---@field loadout PW.Loadout the class being edited
 ---@field ctx PW.LoadoutContext lookup, budget, cap, bans; isUnlocked when progression is present
+---@field isNew? fun(key: string): boolean
 ---@field list fun(kind: string): table<string, any>[] the enabled entities of a kind (each with ClassName)
 
 ---One row of the editor: one position of a slot of the effective slot set.
@@ -42,6 +43,7 @@
 ---@field lockText? string short text next to the lock glyph ("LV 12", "STORE")
 ---@field hint? string an additional reward hint when the reason already describes another path
 ---@field new? boolean granted and unseen
+---@field key? string canonical unlock key
 
 ---@alias PW.LoadoutUIBudgetState "unlimited"|"ok"|"full"|"over"
 
@@ -78,6 +80,7 @@
 ---@field options fun(slotId: string): PW.Option[] ADAPTER:GetOptions(weaponId, slotId)
 ---@field optionRequirement? fun(optionId: string): PW.UnlockRequirement
 ---@field optionEntitled? fun(optionId: string): boolean
+---@field isNew? fun(key: string): boolean
 ---@field weaponLevel integer
 ---@field unlockAll boolean
 ---@field cap integer the match cap of the weapon slot (loadout.maxattachments, wildcards included)
@@ -97,6 +100,7 @@
 ---@field hint? string
 ---@field unlock? integer the weapon level of a curated option
 ---@field new? boolean granted and unseen
+---@field key? string canonical unlock key
 
 ---@class PW.LoadoutUIGunsmithSlot
 ---@field id string the adapter's build slot id

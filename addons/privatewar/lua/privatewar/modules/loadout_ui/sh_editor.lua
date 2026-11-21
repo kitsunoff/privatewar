@@ -194,6 +194,16 @@ local function lockOption(slot, entity, id, ctx, taken, option)
     end
 end
 
+---@param option PW.LoadoutUIOption
+---@param kind string
+---@param isNew? fun(key: string): boolean
+local function markNew(option, kind, isNew)
+    local unlocks = PW.Unlocks
+    if unlocks == nil or isNew == nil then return end
+    local key = unlocks.KeyOf({ kind = kind, id = option.id })
+    option.key, option.new = key, key ~= nil and isNew(key)
+end
+
 function lib.Options(input, row, slots)
     local slot, ctx = slots[row.slot], input.ctx
     ---@type string[]
@@ -221,6 +231,7 @@ function lib.Options(input, row, slots)
                 description = isstring(entity.Description) and entity.Description or nil
             }
             lockOption(slot, entity, id, ctx, taken, option)
+            markNew(option, slot.kind, input.isNew)
             if slot.kind == "perks" then option.description = lib.PerkDescription(entity, selectedWeapons) end
             options[#options + 1] = option
         end

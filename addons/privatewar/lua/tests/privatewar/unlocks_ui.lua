@@ -172,6 +172,115 @@ return {
                 expect({ nextUp[1].id, nextUp[1].level, nextUp[2].id, nextUp[2].level })
                     .to.deepEqual({ "tableLevel", 8, "integer", 10 })
             end
+        },
+        {
+            name = "NEW badge: a granted, unseen key is new; marking it seen clears it; purchases are not new",
+            func = function()
+                local ui = assert(PW.UI)
+                local store = assert(ui.Store)
+                local gift, purchase = "models:reward", "models:bought"
+                ---@type table<string, PW.UnlockGrantMeta>
+                local grants = { [gift] = { source = "purchase", at = 1 } } -- This is still a grant.
+                ---@type table<string, true>
+                local seen = {}
+                ---@type PW.EconomyOffer
+                local offer = {
+                    kind = "bundles", id = "offer", key = "bundles:offer", name = "Offer", price = 1, bundle = true,
+                    items = { { kind = "models", id = "reward", key = gift },
+                        { kind = "models", id = "bought", key = purchase } }
+                }
+                local items = store.ItemViews(offer, function() return nil end, {
+                    currency = 0, owned = function() return true end, unlocked = function() return true end,
+                    isNew = function(key) return store._IsUnlockNew(grants, seen, key) end
+                })
+                local cards = store.ItemCards(items)
+                expect(cards[1].new).to.beTrue()
+                expect(cards[2].new == true).to.beFalse()
+                expect(cards[2].badge).to.equal("OWNED")
+                expect(store._HasUnseenGrants(grants, seen)).to.beTrue()
+                ui.Seen.Mark(seen, ui.Tabs.SeenKey("loadout"))
+                expect(store._HasUnseenGrants(grants, seen)).to.beTrue()
+                expect(store._FocusUnlockCard(grants, seen, purchase, cards[2])).to.beFalse()
+                expect(seen["unlock:" .. purchase]).to.beNil()
+                expect(store._FocusUnlockCard(grants, seen, gift, cards[1])).to.beTrue()
+                expect(ui.Cards.View(cards, nil)[1].new).to.beFalse()
+                expect(cards[1].badge).to.equal("OWNED")
+                expect(seen["unlock:" .. gift]).to.beTrue()
+                expect(store._HasUnseenGrants(grants, seen)).to.beFalse()
+                expect(store._FocusUnlockCard(grants, seen, gift, cards[1])).to.beFalse()
+                grants["perks:scavenger"] = { source = "challenge", at = 2 }
+                expect(store._HasUnseenGrants(grants, seen)).to.beTrue()
+                grants["perks:scavenger"] = nil
+                expect(store._HasUnseenGrants(grants, seen)).to.beFalse()
+            end
+        },
+        {
+            name = "Toast: a granted delta queues one unlock popup per grant group with the item name and source text",
+            func = function()
+                local u, hud = unlocks(), assert(PW.HUD)
+                local queue = hud._MedalNew()
+                ---@type PW.ProgressionLocal
+                local state = {}
+                ---@type PW.ProgressionDelta
+                local delta = { session = 1, seq = 1, xp = 0, weapons = {}, granted = {
+                    ["perks:scavenger"] = { source = "challenge", at = 1, grant = "weekly:1" },
+                    ["perks:soft_landing"] = { source = "event", at = 1, grant = "event:1" },
+                    ["models:swat"] = { source = "event", at = 1, grant = "event:1" }
+                } }
+                ---@param name string
+                ---@param ... any
+                local function onDelta(name, ...)
+                    if name ~= "PW_UnlockGranted" then return end
+                    ---@type any[]
+                    local args = { ... }
+                    hud._QueueUnlock(queue, args[2], args[3], "LIVE")
+                end
+                ---@type PW.UnlockClientIO
+                local io = { writeUnlocks = function() end, writeProgression = function() end, notify = onDelta }
+                local ply = NULL --[[@as Player]]
+                u._ClientDelta(state, delta, ply, io)
+                u._ClientDelta(state, delta, ply, io)
+                expect(queue.count).to.equal(2)
+                expect({ queue.list[1].kind, queue.list[1].name, queue.list[1].label, queue.list[1].sourceText })
+                    .to.deepEqual({ "unlock", "UNLOCKED", "Scavenger", "Challenge reward" })
+                expect({ queue.list[2].kind, queue.list[2].name, queue.list[2].label, queue.list[2].sourceText })
+                    .to.deepEqual({ "unlock", "UNLOCKED", "2 items", "Event reward" })
+            end
+        },
+        {
+            name = "Unlock toast phases: PREMATCH can show grants without starting score, medal or level-up popups",
+            func = function()
+                local hud = assert(PW.HUD)
+                for _, phase in ipairs({ "PREMATCH", "LIVE", "POSTMATCH", "LOBBY", "VOTE" }) do
+                    local queue = hud._MedalNew()
+                    local oldVisible = phase == "LIVE" or phase == "POSTMATCH"
+                    local grantVisible = oldVisible or phase == "PREMATCH"
+                    hud._MedalAdd(queue, "first_blood", "First Blood", 100, 0)
+                    local medal = queue.list[1]
+                    local levelUp = hud._LevelUpAdd(queue, 9)
+                    expect(hud._ScorePopupPhase(phase)).to.equal(oldVisible)
+                    expect(hud._QueueUnlock(queue, { "perks:scavenger" }, "admin", phase)).to.equal(grantVisible)
+                    local current = hud._PopupForPhase(queue, 1, phase)
+                    if phase == "PREMATCH" then
+                        local grant = assert(current)
+                        expect(grant.kind).to.equal("unlock")
+                        expect(grant.sourceText).to.equal("Granted by the host")
+                        expect(medal.startedAt).to.beNil()
+                        expect(levelUp.startedAt).to.beNil()
+                        expect(hud._PopupForPhase(queue, 1.1, "LIVE")).to.equal(grant)
+                    elseif oldVisible then
+                        expect(current).to.equal(medal)
+                        expect(hud._PopupForPhase(queue, 2 + hud.MedalDuration, phase)).to.equal(levelUp)
+                        local grant = hud._PopupForPhase(queue, 3 + 2 * hud.MedalDuration, phase)
+                        expect(assert(grant).kind).to.equal("unlock")
+                    else
+                        expect(current).to.beNil()
+                        expect(queue.count).to.equal(2)
+                        expect(medal.startedAt).to.beNil()
+                        expect(levelUp.startedAt).to.beNil()
+                    end
+                end
+            end
         }
     }
 }

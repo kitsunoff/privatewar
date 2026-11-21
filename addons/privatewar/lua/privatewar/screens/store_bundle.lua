@@ -85,6 +85,8 @@ local function refresh(view)
         card.footer = card.lockText
     end
     store().UpdateCards(view.itemList, cards, view.item)
+    local bind = assert(store().BindUnlockCard)
+    for index, panel in ipairs(view.itemList.panels) do bind(panel, cards[index].id) end
     showItem(view)
     showInfo(view, offer, data)
     view:InvalidateLayout(true)
@@ -140,6 +142,7 @@ function SCREEN:Build(ctx)
         refresh(view)
     end
     view.PWRefresh = function() refresh(view) end
+    assert(store().WatchUnlockView)(view, view.PWRefresh)
     view.OnAction = function(_, action)
         if action == "tertiary" then buy(view) end
     end

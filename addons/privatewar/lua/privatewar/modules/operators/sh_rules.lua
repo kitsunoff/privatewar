@@ -182,7 +182,7 @@ local function lockOf(entry)
     return nil, "Locked"
 end
 
-function lib.Cards(entries, choice, auto)
+function lib.Cards(entries, choice, auto, isNew)
     local own = lib.Resolve(entries, lib.Auto, auto)
     ---@type PW.UICard[]
     local cards = {
@@ -198,6 +198,7 @@ function lib.Cards(entries, choice, auto)
         cards[#cards + 1] = {
             id = entry.id, title = entry.name, locked = entry.locked, lockText = lockText, reason = reason,
             badge = entry.source == "store" and not entry.locked and "STORE" or nil,
+            new = entry.source == "store" and isNew ~= nil and isNew(entry.id),
             text = hint ~= nil and hint ~= reason and hint or text, footer = entry.path
         }
     end

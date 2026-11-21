@@ -113,8 +113,10 @@ function lib.LiveInput(value)
         ctx.isUnlocked = function(kind, id) return (unlocks.IsUnlocked(LocalPlayer(), kind, id)) end
         ctx.requirement = function(kind, id) return unlocks.Requirement(LocalPlayer(), kind, id) end
     end
+    local uiStore = PW.UI ~= nil and PW.UI.Store or nil
     return {
         declared = PW._Loadout.slots, order = PW._Loadout.order, loadout = value, ctx = ctx,
+        isNew = uiStore ~= nil and uiStore.IsUnlockNew or nil,
         list = function(kind)
             local registries = rawget(PW, "Registries") --[[@as table<string, PW.Registry>?]]
             local registry = registries ~= nil and registries[kind] or nil
@@ -176,7 +178,7 @@ function lib.LiveGunsmith(draft)
         weaponId = weaponId, weapon = weapon, weaponName = phrase(isstring(weapon.Name) and weapon.Name or weaponId),
         build = build, slots = istable(slots) and slots or {}, weaponLevel = level, unlockAll = unlockAll,
         cap = slot ~= nil and slot.maxattachments or input.ctx.maxattachments,
-        banned = input.ctx.bannedAttachments or {},
+        banned = input.ctx.bannedAttachments or {}, isNew = input.isNew,
         options = function(id)
             local options = adapters ~= nil and adapters.CallFor(weaponId, "GetOptions", weaponId, id) or nil
             return istable(options) and options or {}

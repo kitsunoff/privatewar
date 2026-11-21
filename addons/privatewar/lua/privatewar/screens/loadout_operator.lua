@@ -71,14 +71,12 @@ end
 ---Focus and hover show the card's operator, also a locked one (it cannot be selected).
 ---@param view PWLoadoutOperatorView
 local function wirePreview(view)
+    local bind = assert(assert(PW.UI.Store).BindUnlockCard)
     for _, panel in ipairs(view.cardList.panels) do
-        local base = panel.PWOnFocus
-        panel.PWOnFocus = function(card)
-            base(card)
-            preview(view, card.view.card.id)
-        end
+        local id = panel.view.card.id
+        bind(panel, id, function() preview(view, id) end)
         local hooks = panel --[[@as PANEL]]
-        hooks.OnCursorEntered = function() preview(view, panel.view.card.id) end
+        hooks.OnCursorEntered = function() preview(view, id) end
     end
 end
 
@@ -88,9 +86,10 @@ local function refresh(view)
     view.entries = lib.LocalList ~= nil and (lib.LocalList --[[@as fun(): PW.OperatorEntry[] ]])() or {}
     local choice = lib.LocalChoice ~= nil and (lib.LocalChoice --[[@as fun(): string]])() or lib.Auto
     local own = GetConVar("cl_playermodel")
-    local cards, selected = lib.Cards(view.entries, choice, own ~= nil and own:GetString() or nil)
+    local store = assert(PW.UI.Store)
+    local cards, selected = lib.Cards(view.entries, choice, own ~= nil and own:GetString() or nil, store.IsUnlockNew)
     for _, card in ipairs(cards) do card.text, card.reason = phrase(card.text), phrase(card.reason) end
-    view.cardList:SetCards(cards, selected)
+    assert(store.UpdateCards)(view.cardList, cards, selected)
     wirePreview(view)
     preview(view, selected)
 end
@@ -126,6 +125,7 @@ function SCREEN:Build(ctx)
     local hooks = view --[[@as PANEL]]
     hooks.PerformLayout = function(_, w, h) layout(view, w, h) end
     view.PWRefresh = function() end
+    assert(assert(PW.UI.Store).WatchUnlockView)(view, function() refresh(view) end)
     refresh(view)
     return view
 end

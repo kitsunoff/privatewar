@@ -32,6 +32,7 @@
 ---@alias PW.OperatorReject "unknown"|"locked"
 ---@alias PW.OperatorUnlocked fun(id: string): boolean
 ---@alias PW.OperatorRequirement fun(id: string): PW.UnlockRequirement
+---@alias PW.OperatorIsNew fun(key: string): boolean
 
 ---Facts for the player colour.
 ---@class PW.OperatorColourFacts
@@ -98,7 +99,8 @@
 ---cl_playercolor, else the GMod default.
 ---@field Colour fun(facts: PW.OperatorColourFacts): number[]
 ---Pure: the picker cards (Auto first) and the selected card id.
----@field Cards fun(entries: PW.OperatorEntry[], choice: string?, auto: string?): PW.UICard[], string
+---@field Cards fun(entries: PW.OperatorEntry[], choice: string?, auto: string?, isNew?: PW.OperatorIsNew):
+---PW.UICard[], string
 ---Shared: the live input (stock models and the enabled economy entries) with an unlock check.
 ---@field LiveInput fun(unlocked?: PW.OperatorUnlocked, requirement?: PW.OperatorRequirement): PW.OperatorListInput
 ---Client: the operator list of the local player.

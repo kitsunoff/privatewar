@@ -27,6 +27,7 @@
 ---@field played boolean? the sound was played (client glue)
 ---@field kind? "levelup"|"unlock" nil for a medal
 ---@field level? integer the new player level of a LEVEL UP entry
+---@field sourceText? string the source label of an UNLOCKED entry
 
 ---FIFO of medals; the head is the one showing.
 ---@class PW.MedalState
@@ -83,6 +84,9 @@
 ---Pure: the medal showing at `now`. Starts the head when it has not started (at `now`), drops it once MedalDuration
 ---passed and starts the next one at `now`. Nil when the queue is empty.
 ---@field _MedalCurrent fun(state: PW.MedalState, now: number): PW.MedalPopup?
+---@field _ScorePopupPhase fun(phase: string): boolean
+---@field _QueueUnlock fun(state: PW.MedalState, keys: string[], source: string, phase: string): boolean
+---@field _PopupForPhase fun(state: PW.MedalState, now: number, phase: string): PW.MedalPopup?
 ---Pure: alpha 0..1 of a medal of the given age: fade in, hold at 1, fade out; 0 outside 0..MedalDuration.
 ---@field _MedalAlpha fun(age: number): number
 ---Pure: display text of an event: the phrase of a "#key" Name when it resolves, else Name as is when it is plain

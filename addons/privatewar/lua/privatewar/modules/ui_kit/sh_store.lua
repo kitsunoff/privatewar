@@ -82,6 +82,24 @@ function store._OwnsKey(key, bought, entitled)
     return bought(kind, id) or (kind ~= "bundles" and entitled(kind, id))
 end
 
+function store._IsUnlockNew(grants, seen, key)
+    return grants[key] ~= nil and lib.Seen.IsNew(seen, "unlock:" .. key)
+end
+
+function store._HasUnseenGrants(grants, seen)
+    for key in pairs(grants) do
+        if store._IsUnlockNew(grants, seen, key) then return true end
+    end
+    return false
+end
+
+function store._FocusUnlockCard(grants, seen, key, card)
+    if not store._IsUnlockNew(grants, seen, key) then return false end
+    lib.Seen.Mark(seen, "unlock:" .. key)
+    card.new = false
+    return true
+end
+
 ---@param offer PW.EconomyOffer
 ---@param facts PW.UIStoreFacts
 ---@return boolean
@@ -324,7 +342,8 @@ function store.ItemViews(offer, lookup, facts)
         items[index] = {
             key = entry.key, kind = entry.kind, id = entry.id, name = name, label = store.KindLabel(entry.kind),
             state = state, preview = store.Preview(entry.kind, entity),
-            requirement = state == "locked" and requirementOf(entry, entity, facts) or nil
+            requirement = state == "locked" and requirementOf(entry, entity, facts) or nil,
+            new = facts.isNew ~= nil and facts.isNew(entry.key)
         }
     end
     return items
@@ -343,7 +362,7 @@ function store.ItemCards(items)
         if req ~= nil and unlocks ~= nil then badge, reason = unlocks.LockText(req) end
         cards[index] = {
             id = entry.key, title = entry.name, tags = entry.label, badge = itemBadges[entry.state],
-            locked = false, lockText = badge, text = reason,
+            locked = false, lockText = badge, text = reason, new = entry.new,
             footer = req ~= nil and req.hint ~= reason and req.hint or nil
         }
     end
