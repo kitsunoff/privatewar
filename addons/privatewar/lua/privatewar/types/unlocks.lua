@@ -60,6 +60,15 @@
 ---@field claims table<string, integer> grant id to Unix time
 ---@field batch PW.ProgressionBatch
 
+---@class PW.UnlockUpload
+---@field grants table<string, boolean> granted keys, without metadata
+---@field claims table<string, boolean> claimed ids, without timestamps
+
+---@class PW.UnlockDeltaPart
+---@field granted? table<string, PW.UnlockGrantMeta>
+---@field revoked? table<string, string> key to the revoking source
+---@field claims? table<string, integer>
+
 ---@class PW.UnlocksLib
 ---@field MaxHintLength integer
 ---@field MaxSourceLength integer
@@ -73,6 +82,31 @@
 ---@field ParseKey fun(key: string): string?, string?, string?, string?
 ---@field _Decide fun(view: PW.ProgressionView, kind: string, id: string): boolean, PW.UnlockReason
 ---@field _Requirement fun(view: PW.ProgressionView, kind: string, id: string): PW.UnlockRequirement
+---@field FilePath string
+---@field FileVersion integer
+---@field UploadMaxBytes integer
+---@field MaxGrants integer
+---@field MaxClaims integer
+---@field MaxGrantIdLength integer
+---@field MaxGrantPerCall integer
+---@field MaxDeltaGrants integer
+---@field MaxDeltaRevokes integer
+---@field MaxDeltaClaims integer
+---@field _CheckGrantId fun(value: any): string?
+---@field _EntitlementKey fun(value: any): string?
+---@field _CheckTime fun(value: any): integer?
+---@field _CheckGrants fun(raw: any, limit?: integer): table<string, PW.UnlockGrantMeta>
+---@field _CheckClaims fun(raw: any, limit?: integer): table<string, integer>
+---@field _FileFromJson fun(decoded: any): PW.UnlocksFile
+---@field _FileToJson fun(stored: PW.UnlocksFile): PW.UnlocksFile
+---@field _ListEntitled fun(owned: table<string, boolean>?, granted: table<string, PW.UnlockGrantMeta>?):
+---table<string, PW.UnlockGrantMeta>
+---@field _ApplyDelta fun(current: PW.UnlocksFile, delta: PW.ProgressionDelta):
+---PW.UnlocksFile, boolean, PW.UnlockDeltaPart?
+---@field _EncodeUpload fun(stored: PW.UnlocksFile, writer: PW.ProgressionWriter)
+---@field _DecodeUpload fun(reader: PW.ProgressionReader): PW.UnlockUpload?
+---@field _EncodeDeltaPart fun(part: PW.UnlockDeltaPart, writer: PW.ProgressionWriter)
+---@field _DecodeDeltaPart fun(reader: PW.ProgressionReader): PW.UnlockDeltaPart
 
 ---@class PW
 ---@field Unlocks? PW.UnlocksLib the progression unlock authority

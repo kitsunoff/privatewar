@@ -10,7 +10,7 @@
 
 ---The client file data/privatewar/progression.json. batch is the last delta applied.
 ---@class PW.ProgressionFile
----@field v integer file version (1)
+---@field v integer file version (2)
 ---@field xp number total player XP
 ---@field weapons table<string, number> total XP per weapon class
 ---@field batch PW.ProgressionBatch
@@ -21,7 +21,7 @@
 ---@field weapons table<string, number>
 
 ---A 10 s delta, server -> owner: the XP earned since the previous one, with its batch id.
----@class PW.ProgressionDelta
+---@class PW.ProgressionDelta : PW.UnlockDeltaPart
 ---@field session integer
 ---@field seq integer
 ---@field xp number

@@ -42,6 +42,7 @@ PW.Unlocks = (rawget(PW, "Unlocks") or {}) --[[@as PW.UnlocksLib]]
 if SERVER then
     AddCSLuaFile("privatewar/modules/progression/sh_curves.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_unlock_spec.lua")
+    AddCSLuaFile("privatewar/modules/progression/sh_entitlements.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_unlocks.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_wallet.lua")
     AddCSLuaFile("privatewar/modules/progression/sh_storage.lua")
@@ -50,6 +51,7 @@ include("privatewar/modules/progression/sh_curves.lua")
 include("privatewar/modules/progression/sh_wallet.lua")
 include("privatewar/modules/progression/sh_unlock_spec.lua")
 include("privatewar/modules/progression/sh_unlocks.lua")
+include("privatewar/modules/progression/sh_entitlements.lua")
 include("privatewar/modules/progression/sh_storage.lua")
 
 ---Whether purchases count right now: only while the economy module is active (06 d.6: disabling it leaves level-only
