@@ -111,6 +111,47 @@
 ---@field ResetOn? PW.ChallengeResetRule[]
 ---@field Rewards? PW.ChallengeReward|table<PW.ChallengeTier, PW.ChallengeReward>
 
+---@alias PW.ChallengeEventTypes table<string, PW.ChallengeEventType>
+---@alias PW.ChallengePredicate fun(facts: table<string, any>): boolean
+---@alias PW.ChallengeBinder fun(params: PW.ChallengeParams): PW.ChallengePredicate
+
+---@class PW.ChallengeFilterContext
+---@field events string[]
+---@field params table<string, PW.ChallengeParam>
+---@field custom PW.ChallengeEventTypes
+
+---@class PW.ChallengeTextContext
+---@field targets integer[]
+---@field params PW.ChallengeParams
+---@field names? table<string, table<string, string>>
+
+---@class PW.ChallengeCompiledReset
+---@field event string
+---@field bind PW.ChallengeBinder
+
+---@class PW.ChallengeCompiledObjective
+---@field events string[]
+---@field targets table<PW.ChallengeTier, integer>
+---@field label? string
+---@field scope PW.ChallengeScope
+---@field count PW.ChallengeCount
+---@field within? PW.ChallengeWindow
+---@field bind PW.ChallengeBinder
+---@field reset PW.ChallengeCompiledReset[]
+---@field filter? fun(self: PW.Challenge, ev: PW.ChallengeEvent, params: PW.ChallengeParams): boolean?
+
+---The original resolved definition and its precompiled objectives.
+---@class PW.ChallengeTemplate
+---@field id string
+---@field definition PW.Challenge
+---@field tiers PW.ChallengeTier[]
+---@field group string
+---@field weight number
+---@field pool PW.ChallengePool
+---@field mode PW.ChallengeCombine
+---@field params table<string, PW.ChallengeParam>
+---@field objectives PW.ChallengeCompiledObjective[]
+
 ---@class PW.ChallengesLib
 ---Monday-based week index for a UTC Unix timestamp.
 ---@field WeekIndex fun(unixUtc: number): integer
@@ -118,6 +159,11 @@
 ---@field WeekLabel fun(index: integer): string
 ---Start inclusive, end exclusive, in UTC Unix seconds.
 ---@field WeekBounds fun(index: integer): integer, integer
+---Validates and compiles a resolved template, or returns a rejection reason. Custom types come from the caller.
+---@field _Compile fun(id: string, raw: any, customTypes?: PW.ChallengeEventTypes): PW.ChallengeTemplate?, string?
+---@field _ArrayLength fun(value: any): integer?
+---@field _CompileFilters fun(filters: any, ctx: PW.ChallengeFilterContext): PW.ChallengeBinder?, string?
+---@field _FormatText fun(text: string, template: PW.ChallengeTemplate, ctx: PW.ChallengeTextContext): string
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib
