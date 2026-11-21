@@ -249,6 +249,91 @@ return {
             end
         },
         {
+            name = "Server rejects a locked loadout choice: a grant-only item in an uploaded class is repaired away "
+                .. "until granted",
+            func = function()
+                local u, p, loadout = unlocks(), assert(PW.Progression), assert(PW.Loadout)
+                local store = server()
+                local ply = playerStub()
+                local lookup = p._RegistryLookup
+                stub(p, "_RegistryLookup").with(function(kind, id)
+                    if kind == "perks" and id == "scavenger" then
+                        return { Name = "Scavenger", Group = 2, Cost = 1, Unlock = false }
+                    end
+                    return lookup(kind, id)
+                end)
+                stub(p, "IsUnlocked").with(function() return true end)
+                local classes = loadout._NewClassStore({
+                    context = function() return { lookup = p._RegistryLookup, budget = 0, maxattachments = 5 } end,
+                    send = function() end
+                })
+                local oldProgress, oldClasses = PW._Progression, PW._LoadoutClasses
+                PW._Progression, PW._LoadoutClasses = store, classes
+                local ok, err = pcall(function()
+                    expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                    local data = { { name = "Reward", loadout = { primary = "weapon_ar2", perk2 = "scavenger" } } }
+                    local locked = loadout._OnClasses(ply, data).entries[1]
+                    expect(locked.ref).to.equal("custom:1")
+                    expect(locked.loadout.perk2).to.beNil()
+                    expect(locked.loadout.primary).to.equal("weapon_ar2")
+                    expect(locked.removed).to.deepEqual({ "scavenger (locked)" })
+                    expect({ u._Grant(store, ply, { item }, { source = "challenge" }) }).to.deepEqual({ 1 })
+                    local open = loadout.ClassState(ply).entries[1]
+                    expect(open.loadout.perk2).to.equal("scavenger")
+                    expect(open.removed).to.deepEqual({})
+                end)
+                PW._Progression, PW._LoadoutClasses = oldProgress, oldClasses
+                assert(ok, err)
+            end
+        },
+        {
+            name = "Bots unaffected: bot pools and bot operators never call PW.Unlocks.IsUnlocked; Grant refuses bots",
+            async = true,
+            timeout = 10,
+            func = function()
+                local u, p, ops = unlocks(), assert(PW.Progression), assert(PW.Operators)
+                local bots = assert(PW.BotLoadouts)
+                ---@type Player?
+                local prior = player.GetBots()[1]
+                if prior ~= nil and prior:GetModel() == nil then prior = nil end
+                local bot = prior or player.CreateNextBot("PW unlock bot test")
+                assert(IsValid(bot), "could not reuse or create a bot")
+                local originalModel, originalColour = bot:GetModel(), bot:GetPlayerColor()
+                local ok, err = pcall(function()
+                    local count = 0
+                    stub(u, "IsUnlocked").with(function() count = count + 1 return false, "override" end)
+                    stub(p, "IsUnlocked").with(function() count = count + 1 return false end)
+                    stub(bots, "Harvest").with(function() end)
+                    local settings = PW.Setting
+                    stub(PW, "Setting").with(function(id)
+                        if id == "bots.classes" then return { preset = true } end
+                        return settings(id)
+                    end)
+                    expect(#bots.PoolFor(bot) > 0).to.beTrue()
+                    local operators = ops._NewStore({ roll = function() return 0 end })
+                    expect(ops._OnSetModel(operators, bot) ~= "").to.beTrue()
+                    expect(count).to.equal(0)
+                    local result = { u._Grant(server(), bot, { item }, { source = "event" }) }
+                    expect(result).to.deepEqual({ 0, "bot" })
+                end)
+                if prior ~= nil then
+                    bot:SetModel(assert(originalModel))
+                    bot:SetPlayerColor(originalColour)
+                    assert(ok, err)
+                    done()
+                    return
+                end
+                bot:Kick("unlock tests done")
+                -- The entity can still be visible to the next test until the engine processes the kick.
+                local function finish()
+                    if IsValid(bot) then return timer.Simple(0.05, finish) end
+                    assert(ok, err)
+                    done()
+                end
+                finish()
+            end
+        },
+        {
             name = "Economy: a granted item counts as owned in a quote; a purchase refreshes the classes",
             func = function()
                 local u = unlocks()

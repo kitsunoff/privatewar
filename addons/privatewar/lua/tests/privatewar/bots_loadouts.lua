@@ -251,6 +251,10 @@ local glueCases = {
             if progression ~= nil then
                 stub(progression, "IsUnlocked").with(function() locked = locked + 1 return false end)
             end
+            local unlocks = PW.Unlocks
+            if unlocks ~= nil then
+                stub(unlocks, "IsUnlocked").with(function() locked = locked + 1 return false, "override" end)
+            end
             stub(lib(), "Harvest").with(function() end)
             store.players = { pwtest = {
                 { key = "pwtest:1", name = "Rifle", loadout = { primary = "weapon_ar2" } },

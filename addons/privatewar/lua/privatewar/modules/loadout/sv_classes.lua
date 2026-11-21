@@ -99,8 +99,10 @@ end
 local function contextFor(ply)
     local ctx = PW._LoadoutClasses.context()
     local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
-    if progression == nil or progression.IsUnlocked == nil then return ctx end
-    ctx.isUnlocked = function(kind, id) return progression.IsUnlocked(ply, kind, id) end
+    local unlocks = PW.Unlocks
+    if progression == nil or unlocks == nil then return ctx end
+    ctx.isUnlocked = function(kind, id) return (unlocks.IsUnlocked(ply, kind, id)) end
+    ctx.requirement = function(kind, id) return unlocks.Requirement(ply, kind, id) end
     ctx.lockedOptions = function(weaponId, build) return progression.LockedOptions(ply, weaponId, build) end
     ctx.entitledOption = function(weaponId, option) return progression._EntitledOptionOf(ply, weaponId, option) end
     -- T-4.8: the progression count limit is the weapon level; the match cap (with wildcards) is checked apart.
