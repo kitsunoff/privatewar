@@ -1,8 +1,7 @@
 -- Kit v1 frame components (U-4; notes/16-frontend-d1-proposal.md §3 items 1-3, 11, 15, 18-20). Thin vgui glue over
 -- the pure models of sh_models.lua: PWScreenTitle (title with a thin rule), PWTab and PWTabBar (active, focused,
--- locked, "NEW", bumper hints), PWStatusLine (phase, timer, players), PWHintBar (actions of the screen in the glyphs
--- of the current input device, a locked node's reason), PWWarningChip, PWBackdrop (blur + scrim), PWTimer and
--- PWDialog. Strings and sizes are prepared in setters, Think or PerformLayout; Paint only draws.
+-- locked, "NEW", bumper hints), PWStatusLine (phase, timer, players), PWWarningChip, PWBackdrop (blur + scrim),
+-- PWTimer and PWDialog. Strings and sizes are prepared in setters, Think or PerformLayout; Paint only draws.
 
 local lib = PW.UI --[[@as PW.UILib]]
 local paint = lib.Draw
@@ -210,71 +209,6 @@ function statusClass:Paint(w, h)
 end
 
 vgui.Register("PWStatusLine", statusClass, "Panel")
-
--- PWHintBar -------------------------------------------------------------------------------------------------------
-
----@class PWHintBar : Panel
----@field input PW.UIInputState
----@field entries PW.UIHintEntry[]
----@field items PW.UIHintItem[]
----@field reason? string
----@field _device? string
----@field _override? string
-local hintClass = {}
-
-function hintClass:Init()
-    self.input, self.entries, self.items = lib.Input.New(), {}, {}
-end
-
----@param state PW.UIInputState
-function hintClass:SetInputState(state)
-    self.input, self._device = state, nil
-end
-
----@param entries PW.UIHintEntry[]
-function hintClass:SetEntries(entries)
-    self.entries, self._device = entries, nil
-end
-
----A locked node's reason, shown after the actions (nil hides it).
----@param reason? string
-function hintClass:SetReason(reason)
-    self.reason = reason
-end
-
-function hintClass:Think()
-    local override = lib.HintOverride()
-    if self.input.device == self._device and override == self._override then return end
-    self._device, self._override = self.input.device, override
-    self.items = lib.Hints(self.input, self.entries, override)
-end
-
----@param w number
----@param h number
-function hintClass:Paint(w, h)
-    local s = style()
-    paint.Rect(0, 0, w, h, s.bg_panel)
-    paint.Rect(0, 0, w, 1, s.border)
-    ---@type number
-    local x = paint.Px(96)
-    local y = h / 2
-    for _, item in ipairs(self.items) do
-        ---@type number
-        local capWidth = paint.KeyCap(item.cap, fontHint, x, y, item.device)
-        ---@type number
-        local labelX = x + capWidth + paint.Px(10)
-        ---@type number
-        local tw = draw.SimpleText(item.label, fontBody, labelX, y, s.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-        x = labelX + tw + paint.Px(36)
-    end
-    local reason = self.reason
-    if reason == nil then return end
-    local size = paint.Px(18)
-    paint.Lock(x, math.floor(y - size / 2), size, s.text_muted)
-    draw.SimpleText(reason, fontBody, x + size + paint.Px(10), y, s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-end
-
-vgui.Register("PWHintBar", hintClass, "Panel")
 
 -- PWWarningChip ---------------------------------------------------------------------------------------------------
 

@@ -248,8 +248,8 @@ vgui.Register("PWList", listClass, "DScrollPanel")
 
 -- Kit v1 components (U-4), then the in-match gamepad buttons.
 for _, name in ipairs({
-    "components", "cards", "form", "operator", "vote", "match", "store", "postmatch", "board", "scoreboard_view",
-    "scoreboard", "gamepad"
+    "components", "hint_bar", "cards", "form", "operator", "vote", "match", "store", "postmatch", "board",
+    "scoreboard_view", "scoreboard", "gamepad"
 }) do
     include("privatewar/modules/ui_kit/cl_" .. name .. ".lua")
 end

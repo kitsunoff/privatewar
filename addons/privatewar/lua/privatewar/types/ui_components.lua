@@ -116,12 +116,17 @@
 ---@class PW.UIHintEntry
 ---@field action string input action (PW.UI.Input.Actions)
 ---@field label string
+---@field passive? boolean display the shortcut without making it clickable
+
+---@alias PW.UIHintDevice "keyboard"|"controller"
 
 ---A hint ready to draw.
 ---@class PW.UIHintItem
 ---@field label string
 ---@field cap string key cap or pad badge text
----@field device "keyboard"|"controller"
+---@field device PW.UIHintDevice
+---@field action? string logical action when the hint is clickable
+---@field hit? PW.UIRect bounds of the last painted glyph and label (client only)
 
 ---@class PW.UIModeLike
 ---@field Name? string

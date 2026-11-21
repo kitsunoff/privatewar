@@ -87,12 +87,14 @@ function paint.Badge(text, font, xRight, yCentre, fill, ink)
 end
 
 ---A key cap (keyboard: square cap) or a pad badge (controller: round badge) at x, centred on yCentre.
----Returns its width.
+---Returns its width, top and height.
 ---@param label string
 ---@param font string
 ---@param x number
 ---@param yCentre number
----@param device "keyboard"|"controller"
+---@param device PW.UIHintDevice
+---@return number
+---@return number
 ---@return number
 function paint.KeyCap(label, font, x, yCentre, device)
     local s = style()
@@ -108,7 +110,7 @@ function paint.KeyCap(label, font, x, yCentre, device)
         paint.Outline(x, y, w, h, s.border_strong, paint.Px(2))
     end
     draw.SimpleText(label, font, x + w / 2, yCentre, s.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    return w
+    return w, y, h
 end
 
 local blur = Material("pp/blurscreen")

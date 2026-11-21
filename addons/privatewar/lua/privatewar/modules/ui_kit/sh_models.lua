@@ -177,7 +177,10 @@ function lib.Hints(state, entries, override)
     for _, entry in ipairs(entries) do
         if input.Actions[entry.action] ~= nil then
             local hint = input.Hint(state, entry.action, override)
-            out[#out + 1] = { label = entry.label, cap = hint.label, device = hint.device }
+            out[#out + 1] = {
+                label = entry.label, cap = hint.label, device = hint.device,
+                action = not entry.passive and entry.action or nil
+            }
         end
     end
     return out

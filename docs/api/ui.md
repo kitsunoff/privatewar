@@ -390,8 +390,8 @@ the local manual checklist (not published), section 37.
 
 Decisions: `design/10-frontend.md` d.9, d.10, d.12; proposal and item numbers: `notes/16-frontend-d1-proposal.md` §3.
 Code: pure and shared `ui_kit/sh_models.lua` and `sh_players.lua` (covered by the server-side test runner), client
-glue `cl_paint.lua` (helpers), `cl_components.lua`, `cl_cards.lua`, `cl_players.lua`, `cl_form.lua`, `cl_settings.lua`.
-Types: `lua/privatewar/types/ui_components.lua`, `ui_widgets.lua`. A vgui class only draws what its model returns.
+glue `cl_paint.lua` (helpers), `cl_components.lua`, `cl_hint_bar.lua`, `cl_cards.lua`, `cl_players.lua`, `cl_form.lua`,
+`cl_settings.lua`. Types: `lua/privatewar/types/ui_components.lua`, `ui_widgets.lua`.
 
 ### Models (shared, pure)
 
@@ -408,7 +408,7 @@ Types: `lua/privatewar/types/ui_components.lua`, `ui_widgets.lua`. A vgui class 
 | `PW.UI.Monogram(mode) -> string` | The mode badge text: `mode.Short` upper-cased; else the initials of up to three words of `Name`; else `"?"` |
 | `PW.UI.FormatTime(seconds) -> string` | `M:SS`, rounded up, never negative |
 | `PW.UI.Status(info) -> PW.UIStatus` | The status line, `PHASE  ·  M:SS  ·  N/M  ·  note` (timer only when `remaining >= 0`); `warning` while the timer shows 10 s or less |
-| `PW.UI.Hints(state, entries, override?) -> PW.UIHintItem[]` | Hint bar entries with the key cap or pad badge of the current device (`PW.UI.Input.Hint`); actions unknown to `Input.Actions` are dropped |
+| `PW.UI.Hints(state, entries, override?) -> PW.UIHintItem[]` | Hint bar entries with the key cap or pad badge of the current device (`PW.UI.Input.Hint`); unknown actions are dropped and `passive = true` keeps the hint visible without a click action |
 | `PW.UI.LockReason(reason?) -> string` | Display text of a lock reason: `soon` "Coming soon", `error` "Unavailable: the screen failed to load", `locked` (default) "Locked"; any other reason is returned as is |
 
 `PW.UICard` fields: `id`, `title`, `text`, `tags`, `footer` (the last three show while expanded), `badge`, `new`,
@@ -416,15 +416,15 @@ Types: `lua/privatewar/types/ui_components.lua`, `ui_widgets.lua`. A vgui class 
 
 ### Classes (client)
 
-All are registered with `vgui.Register`; the buttons derive from `PWButton`. Every interactive one is a focus node
-(`PW.UI.Focusable(panel, group, id?)`); a panel may define `PWAct(action)` (handles an action) and `PWOnFocus()`.
+All are registered with `vgui.Register`; the buttons derive from `PWButton`. Focus nodes use
+`PW.UI.Focusable(panel, group, id?)`; a panel may define `PWAct(action)` (handles an action) and `PWOnFocus()`.
 
 | Class | Role |
 | --- | --- |
 | `PWScreenTitle` | Screen title with a rule (`SetText`) |
 | `PWTab`, `PWTabBar` | Tab strip with Q/E key caps and the NEW mark (`SetItems`, `OnSelect(id)`) |
 | `PWStatusLine` | `PW.UI.Status` of the live phase on the right (`SetInfo`, `SetNote`) |
-| `PWHintBar` | Bottom hint bar (`SetEntries`, `SetReason`: the reason of a focused locked node) |
+| `PWHintBar` | Bottom hint bar (`SetEntries`, `SetReason`, optional `OnAction(action)` callback) |
 | `PWWarningChip` | Warning chip (`SetText`) |
 | `PWBackdrop` | Blurred backdrop (also `PW.UI.Draw.Backdrop`) |
 | `PWTimer` | `M:SS` countdown, warning colour in the last 10 s (`SetEndTime`) |
@@ -442,6 +442,12 @@ All are registered with `vgui.Register`; the buttons derive from `PWButton`. Eve
 `SetLocked(locked, reason)` (stays focusable, shows the reason in the hint bar, does nothing on accept). `PWRoot` gained
 `Act(action)`, `OpenModal(panel, first)` and `CloseModal()`. Helpers in `PW.UI.Draw`: `Px`, `Rect`, `Outline`,
 `EdgeBar`, `Lock`, `Badge`, `KeyCap`, `Backdrop`, `Wrap`, `Fit`; `PW.UI.SetLocked(panel, locked, reason?)`.
+
+A left press and release over the same bottom hint (glyph or label) triggers its logical action without moving focus to
+the bar. `PWRoot` sends it through `Act`, so it uses the same focused control and screen checks as keyboard or controller
+input. A modal blocks clicks on the hints behind it. The lock reason, entries marked `passive = true`, and bars with no
+`OnAction` handler are display-only. A successful click switches the automatic glyph display to mouse/keyboard; a forced
+glyph setting still wins.
 
 ### Dev showcase
 
@@ -1447,11 +1453,11 @@ needs `ui_kit` and the `vote` module valid; otherwise it does not open (a disabl
   (`maps/thumb/<map>.png`, else the map name and `NO PREVIEW`), the mode monogram and name, the map, the vote count, and on the
   card of the own vote a `YOUR VOTE` badge and an accent outline.
 - Input: Left and Right move the focus (wrapping); Enter (`accept`) or a click votes (`pw_vote_cast`, the 1-based index); a
-  new vote replaces the previous one.
+  new vote replaces the previous one. The Previous, Next and Vote hints use the same overlay actions on click.
 - **Pick myself** (`08-lobby.md` d.5): a secondary button and the hint `Pick myself` (F, `secondary`), only for a player with
   `canPick` (`pw.vote.pick`) **and** when the map picker can run. The picker needs the lobby's mode and map lists, which the
   client has only after the lobby screen has received its state in this session (`PW.Lobby._View.state`). A host who joined
-  mid-match and never opened the lobby does not get the button (known limitation). F opens the picker in pick mode
+  mid-match and never opened the lobby does not get the button (known limitation). F or a click on the hint opens the picker in pick mode
   (`PW.Lobby.OpenPicker({ pick = ... })`, "Map picker (U-6)") on a `PWRoot` over the overlay; Enter sends `pw_vote_pick` (mode
   id, map) and closes the root; Esc returns to the overlay.
 - A reload (`pw_reload`) closes an open overlay and opens it again one tick later.
