@@ -12,6 +12,9 @@
 ---@field _Ticks fun(amount: number, duration: number, step: number): number[]
 ---@field _Step fun(current: number, add: number, cap: number): number
 ---@field _EffectLines fun(now: number, marks: PW.StimMarks): string[]
+---@field _WireItems string[] fixed server/client order of the built-in stim notification indices
+---@field Played? fun(owner: Player, item: PW.EquipmentItem|PW.Instance) server presentation for an accepted use
+---@field Mark? fun(owner: Player, key: PW.StimEffect, untilTime: number) server active-effect deadline, zero clears
 
 ---@class PW.EquipmentItem
 ---@field Sound? string stock injection sound

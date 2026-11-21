@@ -13,6 +13,7 @@ MODULE.Settings = {
 
 local lib = (rawget(PW, "Stims") or {}) --[[@as PW.StimsLib]]
 PW.Stims = lib
+lib._WireItems = { "stim_heal", "stim_speed", "stim_armor" }
 
 function lib.Param(item, field, settingId)
     local value = item[field]

@@ -96,6 +96,36 @@ return {
                 end
                 expect(table.Count(schema)).to.equal(checked)
             end
+        },
+        {
+            name = "Mark writes each owner deadline only when it changes",
+            func = function()
+                ---@type table[]
+                local writes = {}
+                ---@type table<string, number>
+                local marks = {}
+                local owner = {
+                    IsValid = function() return true end,
+                    GetNW2Float = function(_, key, default) return marks[key] or default end,
+                    SetNW2Float = function(_, key, deadline)
+                        ---@cast key string
+                        ---@cast deadline number
+                        writes[#writes + 1], marks[key] = { key, deadline }, deadline
+                    end
+                }
+                for _, key in ipairs({ "heal", "armor", "speed" }) do
+                    lib().Mark(owner, key, 0)
+                    lib().Mark(owner, key, 5)
+                    lib().Mark(owner, key, 5)
+                    lib().Mark(owner, key, 0)
+                    lib().Mark(owner, key, 0)
+                end
+                expect(writes).to.deepEqual({
+                    { "pw_stim_heal_until", 5 }, { "pw_stim_heal_until", 0 },
+                    { "pw_stim_armor_until", 5 }, { "pw_stim_armor_until", 0 },
+                    { "pw_stim_speed_until", 5 }, { "pw_stim_speed_until", 0 }
+                })
+            end
         }
     }
 }
