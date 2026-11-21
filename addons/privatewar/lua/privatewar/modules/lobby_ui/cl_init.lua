@@ -119,7 +119,8 @@ function lib.Input()
     local ui = kit() --[[@as PW.UILib]]
     local list = playlists()
     return {
-        state = view.state or false, selection = view.selection, fits = lib._Fits(rawget(PW, "Registries") or {}),
+        state = view.state or false, selection = view.selection,
+        fits = lib._Fits(rawget(PW, "Registries") or {}, game.GetMap()),
         playlists = list ~= nil and list.GetState() or false, players = ui.CollectPlayers(),
         maxPlayers = game.MaxPlayers(), seen = ui.SeenSet(), shortOf = shortOf, entry = entryFacts(),
         flow = flowFacts()
@@ -328,8 +329,21 @@ net.Receive("pw_lobby_state", function()
     notify()
 end)
 
+local lastError = ""
+net.Receive("pw_lobby_error", function(length)
+    if not IsValid(module) or length < 8 or length > 257 * 8 then return end
+    local reason = net.ReadString()
+    if #reason == 0 or #reason > 256 or reason:find("%c") or not utf8.len(reason) then return end
+    if reason == lastError then return end
+    lastError = reason
+    notification.AddLegacy(reason, NOTIFY_ERROR, 8)
+    chat.AddText(Color(255, 160, 100), "[PW] " .. reason)
+    if rootOpen() and shouldShow() then request() end
+end)
+
 ---@param phase PW.PhaseName
 function module:PW_PhaseChanged(phase)
+    if phase == "PREMATCH" then lastError = "" end
     if lib._ShouldShow(phase, IsValid(module), kitValid()) then lib.Open() else lib.Close() end
 end
 

@@ -122,7 +122,8 @@ function lib.Snapshot(state, viewerTeam, viewerId, now)
     ---@type PW.SNDSnapshot
     local out = { generation = state.generation, phase = state.phase,
         deadline = state.deadline < math.huge and state.deadline or 0,
-        fuse = state.phase == "planted" and state.fuse or 0, site = state.site, progress = 0 }
+        fuse = state.phase == "planted" and state.fuse or 0, site = state.site, progress = 0,
+        sites = lib.PublicSites(state.map.sites) }
     if viewerTeam == 1 and state.carrier ~= nil then out.carrier = state.roster[state.carrier].userId end
     if state.phase == "planted" or (viewerTeam == 1 and state.phase ~= "resolved") then out.pos = state.pos end
     local interaction = state.interaction
@@ -142,5 +143,7 @@ function lib.HudText(view, now)
     elseif view.carrier ~= nil then
         title = "BOMB CARRIER  #" .. view.carrier
     end
-    return title, view.action ~= nil and ("HOLD E TO " .. string.upper(view.action)) or "SITES A / B"
+    local sites = view.sites
+    local label = sites ~= nil and ("SITES " .. sites[1].id .. " / " .. sites[2].id) or "SITES"
+    return title, view.action ~= nil and ("HOLD E TO " .. string.upper(view.action)) or label
 end

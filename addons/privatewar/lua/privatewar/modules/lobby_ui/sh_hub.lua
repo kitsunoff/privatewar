@@ -11,6 +11,53 @@ local customId = "@custom" -- PW.Playlist.CustomRow; repeated so the model works
 local fillId = "bots.fill"
 local matchRows = 3
 
+local timerPhrases = {
+    ["pw.playlist.ends"] = "Ends in %s", ["pw.playlist.starts"] = "Starts in %s",
+    ["pw.playlist.end_unknown"] = "End time unknown", ["pw.playlist.start_unknown"] = "Start time unknown",
+    ["pw.playlist.updating"] = "Updating schedule", ["pw.playlist.unavailable"] = "Unavailable",
+    ["pw.playlist.minutes"] = "%dm", ["pw.playlist.hours"] = "%dh %dm",
+    ["pw.playlist.days"] = "%dd %dh %dm"
+}
+if CLIENT then
+    for key, text in pairs(timerPhrases) do language.Add(key, text) end
+end
+
+---@param key string
+---@return string
+local function timerPhrase(key)
+    return CLIENT and language.GetPhrase(key) or timerPhrases[key]
+end
+
+function lib._PlaylistTimer(item, sampledAt, phrase)
+    phrase = phrase or timerPhrase
+    if not item.valid then return phrase("pw.playlist.unavailable") end
+    local boundary = item.nextChange
+    if boundary == nil or boundary ~= boundary or math.abs(boundary) == math.huge then
+        return phrase(item.active and "pw.playlist.end_unknown" or "pw.playlist.start_unknown")
+    end
+    local seconds = boundary - sampledAt
+    if seconds <= 0 then return phrase("pw.playlist.updating") end
+    local minutes = math.ceil(seconds / 60)
+    ---@type string
+    local duration
+    if minutes >= 1440 then
+        duration = string.format(phrase("pw.playlist.days"), math.floor(minutes / 1440),
+            math.floor(minutes / 60) % 24, minutes % 60)
+    elseif minutes >= 60 then
+        duration = string.format(phrase("pw.playlist.hours"), math.floor(minutes / 60), minutes % 60)
+    else
+        duration = string.format(phrase("pw.playlist.minutes"), minutes)
+    end
+    return string.format(phrase(item.active and "pw.playlist.ends" or "pw.playlist.starts"), duration)
+end
+
+---@param text string
+---@return string
+local function description(text)
+    if CLIENT and string.sub(text, 1, 1) == "#" then return language.GetPhrase(string.sub(text, 2)) end
+    return text
+end
+
 local reasons = {
     waiting = "Waiting for the server",
     start = "Only the host can start the match",
@@ -153,13 +200,21 @@ local function playlistCards(input, canPick)
     local keys = {}
     local playlists = input.playlists or nil
     for _, item in ipairs(playlists ~= nil and playlists.list or {}) do
-        local key = lib._SeenKey(item.id)
-        keys[#keys + 1] = key
-        cards[#cards + 1] = {
-            id = item.id, title = item.name, text = item.summary, new = input.seen[key] ~= true,
-            footer = item.fill > 0 and string.format("Fills to %d with bots", item.fill) or nil,
-            locked = not canPick, reason = not canPick and reasons.playlist or nil
-        }
+        local upcoming = playlists ~= nil and item.valid and item.nextChange ~= nil
+            and item.nextChange > playlists.sampledAt and item.nextChange - playlists.sampledAt <= 48 * 3600
+        if item.active or (playlists ~= nil and item.id == playlists.active) or upcoming then
+            local key = lib._SeenKey(item.id)
+            keys[#keys + 1] = key
+            local allowed = canPick and (item.active or
+                (playlists ~= nil and playlists.active == item.id and playlists.canStart))
+            cards[#cards + 1] = {
+                id = item.id, title = item.name, text = description(item.summary), new = input.seen[key] ~= true,
+                timer = playlists ~= nil and lib._PlaylistTimer(item, playlists.sampledAt) or nil,
+                footer = item.fill > 0 and string.format("Fills to %d with bots", item.fill) or nil,
+                locked = not allowed,
+                reason = not canPick and reasons.playlist or (not allowed and "Playlist is inactive" or nil)
+            }
+        end
     end
     cards[#cards + 1] = {
         id = customId, title = "Custom game", new = false, locked = false,
@@ -179,6 +234,7 @@ local function startAction(state, model, active, summary, entryReason)
     if reason == nil and state ~= nil and state.nav ~= nil and state.nav.generating then reason = reasons.navgen end
     local missing = model == nil or model.mode == nil or model.map == nil
     if reason == nil and active == nil and missing then reason = reasons.nothing end
+    if reason == nil and active == nil and model ~= nil then reason = model.blockedReason end
     reason = entryReason or reason
     if active ~= nil then
         local start = action("start", "Start playlist", "Start the playlist " .. active.name .. ".", reason)
@@ -187,6 +243,10 @@ local function startAction(state, model, active, summary, entryReason)
     end
     local start = action("start", "Start match", summary.text ~= "" and "Start " .. summary.text .. "." or nil, reason)
     start.label = "START MATCH"
+    if model ~= nil and model.retryReason ~= nil then
+        start.label, start.title = "RECHECK MAP", "Recheck map"
+        start.text = model.retryReason .. ". Explicitly recheck this map before starting."
+    end
     start.request = { mode = model ~= nil and model.mode or nil, map = model ~= nil and model.map or nil }
     return start
 end
@@ -219,14 +279,18 @@ function lib._Hub(input)
     local mode = (state ~= nil and model ~= nil) and modeEntry(state, model.mode) or nil
     local summary = summaryOf(input, mode, model ~= nil and model.map or nil)
     local active = activePlaylist(input)
-    local cards, keys = playlistCards(input, state ~= nil and state.canStart)
+    local cards, keys = playlistCards(input, state ~= nil and state.canStart
+        and input.playlists ~= false and input.playlists ~= nil and input.playlists.canPick)
+    local entryReason = input.playlists and active ~= nil and
+        (not input.playlists.canPick and reasons.start or
+        (not input.playlists.canStart and "Playlist is inactive" or nil)) or nil
     local rows, fill = matchRowsOf(active, mode)
     local canStart = state ~= nil and state.canStart
     local entry = input.entry ~= nil and lib._Entry(input.entry) or nil
     return {
         ready = state ~= nil, cards = cards, selected = active ~= nil and active.id or customId, seenKeys = keys,
-        start = lib._ApplyFlow(startAction(state, model, active, summary, entry ~= nil and entry.startReason or nil),
-            input.flow),
+        start = lib._ApplyFlow(startAction(state, model, active, summary,
+            entry ~= nil and entry.startReason or entryReason), input.flow),
         hint = entry ~= nil and entry.hints[1] or nil,
         modeMap = action("modemap", "Mode & map", "Choose the mode and the map.",
             lockReason(state, canStart, reasons.modeMap)),
@@ -267,7 +331,8 @@ local function choiceCards(state, model, input)
         }
     end
     for _, entry in ipairs(model.maps) do
-        maps[#maps + 1] = { id = entry.id, title = entry.label, locked = reason ~= nil, reason = reason }
+        maps[#maps + 1] = { id = entry.id, title = entry.label, locked = reason ~= nil or entry.locked == true,
+            reason = reason or entry.reason }
     end
     return modes, maps
 end

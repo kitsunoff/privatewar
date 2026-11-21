@@ -50,7 +50,7 @@
 ---Filled badge right-aligned at xRight; returns its width.
 ---@field Badge fun(text: string, font: string, xRight: number, yCentre: number, fill: Color, ink: Color): number
 ---Key cap or pad badge at x; returns its width.
----@field KeyCap fun(label: string, font: string, x: number, yCentre: number, device: "keyboard"|"controller"): number
+---@field KeyCap fun(label: string, font: string, x: number, y: number, device: PW.UIHintDevice): number, number, number
 ---Blurred view plus bg_scrim over the panel.
 ---@field Backdrop fun(panel: Panel, w: number, h: number)
 ---Layout time only (allocates): the text cut with "..." to fit a width.

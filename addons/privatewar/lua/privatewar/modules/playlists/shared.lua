@@ -1,10 +1,8 @@
--- Playlists module (T-2.6; 02-modes.md d.1-d.5b; 08-lobby.md d.2; docs/api/modes.md "Playlists"). Shared and pure:
--- the one validation of a playlist (Lua file or host-saved JSON), the JSON form, the weighted sampling of the next
--- mode and map over an injected RNG, and the wire form of the list the lobby shows. Server glue (registry, files,
--- messages, starting the match): init.lua. Client state: cl_init.lua.
+-- Lua playlist validation, startup resolution, protected availability evaluation, weighted sampling and bounded
+-- authoritative UI snapshots. No playlist persistence or calendar policy lives here.
 --
 -- Messages (server module playlists owns them):
---   pw_playlist_request  any player, LOBBY: the server answers with pw_playlist_list
+--   pw_playlist_request  any player, LOBBY/PREMATCH/VOTE: cached authoritative list
 --   pw_playlist_pick     pw.match.start, LOBBY: playlist id ("" = Custom) -> the active playlist, answers the list
 --   pw_playlist_start    pw.match.start, LOBBY: playlist id -> settings applied, next mode + map sampled, match started
 --   pw_playlist_list     server -> client: PW.PlaylistListState
@@ -14,12 +12,19 @@ MODULE.Name = "Playlists"
 local lib = (rawget(PW, "Playlist") or {}) --[[@as PW.PlaylistLib]]
 PW.Playlist = lib
 
-lib.Version = 1
-lib.DataDir = "privatewar/playlists"
+if SERVER then AddCSLuaFile("privatewar/modules/playlists/sh_content.lua") end
+include("privatewar/modules/playlists/sh_content.lua")
+
 lib.Privilege = "pw.match.start"
+lib._MaxEntries = 128
 
 local maxName = 64
-local allowedFields = { Name = true, Modes = true, Maps = true, Settings = true }
+
+---@param value any
+---@return boolean
+local function validDescription(value)
+    return isstring(value) and #value <= 256 and not string.find(value, "%c") and not not utf8.len(value)
+end
 
 ---@param text string
 ---@return boolean
@@ -126,44 +131,49 @@ function lib.Normalize(raw, facts)
     local fields = raw --[[@as table<string, any>]]
     local nameErr = checkName(fields.Name)
     if nameErr ~= nil then return nil, nameErr end
+    local description = fields.Description
+    if description ~= nil then
+        if not validDescription(description) then
+            return nil, "Description must be plain UTF-8 text, at most 256 bytes"
+        end
+        description = string.Trim(description)
+        if description == "" then description = nil end
+    end
     local modes, modesErr = checkModes(fields.Modes, facts)
     if modes == nil then return nil, modesErr end
     local maps, mapsErr = checkMaps(fields.Maps)
     if mapsErr ~= nil then return nil, mapsErr end
     local settings, settingsErr = checkSettings(fields.Settings, facts)
     if settings == nil then return nil, settingsErr end
-    return { Name = fields.Name --[[@as string]], Modes = modes, Maps = maps, Settings = settings }
+    return { Name = fields.Name --[[@as string]], Description = description,
+        Modes = modes, Maps = maps, Settings = settings }
 end
 
-function lib.FromJson(text, facts)
-    if not isstring(text) or string.Trim(text --[[@as string]]) == "" then
-        return nil, "invalid JSON: the text is empty"
+function lib.Resolve(definition, facts)
+    if not istable(definition) then return nil, "a playlist must be a table" end
+    local resolved = { Name = definition.Name, Description = definition.Description } --[[@as table<string, any>]]
+    for _, field in ipairs({ "Modes", "Maps", "Settings" }) do
+        local value = definition[field]
+        if isfunction(value) then
+            local ok, result = pcall(value, definition)
+            if not ok then return nil, field .. " resolver failed: " .. tostring(result) end
+            value = result
+        end
+        resolved[field] = istable(value) and table.Copy(value) or value
     end
-    local parsed = util.JSONToTable(text --[[@as string]])
-    if parsed == nil then return nil, "invalid JSON: the text could not be parsed" end
-    local raw = parsed --[[@as table<any, any>]]
-    if not istable(raw) or (raw[1] ~= nil and raw.Name == nil) then
-        return nil, "invalid JSON: a playlist is an object with Name, Modes, Maps and Settings"
-    end
-    if raw.Version ~= nil and raw.Version ~= lib.Version then
-        return nil, "unsupported playlist Version " .. tostring(raw.Version) .. " (expected " .. lib.Version .. ")"
-    end
-    for key in pairs(raw) do
-        if key ~= "Version" and not allowedFields[key] then return nil, "unknown field " .. tostring(key) end
-    end
-    return lib.Normalize(raw, facts)
+    return lib.Normalize(resolved, facts)
 end
 
-function lib.ToJson(data)
-    return util.TableToJSON({ Version = lib.Version, Name = data.Name, Modes = data.Modes, Maps = data.Maps,
-        Settings = data.Settings }, true)
-end
-
-function lib.FileId(fileName)
-    if not isstring(fileName) then return nil end
-    local id = string.match(fileName --[[@as string]], "^(.+)%.json$")
-    if id == nil or #id > 64 or not validId(id) then return nil end
-    return id
+function lib._Evaluate(definition, now)
+    local predicate = definition.IsActive
+    if predicate == nil then return { active = true, valid = true } end
+    local ok, active, boundary = pcall(predicate, definition, now)
+    if not ok or not isbool(active) then
+        return { active = false, valid = false }, "IsActive failed: " .. tostring(active)
+    end
+    local nextChange = isnumber(boundary) and boundary == boundary and boundary < math.huge
+        and boundary > now and boundary or nil
+    return { active = active, valid = true, nextChange = nextChange }
 end
 
 ---@param weights table<string, number>
@@ -237,14 +247,19 @@ end
 
 function lib._Summary(entry, fill)
     local where = entry.Maps ~= nil and (#entry.Maps .. (#entry.Maps == 1 and " map" or " maps")) or "all maps"
-    return { id = entry.id, name = entry.Name, summary = modeNames(entry) .. " on " .. where, fill = fill }
+    return { id = entry.id, name = entry.Name,
+        summary = entry.Description or string.sub(modeNames(entry) .. " on " .. where, 1, 256),
+        fill = fill, active = false, valid = false }
 end
 
 -- Wire format of pw_playlist_list (DESIGN.md global rule 4: explicit writes, no net.WriteTable).
 local countBits, fillBits = 8, 8
 
 function lib._Encode(state, writer)
-    local count = math.min(#state.list, 2 ^ countBits - 1)
+    writer.uint(1, 8)
+    writer.uint(state.serial, 32)
+    writer.number(state.sampledAt)
+    local count = math.min(#state.list, lib._MaxEntries)
     writer.uint(count, countBits)
     for index = 1, count do
         local item = state.list[index]
@@ -252,33 +267,74 @@ function lib._Encode(state, writer)
         writer.string(item.name)
         writer.string(item.summary)
         writer.uint(math.Clamp(item.fill, 0, 2 ^ fillBits - 1), fillBits)
+        writer.bool(item.active)
+        writer.bool(item.valid)
+        writer.bool(item.nextChange ~= nil)
+        if item.nextChange ~= nil then writer.number(item.nextChange) end
     end
     writer.string(state.active)
     writer.bool(state.canPick)
+    writer.bool(state.retained)
+    writer.bool(state.canStart)
 end
 
 function lib._Decode(reader)
+    if reader.uint(8) ~= 1 then return nil end
+    local serial, sampledAt = reader.uint(32), reader.number()
+    if sampledAt ~= sampledAt or sampledAt == math.huge or sampledAt == -math.huge then return nil end
+    local count = reader.uint(countBits)
+    if count > lib._MaxEntries then return nil end
     ---@type PW.PlaylistSummary[]
     local list = {}
-    for index = 1, reader.uint(countBits) do
+    ---@type table<string, boolean>
+    local seen = {}
+    for index = 1, count do
         local id, name, summary = reader.string(), reader.string(), reader.string()
-        list[index] = { id = id, name = name, summary = summary, fill = reader.uint(fillBits) }
+        if #id > 64 or not validId(id) or seen[id] or #name == 0 or #name > 64
+            or not validDescription(summary) then return nil end
+        seen[id] = true
+        local fill, active, valid = reader.uint(fillBits), reader.bool(), reader.bool()
+        if active and not valid then return nil end
+        local boundary = reader.bool() and reader.number() or nil
+        if boundary ~= nil and (boundary ~= boundary or boundary == math.huge or boundary <= sampledAt) then
+            return nil
+        end
+        list[index] = { id = id, name = name, summary = summary, fill = fill,
+            active = active, valid = valid, nextChange = boundary }
     end
     local active = reader.string()
-    return { list = list, active = active, canPick = reader.bool() }
+    if active ~= "" and not seen[active] then return nil end
+    return { list = list, active = active, canPick = reader.bool(), serial = serial, sampledAt = sampledAt,
+        retained = reader.bool(), canStart = reader.bool() }
 end
 
 lib.CustomRow = "@custom"
 
+function lib._Newer(current, incoming)
+    return current == nil or incoming.serial > current.serial
+end
+
 function lib._Items(state, maxPlayers)
     ---@type { id: string, label: string }[]
-    local items = { { id = lib.CustomRow, label = "Custom (pick mode and map)" } }
+    local items = {}
     ---@type PW.PlaylistSummary?
     local active = nil
     for _, item in ipairs(state.list) do
-        items[#items + 1] = { id = item.id, label = item.name .. " - " .. item.summary }
+        local upcoming = item.valid and not item.active and item.nextChange ~= nil
+            and item.nextChange > state.sampledAt and item.nextChange - state.sampledAt <= 48 * 3600
+        if item.active or item.id == state.active or upcoming then
+            local timing = ""
+            if item.valid and item.nextChange ~= nil then
+                timing = string.format(" (%s in %dm)", item.active and "ends" or "starts",
+                    math.ceil((item.nextChange - state.sampledAt) / 60))
+            elseif not item.active then
+                timing = " (unavailable)"
+            end
+            items[#items + 1] = { id = item.id, label = item.name .. " - " .. item.summary .. timing }
+        end
         if item.id == state.active then active = item end
     end
+    items[#items + 1] = { id = lib.CustomRow, label = "Custom (pick mode and map)" }
     ---@type PW.PlaylistItems
     local out = { items = items, selected = active ~= nil and active.id or lib.CustomRow }
     if active ~= nil then

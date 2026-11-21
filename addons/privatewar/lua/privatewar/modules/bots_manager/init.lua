@@ -221,7 +221,9 @@ local function createBots(store, count)
     local taken = lib._TakenNames(count > 0 and store.players() or {})
     for _ = 1, count do
         store.serial = store.serial + 1
-        local name = lib._PickName(lib.NamePool, taken, store.roll)
+        local chatter = PW.BotChatter
+        local external = chatter ~= nil and chatter.PickName ~= nil and chatter.PickName(taken, store.roll) or nil
+        local name = external or lib._PickName(lib.NamePool, taken, store.roll)
         taken[string.lower(name)] = true
         local bot = store.create(name)
         if bot == nil or not IsValid(bot) then

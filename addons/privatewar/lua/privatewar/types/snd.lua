@@ -112,6 +112,7 @@
 ---@field _SND PW.SNDStore internal server-only S&D engine resources
 
 ---@class PW.SNDMode: PW.Mode
+---@field _SNDMap? PW.SNDMapData pinned immutable match map; survives definition reload through every round
 ---@field _SND? PW.SNDState
 ---@field _Rounds? PW.RoundState
 ---@field PW_CanJoinInProgress fun(self: PW.SNDMode): boolean

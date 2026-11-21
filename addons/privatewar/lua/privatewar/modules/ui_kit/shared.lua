@@ -78,8 +78,8 @@ end
 -- the scale exist; they are sent from here.
 if SERVER then
     for _, name in ipairs({
-        "root", "paint", "components", "cards", "players", "form", "settings", "operator", "vote", "match", "store",
-        "postmatch", "board", "scoreboard_view", "scoreboard", "gamepad"
+        "root", "paint", "components", "hint_bar", "cards", "players", "form", "settings", "operator", "vote",
+        "match", "store", "postmatch", "board", "scoreboard_view", "scoreboard", "gamepad"
     }) do
         AddCSLuaFile("privatewar/modules/ui_kit/cl_" .. name .. ".lua")
     end

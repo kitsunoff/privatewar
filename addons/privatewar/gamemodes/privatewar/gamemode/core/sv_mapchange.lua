@@ -191,7 +191,8 @@ local function buildPending(store, mode, map)
     return {
         v = lib._Version, map = map, mode = mode.ClassName --[[@as string]], settings = settings,
         bots = store.bots(settings), teams = teamsFor(mode), createdAt = store.time(),
-        mapChangeCount = store.mapChangeCount()
+        mapChangeCount = store.mapChangeCount(),
+        playlist = PW.Playlist ~= nil and PW.Playlist._PendingStart(tostring(mode.ClassName), map) or nil
     }
 end
 
@@ -248,7 +249,7 @@ local function runScheduled(store)
     if lib._Begin(scheduled.mode, scheduled.map) then return end
     store.announce("", "", -1)
     local match = PW.Match
-    if match ~= nil and match.GetPhase() ~= "LOBBY" then
+    if match ~= nil then
         match.Abort("map change to " .. scheduled.map .. " failed: the pending file could not be written")
     end
 end
@@ -295,8 +296,24 @@ function lib._Apply()
     local fromFile = PW.Settings._FromFile
     if fromFile ~= nil then fromFile(valid.settings) end
     local match = PW.Match
-    if match == nil or not match.Start(mode) then return false, "start" end
-    PW.Notify("PW_PendingMatchApplied", valid)
+    if valid.playlist ~= nil
+        and (PW.Playlist == nil or not PW.Playlist._RestoreStart(valid.playlist, valid.mode, valid.map)) then
+        store.log("pending match rejected: invalid playlist continuation")
+        if match ~= nil then match.Abort("pending playlist continuation is invalid") end
+        return false, "start"
+    end
+    if match == nil then return false, "start" end
+    if not match.Start(mode) then
+        match.Abort(match.GetAbortReason() or "Pending match could not start")
+        return false, "start"
+    end
+    local waiting = PW._Match.startWait
+    if waiting ~= nil then
+        waiting.accepted = true
+        waiting.applied = function() PW.Notify("PW_PendingMatchApplied", valid) end
+    else
+        PW.Notify("PW_PendingMatchApplied", valid)
+    end
     return true
 end
 
@@ -316,4 +333,10 @@ util.AddNetworkString(ackName)
 hook.Add("Think", "PW.MapChange", function() lib._Tick() end)
 -- game.GetMapChangeCount() grows only after server InitPostEntity (measured on the Deck: still the old count in
 -- Initialize and InitPostEntity, +1 from the first tick), so the file is checked one tick later.
-hook.Add("InitPostEntity", "PW.MapChange", function() timer.Simple(0, function() lib._Apply() end) end)
+hook.Add("InitPostEntity", "PW.MapChange", function()
+    timer.Simple(0, function()
+        if PW.Playlist ~= nil then PW.Playlist._ResolveStartup() end
+        lib._Apply()
+        if PW.Playlist ~= nil then PW.Playlist._BootReady() end
+    end)
+end)

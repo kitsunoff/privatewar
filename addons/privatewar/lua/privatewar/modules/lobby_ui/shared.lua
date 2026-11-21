@@ -55,8 +55,11 @@ function lib._CheckStart(request, facts)
     if not isstring(request.mode) or not facts.modes[request.mode] then return false, "unknown mode" end
     if not lib._ValidMapName(request.map) then return false, "invalid map" end
     if not facts.mapExists(request.map --[[@as string]]) then return false, "no such map" end
-    if facts.fits ~= nil and not facts.fits(request.mode --[[@as string]], request.map --[[@as string]]) then
-        return false, "mode not offered on this map"
+    if facts.fits ~= nil then
+        local offered, reason, recheck = facts.fits(request.mode --[[@as string]], request.map --[[@as string]])
+        if not offered and not (facts.allowRecheck == true and recheck == true) then
+            return false, reason or "mode not offered on this map"
+        end
     end
     return true
 end
@@ -71,13 +74,18 @@ function lib._NavLine(nav)
     return string.format("Navmesh: %d areas.", nav.areas)
 end
 
-function lib._Fits(registries)
+function lib._Fits(registries, retryCurrent)
     return function(modeId, map)
         local modes = registries.modes
         local mode = modes ~= nil and modes.Get(modeId) or nil
         local mapData = rawget(PW, "Map") --[[@as PW.MapLib?]]
         if mode == nil or mapData == nil then return mode ~= nil and mode.MapData ~= true end
-        return (mapData.ModeFits(mode, map))
+        if retryCurrent ~= nil and retryCurrent == map then
+            local status = mapData.GetModeAvailability(modeId, map)
+            return status.fits, status.reason, status.canRetry, not status.fits and status.readiness == "rejected"
+        end
+        local offered, reason = mapData.ModeFits(mode, map)
+        return offered, reason, false, false
     end
 end
 
@@ -169,7 +177,8 @@ local function mapsFor(state, modeId, fits)
     ---@type string[]
     local list = {}
     for _, name in ipairs(state.maps) do
-        if fits(modeId, name) then list[#list + 1] = name end
+        local offered, _, recheck, rejected = fits(modeId, name)
+        if offered or recheck == true or rejected == true then list[#list + 1] = name end
     end
     return list
 end
@@ -186,14 +195,34 @@ function lib._Model(state, selection, fits)
     if mode ~= nil and kit ~= nil then sections = kit.BuildForm(mode.groups, { [mode.id] = mode.name }) end
     ---@type { id: string, label: string }[]
     local modes = {}
-    ---@type { id: string, label: string }[]
+    ---@type PW.LobbyMapChoice[]
     local maps = {}
     for index, entry in ipairs(state.modes) do modes[index] = { id = entry.id, label = entry.name } end
-    for index, name in ipairs(offered) do maps[index] = { id = name, label = name } end
+    for index, name in ipairs(offered) do
+        local recheck, rejected, why = false, false, nil
+        if fits ~= nil and mode ~= nil then
+            local _, reason, allowed, failed = fits(mode.id, name)
+            recheck, rejected, why = allowed == true, failed == true, reason
+        end
+        maps[index] = { id = name, label = name .. (recheck and " (recheck required)" or ""),
+            locked = rejected and not recheck or nil, reason = rejected and not recheck and why or nil }
+    end
+    ---@type string?
+    local retryReason
+    ---@type string?
+    local blockedReason
+    if fits ~= nil and mode ~= nil and map ~= nil then
+        local eligible, why, recheck, rejected = fits(mode.id, map)
+        if not eligible and recheck == true then retryReason = why end
+        if not eligible and rejected == true and recheck ~= true then
+            blockedReason = why or "Map layout was rejected"
+        end
+    end
     return {
         modes = modes, maps = maps, mode = mode ~= nil and mode.id or nil, map = map, sections = sections,
         toggles = state.toggles, canEdit = state.canEdit, canToggle = state.canToggle, nav = state.nav,
-        canStart = state.canStart and mode ~= nil and map ~= nil
+        canStart = state.canStart and mode ~= nil and map ~= nil and blockedReason == nil,
+        retryReason = retryReason, blockedReason = blockedReason
     }
 end
 

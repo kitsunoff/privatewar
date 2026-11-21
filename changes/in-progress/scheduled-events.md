@@ -1,34 +1,65 @@
 # Scheduled events (T-11.16)
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-11
 
-The user-approved direction replaces shared schedules with optional playlist-local availability. This record is a
-checklist for future work, not a frozen API or authorization to implement runtime changes. Exact rotations, calendars,
-map names and content remain unapproved. Existing design and API decisions remain in force until separately changed.
+The user-approved direction replaces shared schedules with optional playlist-local availability. The checklist below
+retains the original implementation/acceptance inventory, not proof of completion. The user approved the revision and replacement of the
+mandatory playlist JSON tests: [contract](../../docs/api/feature-contracts.md#lua-playlists-and-availability),
+`02-modes.md` d.2–3, d.9 and TASKS.md T-2.6. The integration branch now contains the infrastructure candidate and
+shipped content below; engine verification remains pending. The user explicitly delegated concrete rotations,
+calendars, installed maps and schema settings on 2026-11-11. No device/publication permission is implied.
+
+## Current implementation and blockers
+
+Owner/scope: integration content work on the existing Lua-playlist implementation; no Deck or publication access.
+The previous infrastructure checklist remains historical/pending verification rather than being checked from
+static inspection alone. Concrete policy and dependency details: [shipped playlists](../../docs/playlists.md).
+
+- Added six periodic definitions: Shipment weekends, Ground War TDM 32, Infected, Small Map Moshpit,
+  Objective Chaos and FFA Frenzy. Wednesday has three immediately active stock-content rotations.
+- Startup resolution filters installed eligible map/mode pairs; missing optional content rejects only its entry.
+  Availability rechecks dependencies without publishing known upcoming boundaries for empty content.
+- Review correction: both checks delegate mode dependency admission to `PW.Match._CheckDependencies`;
+  `playlists_dependencies.lua` covers applied soft toggles, hard failures/repair, Base inheritance and core's
+  nonrecursive declaration semantics. All five cases passed a pure Lua smoke using real core registry/checker/
+  enable code with mocked engine glue, not GLuaTest. Pending ConVar changes retain core's boot/new-match timing.
+- Follow-up review correction: server default sampling also runs the core dependency checker. A tests-first real
+  `Pick` regression with RNG=0 fails before the fix and passes after it in the pure Lua harness; all six dependency
+  cases pass with actual server store/sampling/core code and mocked engine glue. Partial DOM loss selects
+  Hardpoint, restoration selects DOM again, total loss returns no pair and a plain TDM playlist stays unaffected.
+  No replacement `fits` predicate is injected; engine GLuaTest remains unobserved.
+- Added `playlists_content.lua` tests first, retaining all mandatory infrastructure suites unchanged.
+- Hardcore is blocked on absent gameplay/schema, not on calendar choice. No fake mode/map or unsupported
+  setting is shipped. Shipment still requires a mounted matching BSP; Infection requires its optional addon.
+- `nix develop --command make check` passed (537 source files; all gate selftests). Pure Lua smoke passed for
+  six compositions, UTC boundaries and missing content; actual source schema/index/validator smoke accepted all
+  11 shipped setting overrides without clamping, including inherited FFA ids. These are not GLuaTest results.
+  Engine RED/GREEN and `make test`
+  remain unobserved because this content task explicitly forbids Deck access; merge/acceptance gates are incomplete.
 
 ## Scope and prerequisites
 
-- [ ] Obtain explicit implementation authorization and separate approval for the necessary changes to decided design
-  and frozen APIs before implementation. Reconcile `design/02-modes.md` d.2–3 and `docs/api/modes.md`, which currently
-  define data-only playlists and host-saved JSON, with the proposed Lua methods and any removal of JSON support.
-- [ ] Record the approved direction: no JSON playlists and no need for JSON backward compatibility. Existing support
-  is real: `addons/privatewar/lua/privatewar/modules/playlists/shared.lua` implements JSON conversion and
-  `init.lua` loads and saves host JSON playlists. Removal or migration is future work subject to design/API approval;
-  do not claim it is already absent. The older note's JSON-retention proposal is superseded by this direction.
+- [x] Design/API changes explicitly approved: playlist-local Lua predicates/startup resolvers, UTC, outside-match
+  evaluation, one expired selected start then lobby; no shared schedules or XP feature. Exact calendars deferred.
+- [x] Lua-only playlist storage and replacement mandatory tests approved. Remove all playlist JSON read/write and
+  conversion APIs without migration; never delete/rewrite user files. Other mandatory cases and JSON remain.
+- [x] Integration candidate replaces playlist JSON conversion/load/save with Lua resolution in
+  `addons/privatewar/lua/privatewar/modules/playlists/`. User files remain untouched. This is inspected code,
+  not an engine pass; the older note's JSON-retention proposal is superseded by this direction.
 - [ ] Keep the scope playlist-local: no shared schedule kind, event lifecycle or separate offer registry. XP events,
   multiplier stacking and progression effects remain separate future questions, not promised by this task. Preserve
   applicable mandatory test requirements and historical evidence in `TASKS.md`.
-- [ ] Decide calendar rules, exact dates and biweekly anchor, UTC boundary and leap-year semantics, clock jumps,
-  validation details, map-change failure recovery, and presentation/order of simultaneous and retained rotations
-  with the user; do not treat examples as approved calendars.
+- [x] User delegated concrete calendars/content/settings and installed-map choices. Shipped weekly/daily UTC
+  windows need no annual/leap-day policy. Existing integration ordering is unchanged, not a new UI redesign.
 
 ## Playlist API and data
 
-- [ ] Define the proposed optional Lua method `PLAYLIST:IsActive(nowUTC)`: host-supplied UTC timestamp in, boolean
+- [ ] Implement the approved optional Lua method `PLAYLIST:IsActive(nowUTC)`: host-supplied UTC timestamp in, boolean
   availability out, optionally followed by the next UTC change (end when active, start when inactive). No method
-  means always available; an omitted or invalid next change is unknown, never guessed. Final return validation is open.
+  means always available; an omitted or invalid next change is unknown, never guessed. Apply the API's finite,
+  strictly-future boundary validation and fail-closed nonboolean/error handling.
 - [ ] Make results deterministic for the same definition/version, UTC time and installed content, independent of
   uptime or selection; different host clocks or installed versions need not agree. Work offline without a service.
 - [ ] Isolate predicate exceptions: log and fail closed for that playlist while continuing to evaluate others.
@@ -38,8 +69,8 @@ map names and content remain unapproved. Existing design and API decisions remai
   public annotations and types. Reconcile selection, sampling, start validation and archived `pw_playlist_active`
   with the new availability and entitlement rules.
 - [ ] Support static or function-supplied playlist data for `Maps`, `Modes` and `Settings`. Resolve dynamic values
-  on the server at startup against installed content and hold them stable; the callable form and explicit reload or
-  reevaluation remain open.
+  on the server at startup against installed content and hold them stable; the callable form is fixed in the API.
+  Explicit hot-reload/reevaluation policy remains open; do not add a public reload promise implicitly.
 
 ## Timing, selection and votes
 
@@ -53,7 +84,7 @@ map names and content remain unapproved. Existing design and API decisions remai
   generally active. The entitlement lasts in the current lobby until another playlist or Custom Game is selected;
   it does not survive server restart. Preserve the ability to finish that match across a map change while starting.
 - [ ] Let a match running at expiry finish normally, then return to the lobby without continuing the expired rotation.
-  Specify map-change failure/recovery separately; do not invent the outcome.
+  Follow the API's one-shot pending-attempt failure handling; no expired automatic retry.
 - [ ] Keep votes outside running matches. Check availability within one minute during a vote and revalidate before
   launching the next match; if the playlist expires during the vote, return to the lobby without starting another match.
 
@@ -71,17 +102,18 @@ map names and content remain unapproved. Existing design and API decisions remai
 
 ## Proposed content
 
-All shipped proposed rotations are intended to be periodically available; no exact playlist composition, map pool,
-mode settings or schedule is approved. Confirm installed dependencies and feasibility before defining content.
+The original proposed inventory is retained below. The user has now delegated concrete compositions, pools,
+settings and calendars within existing content; see the implementation policy above. Checkboxes do not imply
+runtime or human acceptance.
 
-- [ ] Design and, after approval, add Shipment 24/7 weekends.
-- [ ] Design and, after approval, add Ground War TDM 32; player count means bot fill capped by server slots, not a
+- [x] Add Shipment 24/7 weekends with installed-BSP discovery and eligibility filtering.
+- [x] Add Ground War TDM 32; player count means bot fill capped by server slots, not a
   Lua change to `maxplayers`.
-- [ ] Design and, after approval, add Infected, subject to its installed mode/content dependency.
-- [ ] Design and, after approval, add Small Map Moshpit.
-- [ ] Design and, after approval, add Hardcore.
-- [ ] Design and, after approval, add Objective Chaos.
-- [ ] Design and, after approval, add Free-for-All Frenzy.
+- [x] Add Infected, subject to its installed mode/content dependency.
+- [x] Add Small Map Moshpit.
+- [ ] Add Hardcore: blocked on absent real gameplay/schema; do not substitute ordinary TDM.
+- [x] Add Objective Chaos.
+- [x] Add Free-for-All Frenzy.
 - [ ] Consider One in the Chamber only as a future design/content idea: its required game rules are unimplemented.
   Its playlist is blocked until those rules are separately designed, approved and implemented; do not imply it exists.
 
@@ -90,8 +122,9 @@ mode settings or schedule is approved. Confirm installed dependencies and feasib
 - [ ] Write GLuaTest cases first and retain all applicable mandatory `TASKS.md` cases. Cover absent predicate,
   active/end and inactive/start, unknown and invalid next change, predicate errors/logging and isolation, author-owned
   dependencies, ordinary validation, enabled content, and stable static/dynamic startup resolution.
-- [ ] Cover UTC boundaries, biweekly dates including before an anchor, annual/year-wrap and leap years, offline startup
-  without replay, repeat evaluation, clock-jump decisions once specified, and host/client authoritative agreement.
+- [ ] Cover UTC boundaries, offline startup without replay, repeat evaluation, forward/backward sampled clock jumps
+  and host/client authoritative agreement. Biweekly/annual/leap-day calendar fixtures wait for approved author policy;
+  use synthetic availability boundaries for the infrastructure tests, not invented shipped calendars.
 - [ ] Cover transition detection within one minute outside matches, including unknown next changes; assert zero
   predicate evaluations during a running match and a fresh evaluation before post-match flow or vote.
 - [ ] Cover concurrent active rotations, Custom Game last and the empty-active case, the 48-hour boundary, unknown
@@ -111,4 +144,6 @@ See the [draft and future tests](../../notes/26-scheduled-events.md); its JSON-r
 noted above, and its examples are not approved calendars. The
 [T-11.16 deliverable and status](../../TASKS.md#class-visibility-implementation-and-future-scheduling-request) are
 historical; their shared-schedule direction is superseded, but mandatory test requirements remain in `TASKS.md`.
-No runtime implementation or game-test result is claimed by this record.
+The integration branch contains implementation candidates, not a game-test result. Design/contract evidence:
+the approved 2026-11-11 revision, delegated concrete content and mandatory clauses; unchecked items retain their
+original implementation/verification inventory and are not undecided alternatives to approved contracts.

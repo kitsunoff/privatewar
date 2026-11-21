@@ -78,17 +78,23 @@ end
 local emptyState = { options = {}, mine = 0, canPick = false } --[[@as PW.VoteState]]
 
 ---Recomputes the screen model (state, phase time left, humans).
-local function update()
+---@param refreshHints? boolean the vote state changed, not just the timer
+local function update(refreshHints)
+    local pickWasVisible = view.model ~= nil and view.model.pick.visible
     view.model = lib._Screen(view.state or emptyState, {
         remaining = PW.Phase.Remaining(), humans = #player.GetHumans(), shortOf = shortOf, pickReady = pickerReady()
     })
     local bar = view.hintBar
-    if bar ~= nil and IsValid(bar) then (bar --[[@as PWHintBar]]):SetEntries(view.model.hints) end
+    if (refreshHints or pickWasVisible ~= view.model.pick.visible) and bar ~= nil and IsValid(bar) then
+        (bar --[[@as PWHintBar]]):SetEntries(view.model.hints)
+    end
 end
 
 ---Opens the map picker in pick mode over the vote; Back returns to the vote, Enter sends the pick.
 local function openPicker()
     if not pickerReady() or view.model == nil or not view.model.pick.visible then return end
+    local bar = view.hintBar
+    if bar ~= nil and IsValid(bar) then bar:CancelClick() end
     local kit, lobby = ui(), PW.Lobby --[[@as PW.LobbyLib]]
     kit.OpenRoot()
     ---@type PW.LobbyPickerOpts
@@ -117,11 +123,12 @@ end
 
 ---@param action string
 local function act(action)
+    if view.picking or not shouldShow() then return end
     if action == "left" then return setFocus(view.focus - 1) end
     if action == "right" then return setFocus(view.focus + 1) end
     if action == "secondary" then return openPicker() end
     local card = view.cards[view.focus]
-    if action == "accept" and card ~= nil then lib.SendVote(card.card.index) end
+    if action == "accept" and card ~= nil and IsValid(card) then lib.SendVote(card.card.index) end
 end
 
 ---@param frame Panel
@@ -199,7 +206,7 @@ local function rebuild()
 end
 
 local function refresh()
-    update()
+    update(true)
     rebuild()
 end
 
@@ -242,12 +249,14 @@ function lib.Open()
     hooks.Paint = function(_, w, h) paintFrame(frame, w, h) end
     hooks.PerformLayout = function(_, w, h) layout(w, h) end
     hooks.Think = function() think(frame) end
+    view.frame, view.state, view.cards, view.focus = frame, nil, {}, 1
+    local bar = vgui.Create("PWHintBar", frame) --[[@as PWHintBar]]
+    view.hintBar = bar
+    bar.OnAction = function(_, action) act(action) end
     hooks.OnKeyCodePressed = function(_, code)
-        local action = ui().Input.Press(view.hintBar ~= nil and view.hintBar.input or ui().Input.New(), code)
+        local action = ui().Input.Press(bar.input, code)
         if action ~= nil then act(action) end
     end
-    view.frame, view.state, view.cards, view.focus = frame, nil, {}, 1
-    view.hintBar = vgui.Create("PWHintBar", frame) --[[@as PWHintBar]]
     refresh()
     lib.Request()
 end

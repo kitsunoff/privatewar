@@ -90,6 +90,9 @@ function rootClass:Init()
     self.tabBar.OnSelect = function(_, id) self:SelectTab(id) end
     self.hintBar = vgui.Create("PWHintBar", self) --[[@as PWHintBar]]
     self.hintBar:SetInputState(self.input)
+    self.hintBar.OnAction = function(_, action)
+        if not IsValid(self.modal) then self:Act(action) end
+    end
     local registry = PW.Registries["screens"]
     self.model = router.New(registry ~= nil and registry.GetEnabledList() --[[@as PW.Screen[] ]] or {})
 end
@@ -257,6 +260,7 @@ end
 ---@param modal Panel
 ---@param first? Panel
 function rootClass:OpenModal(modal, first)
+    self.hintBar:CancelClick()
     self.modal, self.modalReturn = modal, self.focusPanel
     self.focusId = nil
     self:RefreshFocus()
@@ -264,6 +268,7 @@ function rootClass:OpenModal(modal, first)
 end
 
 function rootClass:CloseModal()
+    self.hintBar:CancelClick()
     self.modal, self.focusId = nil, nil
     self:RefreshFocus()
     if IsValid(self.modalReturn) then self:FocusPanel(self.modalReturn, "auto") end

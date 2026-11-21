@@ -33,6 +33,14 @@ end
 
 net.Receive("pw_playlist_list", function()
     if not IsValid(module) then return end
-    state = lib._Decode({ uint = net.ReadUInt, string = net.ReadString, bool = net.ReadBool })
+    local ok, incoming = pcall(lib._Decode,
+        { uint = net.ReadUInt, string = net.ReadString, bool = net.ReadBool, number = net.ReadDouble })
+    if not ok or incoming == nil or not lib._Newer(state, incoming) then return end
+    state = incoming
     if lib.OnChange ~= nil then lib.OnChange() end
+end)
+
+net.Receive("pw_playlist_error", function()
+    local reason = net.ReadString()
+    if IsValid(module) and #reason <= 256 then notification.AddLegacy(reason, NOTIFY_ERROR, 6) end
 end)

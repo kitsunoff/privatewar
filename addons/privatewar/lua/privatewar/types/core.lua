@@ -304,6 +304,9 @@
 ---@field result any result given to PW.Match.Finish, passed to PW_MatchEnd
 ---@field abortReason? string reason of the last abort, kept for the host until the next PW.Match.Start
 ---@field dependencies? PW.DependencySnapshot exact required definitions pinned for this match
+---@field startWait? PW.StartWait one pre-PREMATCH loaded-map attempt
+---@field startReady? PW.StartWait synchronous one-shot certification for the resumed request
+---@field startMapRelease? fun() idempotent owner cleanup for the accepted preflight map
 ---@field busy boolean a phase change is in progress; requests made meanwhile are queued
 ---@field queue fun(store: PW.MatchStore)[] requests made during a phase change
 ---@field log PW.LogFn

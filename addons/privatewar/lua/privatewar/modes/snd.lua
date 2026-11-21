@@ -5,21 +5,42 @@ MODE.Description = "Plant or defuse one bomb. One life per round."
 MODE.Base = "round_base"
 MODE.Teams = 2
 MODE.Dependencies = { objective_actions = { "collect", "hold", "plant", "defuse" },
-    modules = { "bots_objectives", "snd", "lobby" } }
+    modules = { "bots_objectives", "snd", "lobby", "mapdata" } }
 MODE.TeamPolicy = "managed"
 MODE.BotQuotaPolicy = "rounds"
 MODE.MapData = true
+MODE.MapReadiness = true
 MODE.RoundsToWin = 6
 MODE.SwapSidesEvery = 3
 
 ---@return PW.SNDLib
 local function lib() return assert(PW.SND) end
+---@param self table<string, any>
 ---@return PW.RoundBase
-local function base() return assert(PW.Modes.GetStored("round_base")) --[[@as PW.RoundBase]] end
+local function base(self)
+    ---@type table<string, any>?
+    local current = self.BaseClass
+    ---@type table<table, true>
+    local seen = {}
+    while istable(current) and not seen[current] do
+        local definition = current --[[@as table<string, any>]]
+        if definition.ClassName == "round_base" then return definition --[[@as PW.RoundBase]] end
+        seen[definition] = true
+        current = definition.BaseClass --[[@as table<string, any>?]]
+    end
+    error("S&D has no pinned round_base definition")
+end
 
 ---@param data any
 ---@return boolean, string?
 function MODE:ValidateMapData(data) return lib().Validate(data) end
+
+---@param mapName string
+---@return boolean
+function MODE:MapCandidate(mapName)
+    return string.sub(string.lower(mapName), 1, 3) == "de_"
+        and (PW.MapList == nil or not PW.MapList.IsJunk(mapName))
+end
 
 ---@param self PW.SNDMode
 ---@return boolean
@@ -29,13 +50,13 @@ local function playing(self)
 end
 
 function MODE:Start()
-    local lobby = assert(PW.Modules.Get("lobby"), "S&D needs the spectator policy owner")
+    local lobby = assert(assert(PW.Match).Dependency("modules", "lobby"), "S&D needs the spectator policy owner")
     assert(lobby:IsValid() and assert(PW.Jip).RefreshSpectator ~= nil, "S&D needs the spectator policy owner")
-    local data = assert(PW.Map).GetModeData(self.ClassName)
+    local data = assert(self._SNDMap, "S&D has no accepted preflight map") --[[@as PW.SNDMapData]]
     local valid, reason = lib().Validate(data)
-    if not valid then error(reason or "invalid S&D map") end
-    lib().Activate(data --[[@as PW.SNDMapData]])
-    base().Start(self)
+    assert(valid, reason)
+    lib().Activate(data) -- Final world safety check, never a new layout/definition lookup after acceptance.
+    base(self).Start(self)
 end
 
 ---@param _round integer
@@ -43,7 +64,7 @@ end
 function MODE:PrepareRound(_round, _swapped)
     local previous = self._SND --[[@as PW.SNDState?]]
     if previous ~= nil then lib().Invalidate(previous) end
-    local data = assert(assert(PW.Map).GetModeData(self.ClassName)) --[[@as PW.SNDMapData]]
+    local data = assert(self._SNDMap, "S&D has no pinned match map") --[[@as PW.SNDMapData]]
     local actors = lib().Roster()
     ---@type string[]
     local attackers = {}
@@ -196,7 +217,8 @@ function MODE:Cleanup()
     local state = self._SND --[[@as PW.SNDState?]]
     if state ~= nil then lib().Invalidate(state) end
     self._SND = nil
+    lib().ReleaseMap(self)
     for _, ply in ipairs(player.GetAll()) do ply:Freeze(false) ply:SetNW2Bool("pw_snd_alive", false) end
     lib().Clear()
-    base().Cleanup(self)
+    base(self).Cleanup(self)
 end

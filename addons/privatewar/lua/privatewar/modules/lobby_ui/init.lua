@@ -16,6 +16,7 @@ PW.Privilege(lib.StartPrivilege, "superadmin")
 PW.Privilege(lib.TogglePrivilege, "superadmin")
 
 util.AddNetworkString("pw_lobby_state")
+util.AddNetworkString("pw_lobby_error")
 AddCSLuaFile("privatewar/modules/lobby_ui/cl_flow.lua")
 
 ---@param message string
@@ -111,6 +112,19 @@ local function nick(ply)
     return IsValid(ply) and ply:Nick() or tostring(ply)
 end
 
+---@param reason string
+---@param ply? Player nil broadcasts the server-owned failure
+function lib._StartFailure(reason, ply)
+    net.Start("pw_lobby_error")
+    net.WriteString(assert(PW.Match)._StartReason(reason))
+    if ply ~= nil then net.Send(ply) else net.Broadcast() end
+end
+
+---@param reason string
+function module:PW_MatchStartRefused(reason)
+    lib._StartFailure(reason)
+end
+
 function lib._OnRequest(ply)
     local store = PW._Lobby --[[@as PW.LobbyStore]]
     local registries = store.registries()
@@ -126,6 +140,8 @@ function lib._OnRequest(ply)
         canStart = PW.Can(ply, lib.StartPrivilege), canEdit = PW.Can(ply, PW.Settings.Privilege),
         nav = store.navInfo(ply)
     }))
+    local reason = PW.Match ~= nil and PW.Match.GetAbortReason() or nil
+    if reason ~= nil then lib._StartFailure(reason, ply) end
     return true
 end
 
@@ -143,6 +159,7 @@ function lib._OnStart(ply)
     if navGenerating() then
         store.log(string.format("lobby start from %s refused: navmesh generation running (%s on %s)", nick(ply),
             tostring(modeId), tostring(map)))
+        lib._StartFailure("Navmesh generation is running; wait for the map to reload", ply)
         return false
     end
     ---@type table<string, table>
@@ -154,11 +171,21 @@ function lib._OnStart(ply)
         ids[mode.ClassName] = true
     end
     local ok, reason = lib._CheckStart({ mode = modeId, map = map },
-        { modes = ids, mapExists = store.mapExists, fits = lib._Fits(store.registries()) })
+        { modes = ids, mapExists = store.mapExists, fits = lib._Fits(store.registries(), store.map()),
+            allowRecheck = true })
     if not ok then
         store.log(string.format("lobby start from %s refused: %s (%s on %s)", nick(ply), tostring(reason),
             tostring(modeId), tostring(map)))
+        lib._StartFailure(reason or "Match selection was rejected", ply)
         return false
+    end
+    local playlists = PW.Playlist
+    if playlists ~= nil and playlists.SetActive ~= nil then
+        local selected, why = playlists.SetActive("")
+        if not selected then
+            store.log("custom start refused: " .. tostring(why))
+            return false
+        end
     end
     store.log(string.format("lobby start by %s: %s on %s", nick(ply), modeId, map))
     return store.start(byId[modeId], map)

@@ -90,6 +90,7 @@
 ---@class PW.LobbyLib
 ---Pure: the hub model (U-5, notes/16 §4a).
 ---@field _Hub fun(input: PW.LobbyHubInput): PW.LobbyHub
+---@field _PlaylistTimer fun(item: PW.PlaylistSummary, sampledAt: number, phrase?: fun(key: string): string): string
 ---Pure: the custom game model (U-5, notes/16 §4b).
 ---@field _Custom fun(input: PW.LobbyHubInput): PW.LobbyCustom
 ---Pure: the maxplayers warning (T-8.2) when the bots fill exceeds the server slots, else nil.

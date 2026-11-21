@@ -17,14 +17,17 @@ historical test result into a current pass. Maintain one record per change and l
 
 ## Planned
 
+The remaining gameplay/social records below separate the user-approved 2026-11-11 design/API revision from
+unresolved choices and unimplemented work. [Approved contracts](../docs/api/feature-contracts.md) are not gate or
+human-acceptance evidence; planned status is retained.
+
 - [Fira Sans fonts](planned/fira-sans.md)
 - [Lambda-compatible bot voices, names and chat](planned/lambda-bot-voice.md)
 - [Automatic Search and Destroy support for `de_` maps](planned/snd-de-autodetect.md)
-- [Scheduled events (T-11.16)](planned/scheduled-events.md)
 
 ## In progress
 
-No migrated records.
+- [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
 
 ## Blocked
 

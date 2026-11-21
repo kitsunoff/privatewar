@@ -13,7 +13,6 @@ local function style()
 end
 
 local cardHeight, cardGap, pagerHeight = 64, 6, 44
-
 -- PWCard ----------------------------------------------------------------------------------------------------------
 
 ---@class PWCard : PWButton
@@ -23,10 +22,12 @@ local cardHeight, cardGap, pagerHeight = 64, 6, 44
 ---@field _title string the title cut to the room left of the badge (layout time)
 ---@field _fullTitle string
 ---@field _lines string[]
+---@field _timer string fitted timer text, cached at layout time
+---@field _timerRect? PW.UIRect
 local cardClass = {}
 
 function cardClass:Init()
-    self._title, self._fullTitle, self._lines, self.index = "", "", {}, 0
+    self._title, self._fullTitle, self._lines, self.index, self._timer = "", "", {}, 0, ""
     self:SetTall(paint.Px(cardHeight))
 end
 
@@ -45,12 +46,20 @@ end
 
 ---Cuts the title so it never runs into the badge, the "NEW" badge or the lock glyph.
 ---@param w number
-function cardClass:PerformLayout(w, _)
+function cardClass:PerformLayout(w, h)
     local view = self.view
     local marked = view ~= nil and (view.locked or view.new or view.card.badge ~= nil)
     local reserve = view ~= nil and view.locked and view.card.lockText ~= nil and 150 or 72
     local room = w - paint.Px(48) - (marked and paint.Px(reserve) or 0)
     self._title = paint.Fit(self._fullTitle, fontH2, room)
+    self._timerRect = nil
+    if view ~= nil and view.card.timer ~= nil then
+        surface.SetFont(fontSmall)
+        local textWidth = surface.GetTextSize(view.card.timer)
+        local rect = lib.Cards.TimerRect(w, h, textWidth, paint.Px(24), paint.Px(12))
+        self._timerRect = rect
+        self._timer = lib.Board.Fit(view.card.timer, math.max(0, rect.w - paint.Px(24)), surface.GetTextSize)
+    end
 end
 
 ---Height of the card at a width; the expanded card wraps its description (layout time).
@@ -58,12 +67,18 @@ end
 ---@return number
 function cardClass:WantedHeight(width)
     local view = self.view
-    if view == nil or not view.expanded then return paint.Px(cardHeight) end
+    if view == nil then return paint.Px(cardHeight) end
+    local base = lib.Cards.Height(cardHeight, 0, view.card.timer ~= nil)
+    if not view.expanded then return paint.Px(base) end
     self._lines = view.card.text ~= nil and paint.Wrap(view.card.text, fontBody, width - paint.Px(48)) or {}
+    surface.SetFont(fontBody)
+    for index, line in ipairs(self._lines) do
+        self._lines[index] = lib.Board.Fit(line, math.max(0, width - paint.Px(48)), surface.GetTextSize)
+    end
     local extra = #self._lines * draw.GetFontHeight(fontBody)
     if view.card.tags ~= nil then extra = extra + paint.Px(34) end
     if view.card.footer ~= nil then extra = extra + paint.Px(30) end
-    return paint.Px(cardHeight) + extra + paint.Px(16)
+    return paint.Px(base) + extra + paint.Px(16)
 end
 
 ---@param action string
@@ -122,6 +137,13 @@ function cardClass:Paint(w, h)
         draw.SimpleText(view.card.badge, fontSmall, w - pad, headerY, s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
     end
     if view.expanded then self:PaintDetails(pad, paint.Px(cardHeight) - paint.Px(4), s) end
+    local rect = self._timerRect
+    if rect ~= nil and rect.w > 0 then
+        paint.Rect(rect.x, rect.y, rect.w, rect.h, s.bg_selected)
+        paint.Outline(rect.x, rect.y, rect.w, rect.h, s.border_strong)
+        draw.SimpleText(self._timer, fontSmall, rect.x + rect.w / 2, rect.y + rect.h / 2,
+            s.text_muted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
     return true
 end
 
@@ -317,7 +339,7 @@ end
 ---@param w number
 ---@param h number
 function listClass:PerformLayout(w, h)
-    local rowH, gap = paint.Px(cardHeight), paint.Px(cardGap)
+    local rowH, gap = paint.Px(lib.Cards.RowHeight(self.cards, cardHeight)), paint.Px(cardGap)
     local extra = 0
     for _, card in ipairs(self.panels) do
         if card.view ~= nil and card.view.expanded then extra = card:WantedHeight(w) - rowH end
