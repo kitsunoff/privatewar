@@ -115,9 +115,11 @@ Bots that fill empty slots: manager, brain, navigation, input control.
     | `third_party` | combat | Heard a fight nearby: flank into it |
     | `use_streak` | objective | Activate a killstreak when `BotShouldUse` agrees |
     | `throw_equipment` | combat | Grenade at a target behind cover or into an objective zone |
+    | `use_stim` | survival | Use Heal Stim at or below half health with charges left and no visible enemy |
     | `camp` | roam | Stationary personality only: hold a spot and watch its entrances |
 
     - Domination and Kill Confirmed need no dedicated behaviours: `objective` covers them, with targets and required actions coming from `MODE:BotObjectives`.
+    - The user-approved stim behaviour uses the ordinary server-side equipment path. Bots do not use Speed or Armor Stim in this slice.
 
     **Revision 2026-11-07 (user decision after the first playtest): bot combat movement.** Playtest finding: bots barely use cover and do not run. Requirements on `fight`, `take_cover` and the movement layer:
 
