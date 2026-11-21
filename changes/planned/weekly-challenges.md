@@ -69,8 +69,10 @@ None of these is approved. Proposed wording is for the user to accept, change or
   empty item list records the claim (XP-only and currency-only rewards, and rewards whose items are all owned,
   unresolved or refused as `"full"`); (b) XP and currency added before `Grant` travel in the same
   `pw_progression_delta` batch as the claim (the flush inside `Grant` sends both); (c) the client persists claims
-  (`unlocks.json`) before applying XP and currency of that batch (`progression.json`), so a crash loses a reward at
-  worst and never grants it twice.
+   (`unlocks.json`) before applying XP and currency of that batch (`progression.json`), so a crash loses a reward at
+   worst and never grants it twice.
+   Approved 2026-11-22: defer the entire reward while `PW.Unlocks.IsReady(ply)` is false, before checking claims or
+   queuing XP or currency. Otherwise an unrelated flush could pay part of the reward before its claim is recorded.
 - [ ] **D-WC7, Hardpoint objective time** (optional): `modules/hardpoint/init.lua` reports a
   challenge-only `objective_time` event (no score change). Without approval template C11 is dropped.
 - [ ] **D-WC8, UI placement**: a PROGRESS sub-screen "WEEKLY CHALLENGES" pushed from `progress_home`, and a new HUD

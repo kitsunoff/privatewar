@@ -11,6 +11,9 @@ Approval (2026-11-22): the user approved every design change proposed in this re
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
+Protocol clarification (approved 2026-11-22): transmit the revoking source with each revoked key. Wait for the
+initial unlock upload before granting items or recording claims; preserve valid uploaded keys up to the limit.
+
 Research: [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md) (current system,
 every decision site, defects found, comparison with other games).
 
@@ -262,22 +265,25 @@ No `net.WriteTable`; explicit `net.Write*`; receivers through `PW.Net.Receive`.
   it). `UploadMaxBytes = 1 + 2 + MaxGrants * (MaxKeyLength + 1) + 2 + MaxClaims * (MaxGrantIdLength + 1)` = 53 893.
   Validation: a count above its maximum makes the decoder stop and keep nothing of that list; every key and id is
   checked like the file; duplicates collapse. Keys of content not installed on this host are kept.
-- [ ] Merge on upload: the session grants and claims become the union of the upload and anything granted before it
-  arrived; a `Revoke` before the upload is refused (`notready`). Then classes are refreshed (`store.refresh(ply)`).
+- [ ] On upload: install the validated grants and claims, mark the player's unlock state ready and refresh classes
+  (`store.refresh(ply)`). A `Grant` (including claim-only) or `Revoke` before accepted upload returns
+  `0, "notready"` without mutation, delta flush, refresh or notification. At capacity a new grant key returns `full`;
+  existing uploaded keys are retained.
 - [ ] **`pw_progression_delta`** (extended), server to owner, appended after the existing `owned` list:
   `granted` UInt(8) (at most `MaxDeltaGrants`) x (`key` string, `source` string, `grant` string, empty when none,
-  `at` UInt(32)); `revoked` UInt(8) (at most `MaxDeltaRevokes`) x `key` string; `claims` UInt(8) (at most
+  `at` UInt(32)); `revoked` UInt(8) (at most `MaxDeltaRevokes`) x (`key` string, `source` string); `claims` UInt(8) (at most
   `MaxDeltaClaims`) x (`grant` string, `at` UInt(32)). Counts are capped on both sides. The worst-case delta stays
-  below 64 KB (about 9.5 KB added).
+  below 64 KB (about 10 KB added).
 - [ ] The client applies the unlocks part with its own batch check on `unlocks.json` (union of grants keeping the
   existing meta of a key already present, removal of revoked keys, claims added and pruned), writes the file once per
-  applied delta and fires `PW_UnlockGranted` and `PW_UnlockRevoked` locally.
+  applied delta and fires `PW_UnlockGranted` and `PW_UnlockRevoked` locally. Revokes carry the validated source of the
+  revoke operation, not the original grant. Report only keys actually removed, grouped by source.
 - [ ] Write order on the client (weekly challenges D-WC6): for one delta, `unlocks.json` (claims and grants) is written
   before `progression.json` (XP and currency). A crash between the two writes can lose that reward's XP and currency
   but never applies them twice, because the claim is already persisted.
-- [ ] Reward batching: `Grant` flushes the player's pending delta. A caller that also pays XP or currency for the same
-  reward queues them first (`PW.Progression.AddXP`, `AddCurrency`) and calls `Grant` last, so claim, items, XP and
-  currency travel in one batch.
+- [ ] Reward batching: wait for `PW.Unlocks.IsReady(ply)` before checking claims, queuing XP or currency, or granting
+  items. A caller that also pays XP or currency for the same reward queues them first (`PW.Progression.AddXP`,
+  `AddCurrency`) and calls `Grant` last, so claim, items, XP and currency travel in one batch.
 - [ ] `pw_progression_levels`: unchanged. The client knows `unlockall` from it and evaluates hooks locally.
 - [ ] `pw_economy_buy` and `pw_economy_result`: unchanged wire; the reason `owned` now also covers granted items.
 
@@ -316,8 +322,10 @@ Server functions mutate; shared functions answer on the server for any human and
 ---@field ListUnlocked fun(ply: Player, kind: string): string[]
 ---Shared. Whether a grant id was already claimed.
 ---@field HasClaim fun(ply: Player, grant: string): boolean
+---Server. True only for a human player whose unlock upload has been accepted.
+---@field IsReady fun(ply: Player): boolean
 ---Server. Grants items; idempotent by opts.grant. Returns how many keys were new, and a refusal reason or nil.
----Refusals: "bot", "badplayer", "badsource", "badgrant", "badkey", "unknown", "toomany", "full", "claimed".
+---Refusals: "bot", "badplayer", "notready", "badsource", "badgrant", "badkey", "unknown", "toomany", "full", "claimed".
 ---Flushes the delta at once, refreshes classes, fires PW_UnlockGranted when at least one key was new.
 ---@field Grant fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
 ---Server. An empty item list with opts.grant records only the claim (XP-only or currency-only rewards): returns 0, nil
@@ -364,7 +372,7 @@ Server functions mutate; shared functions answer on the server for any human and
 | `PW_UnlockOverride` | question | shared | `ply, kind, id` | `true` opens, `false` locks, `nil` continues | Every decision, after `Hidden`. Listeners must answer the same on both realms (the server is authoritative) |
 | `PW_UnlockHint` | question | shared | `kind, id` | `string?` | When building a requirement of a locked item; the weekly challenges module answers for its rewards |
 | `PW_UnlockGranted` | notification | server and client | `ply, keys, source, grant?` | none | Server: after `Grant` added at least one key. Client: after a delta added keys (one call per `source` and `grant` group), `ply` is the local player |
-| `PW_UnlockRevoked` | notification | server and client | `ply, keys, source` | none | After `Revoke` removed at least one key; client after the delta applied |
+| `PW_UnlockRevoked` | notification | server and client | `ply, keys, source` | none | After `Revoke` removed at least one key. Both realms report the revoking source; the client groups removed keys by source after applying the delta |
 
 - [ ] Admin console commands (server, privilege `pw_unlocks_admin`, default `superadmin`; pattern of
   `modules/bots_goal/sv_command.lua`): `pw_unlock_grant <player> <key>` (source `admin`), `pw_unlock_revoke <player>
@@ -572,7 +580,7 @@ New cases, `unlocks_storage.lua` (server glue with fake stores; one engine smoke
 - [ ] 3. "Revoke: removes grants only, never purchases; revoking twice removes nothing more"
 - [ ] 4. "Grant and revoke: the delta carries them and the client file applies them once per batch id"
 - [ ] 5. "Grant: classes are refreshed at once and PW_UnlockGranted fires with the new keys, source and grant id"
-- [ ] 6. "Upload: keys and claims are validated, bounded, accepted once and merged with grants made before it"
+- [ ] 6. "Upload: keys and claims are validated, bounded and accepted once; Grant waits for readiness"
 - [ ] 7. "Upload: keys of content not installed on this host are kept"
 - [ ] 8. "Migration: a v2 progression.json with owned keys and no unlocks.json lists purchases as entitlements; nothing is
   lost and progression.json stays at version 2"
@@ -589,6 +597,8 @@ New cases, `unlocks_storage.lua` (server glue with fake stores; one engine smoke
 - [ ] 19. "Claim only: an empty grant with a grant id records the claim once; HasClaim answers on both realms"
 - [ ] 20. "Batching: XP and currency queued before a Grant travel in its delta; the client writes unlocks.json before
   progression.json"
+- [ ] 21. "Revoke: both realms notify the revoking source once"
+- [ ] 22. "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved"
 
 New cases, `unlocks_ui.lua` (pure UI models, server runner):
 
@@ -648,6 +658,8 @@ local added, refusal = PW.Unlocks.Grant(ply, {
 - [ ] Idempotency: the grant id is the claim; a retried or duplicated completion is a no-op (`0, "claimed"`). The
   challenge module does not keep its own "claimed" flag for item rewards. `PW.Unlocks.HasClaim(ply, grantId)` answers
   "already claimed" on the server (upload plus session) and on the client (local file).
+- [ ] If `PW.Unlocks.IsReady(ply)` is false, defer the entire reward, including the claim check, XP and currency.
+  Do not queue any part of a reward until readiness, since an unrelated flush may otherwise pay it separately.
 - [ ] Rewards without items (XP or currency only): `PW.Unlocks.Grant(ply, {}, { source = "challenge", grant = id })`
   records the claim alone. Order for one reward: `AddXP`, `AddCurrency`, then `Grant` (which flushes), so everything
   travels in one delta batch; the client persists the claim before the XP and currency (section 3.7).
