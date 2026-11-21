@@ -1,8 +1,8 @@
 -- Equipment module, client (T-4.5, T-11.4). Slot keys: the default physical keys are the client ConVars
 -- pw_key_lethal (g) and pw_key_tactical (4); the console commands pw_lethal and pw_tactical do the same for players
 -- who bind keys themselves (the gamepad d-pad runs them too). A press in LIVE selects the slot's grenade SWEP when
--- it has ammo (input.SelectWeapon); it never throws: the SWEP throws on release of attack. While the player holds
--- an item in a slot during LIVE, the engine bind of that key (slot4 for the 4 key) is swallowed, so the tactical
+-- it has ammo, or requests use of a weapon-less item. Grenades still only throw on release of attack. A held item
+-- in LIVE swallows the engine bind of its key (slot4 for the 4 key), so the tactical
 -- key does not also switch to weapon slot 4.
 
 local lib = PW.Equipment --[[@as PW.EquipmentLib]]
@@ -33,25 +33,6 @@ local function currentCodes()
     return codes
 end
 
----@type PW.SlotWeapons
-local weapons = {}
----@type PW.GrenadeAmmo
-local ammo = {}
-
----The local player when grenades may be selected (alive, LIVE), and the grenade SWEP and ammo per slot filled.
----@return Player?
-local function facts()
-    local ply = LocalPlayer()
-    if not IsValid(ply) or not ply:Alive() or PW.Phase.GetPhase() ~= "LIVE" then return nil end
-    table.Empty(weapons)
-    table.Empty(ammo)
-    for _, slot in ipairs(lib.Slots) do
-        local class = lib._ItemWeapon(lib.Item(ply, slot))
-        if class ~= nil then weapons[slot], ammo[class] = class, lib.Count(ply, slot) end
-    end
-    return ply
-end
-
 ---@param ply Player
 ---@param class string?
 local function selectWeapon(ply, class)
@@ -59,17 +40,36 @@ local function selectWeapon(ply, class)
     if wep ~= nil and IsValid(wep) and ply:GetActiveWeapon() ~= wep then input.SelectWeapon(wep) end
 end
 
-for _, slot in ipairs(lib.Slots) do
+---@param ply Player
+---@param slot string
+---@param index integer
+local function keyAction(ply, slot, index)
+    if not IsValid(ply) or not ply:Alive() or PW.Phase.GetPhase() ~= "LIVE" then return end
+    local id = lib.Item(ply, slot)
+    local class = lib._ItemWeapon(id)
+    local action = lib._KeyAction(id, class, lib.Count(ply, slot))
+    if action == "select" then
+        selectWeapon(ply, class)
+    elseif action == "use" then
+        net.Start("pw_equipment_use")
+        net.WriteUInt(index, 2)
+        net.SendToServer()
+    end
+end
+
+---@type table<string, integer>
+local slotIndices = {}
+for index, slot in ipairs(lib.Slots) do
+    slotIndices[slot] = index
     concommand.Add(lib.Keys[slot].command, function()
-        local ply = facts()
-        if ply ~= nil then selectWeapon(ply, lib._SlotWeapon(slot, weapons, ammo)) end
-    end, nil, "Switch to the " .. slot .. " grenade")
+        keyAction(LocalPlayer(), slot, index)
+    end, nil, "Select or use the " .. slot .. " equipment")
 end
 
 PW.HookFor(MODULE, "PlayerButtonDown", function(_, ply, button)
     if not IsFirstTimePredicted() or ply ~= LocalPlayer() then return end
-    if lib._KeySlot(button, currentCodes()) == nil or facts() == nil then return end
-    selectWeapon(ply, lib._KeyWeapon(button, currentCodes(), weapons, ammo))
+    local slot = lib._KeySlot(button, currentCodes())
+    if slot ~= nil then keyAction(ply, slot, slotIndices[slot]) end
 end)
 
 PW.HookFor(MODULE, "PlayerBindPress", function(_, ply, _, pressed, code)
