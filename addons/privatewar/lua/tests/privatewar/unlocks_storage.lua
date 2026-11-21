@@ -113,6 +113,69 @@ return {
             end
         },
         {
+            name = "Grant rejects an option with a mismatched entitlement kind",
+            func = function()
+                local u, p, loadout = unlocks(), assert(PW.Progression), assert(PW.Loadout)
+                local adapters = assert(PW.Adapters)
+                local store, deltas = server()
+                local ply = playerStub()
+                local weaponId = "unlock_fixture_rifle"
+                local weapon = { Camos = { gold = { Name = "Gold", Unlock = 12 } } }
+                local optionId = weaponId .. ":"
+                local rightCamo, rightPaint = "camos:" .. optionId .. "gold", "attachments:" .. optionId .. "paint"
+                local wrongCamo, wrongPaint = "attachments:" .. optionId .. "gold", "camos:" .. optionId .. "paint"
+                local lookup, originalCall = p._RegistryLookup, adapters.CallFor
+                stub(p, "_RegistryLookup").with(function(kind, id)
+                    if kind == "weapons" and id == weaponId then return weapon end
+                    return lookup(kind, id)
+                end)
+                stub(adapters, "CallFor").with(function(id, method, ...)
+                    if id == weaponId and method == "GetSlots" then
+                        return { { id = "1", name = "Skin", cosmetic = true } }
+                    end
+                    if id == weaponId and method == "GetOptions" then
+                        return { { id = "gold", name = "Gold", cosmetic = true },
+                            { id = "paint", name = "Adapter paint", cosmetic = true } }
+                    end
+                    return originalCall(id, method, ...)
+                end)
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                local v = p._ViewOf(store, ply, p._RegistryLookup)
+                ---@type PW.LoadoutContext
+                local ctx = { lookup = v.lookup, budget = 0, maxattachments = 5,
+                    adapterOptions = function() return { ["1"] = { gold = true, paint = true } } end,
+                    isCosmetic = function() return true end,
+                    lockedOptions = function(id, build) return p._LockedOptions(v, id, build) end,
+                    entitledOption = function(id, option) return p._EntitledOption(v, id, option) end,
+                    attachmentLimit = function() return 1 end }
+                local build = { ["1"] = "gold" }
+                local repaired, problems = loadout._ValidateBuild(weaponId, weapon, build, ctx)
+                expect(repaired).to.deepEqual({})
+                expect(problems).to.deepEqual({ { slot = "1", option = "gold", why = "locked" } })
+                local opts = { source = "admin" }
+                expect({ u._Grant(store, ply, { wrongPaint }, opts) }).to.deepEqual({ 0, "unknown" })
+                expect({ u._Grant(store, ply, { wrongCamo }, opts) }).to.deepEqual({ 0, "unknown" })
+                expect(#deltas).to.equal(0)
+                expect(u.Describe(wrongPaint).valid).to.beFalse()
+                expect(u.Describe(wrongCamo).valid).to.beFalse()
+                expect(u.Describe(rightPaint).valid).to.beTrue()
+                local camo = u.Describe(rightCamo)
+                expect({ camo.valid, camo.name }).to.deepEqual({ true, "Gold" })
+                expect({ u._Grant(store, ply, { rightPaint, rightCamo }, opts) }).to.deepEqual({ 2 })
+                expect({ u._Decide(v, "attachments", optionId .. "paint") }).to.deepEqual({ true, "grant" })
+                expect({ u._Decide(v, "camos", optionId .. "gold") }).to.deepEqual({ true, "grant" })
+                repaired, problems = loadout._ValidateBuild(weaponId, weapon, build, ctx)
+                expect(repaired).to.deepEqual(build)
+                expect(problems).to.deepEqual({})
+                expect(p._EntitledOption(v, weaponId, "paint")).to.beTrue()
+                local imported = server()
+                local uploaded = { grants = { [wrongCamo] = true, [wrongPaint] = true }, claims = {} }
+                expect(u._OnUpload(imported, ply, uploaded)).to.beTrue()
+                local importedGrants = assert(imported.players[ply].grants)
+                expect(importedGrants[wrongCamo] ~= nil and importedGrants[wrongPaint] ~= nil).to.beTrue()
+            end
+        },
+        {
             name = "Revoke: removes grants only, never purchases; revoking twice removes nothing more",
             func = function()
                 local u = unlocks()

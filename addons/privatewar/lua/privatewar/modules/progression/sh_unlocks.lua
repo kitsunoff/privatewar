@@ -217,9 +217,8 @@ function unlocks._Known(key)
     if kind == nil or id == nil then return false end
     if weaponId == nil or option == nil then return lib._RegistryLookup(kind, id) ~= nil end
     local weapon = lib._RegistryLookup("weapons", weaponId)
-    if weapon == nil then return false end
-    return entryOf(weapon, kind == "camos" and "Camos" or "Attachments", option) ~= nil
-        or offeredOption(weaponId, option)
+    if weapon == nil or optionKind(weapon, option) ~= kind then return false end
+    return kind == "camos" or entryOf(weapon, "Attachments", option) ~= nil or offeredOption(weaponId, option)
 end
 
 function unlocks.Describe(item)
