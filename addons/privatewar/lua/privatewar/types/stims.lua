@@ -26,3 +26,6 @@
 
 ---@class PW
 ---@field Stims? PW.StimsLib
+
+---Client-only notification after the server accepts a built-in stim use.
+---@alias PW.StimInjectedNotification fun(itemId: string)

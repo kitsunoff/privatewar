@@ -126,6 +126,44 @@ return {
                     { "pw_stim_speed_until", 5 }, { "pw_stim_speed_until", 0 }
                 })
             end
+        },
+        {
+            name = "Stim client notifies once for a valid item index and ignores malformed or unknown data",
+            func = function()
+                local source = assert(CompileFile("privatewar/modules/stims/cl_init.lua"), "stim receiver is missing")
+                ---@type string[][]
+                local emitted = {}
+                ---@type function?
+                local receiver
+                local value, reads = 2, 0
+                local context = setmetatable({
+                    MODULE = { IsValid = function() return true end },
+                    PW = { Stims = lib(), Notify = function(name, id)
+                        ---@cast name string
+                        ---@cast id string
+                        emitted[#emitted + 1] = { name, id }
+                    end },
+                    net = {
+                        Receive = function(name, fn)
+                            assert(name == "pw_stim_used")
+                            receiver = fn
+                        end,
+                        ReadUInt = function(bits)
+                            assert(bits == 8)
+                            reads = reads + 1
+                            return value
+                        end
+                    }
+                }, { __index = _G })
+                setfenv(source, context)()
+                local receive = assert(receiver)
+                receive(0)
+                expect(reads).to.equal(0)
+                receive(8)
+                value = 255
+                receive(8)
+                expect(emitted).to.deepEqual({ { "PW_StimInjected", "stim_speed" } })
+            end
         }
     }
 }
