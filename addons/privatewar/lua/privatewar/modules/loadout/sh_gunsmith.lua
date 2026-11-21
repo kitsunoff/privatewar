@@ -6,10 +6,10 @@
 -- removed with its reason, the rest is kept (05 d.12: repair, not reject):
 --   1. "not available": the adapter does not offer the option in that build slot (unknown, gone from the catalogue, or
 --      a weapon without a gunsmith: the HL2 fallback offers nothing);
---   2. "locked": progression (ctx.lockedOptions), asked per option so only the curated Unlock decides here;
+--   2. "locked": the option's unlock authority (ctx.lockedOptions), asked per option;
 --   3. "conflict: <code>": the adapter's static ADAPTER:Validate rejects the build slot;
 --   4. "over the limit": the progression count limit (ctx.attachmentLimit, the weapon level): uncurated, non-cosmetic
---      options past it in build slot order.
+--      options without an entitlement past it in build slot order.
 -- The match cap (loadout.maxattachments, raised by wildcards through _EffectiveSlots) is not trimmed here: over it the
 -- class is marked unavailable (sh_budget.lua, 05 d.12). So the limit a build meets is min(progression, match cap).
 --
@@ -84,7 +84,7 @@ local function checkConflicts(weaponId, build, ctx, problems)
     end
 end
 
----Is an option counted toward the progression limit (no curated Unlock, not cosmetic)?
+---Is an option counted toward the progression limit (not curated, cosmetic or entitled)?
 ---@param weaponId string
 ---@param weapon table<string, any>
 ---@param slot string
@@ -96,6 +96,7 @@ local function counted(weaponId, weapon, slot, option, ctx)
     local camos = istable(weapon.Camos) and weapon.Camos or {}
     local entry = istable(entries[option]) and entries[option] or {}
     if entry.Unlock ~= nil or entry.Cosmetic == true or camos[option] ~= nil then return false end
+    if ctx.entitledOption ~= nil and ctx.entitledOption(weaponId, option) then return false end
     return not (ctx.isCosmetic ~= nil and ctx.isCosmetic(weaponId, slot, option) == true)
 end
 

@@ -282,6 +282,27 @@ return {
             end
         },
         {
+            name = "Gunsmith: entitled uncurated attachments do not consume the level allowance on save",
+            func = function()
+                local loadout = assert(PW.Loadout)
+                local v = view()
+                v.granted = function(key) return key == "attachments:rifle:reward" end
+                local progression = assert(PW.Progression)
+                local weapon = assert(v.lookup("weapons", "rifle"))
+                ---@type PW.LoadoutContext
+                local ctx = { lookup = v.lookup, budget = 0, maxattachments = 6,
+                    attachmentLimit = function() return 1 end,
+                    entitledOption = function(weaponId, option)
+                        return progression._EntitledOption(v, weaponId, option)
+                    end }
+                local build = { ["1"] = "reward", ["2"] = "ordinary", ["3"] = "overflow" }
+                local repaired, problems = loadout._ValidateBuild("rifle", weapon, build, ctx)
+                expect(repaired).to.deepEqual({ ["1"] = "reward", ["2"] = "ordinary" })
+                expect(problems).to.deepEqual({ { slot = "3", option = "overflow", why = "over the limit" } })
+                expect(build["3"]).to.equal("overflow")
+            end
+        },
+        {
             name = "Keys: KeyOf and ParseKey accept the bundle item shape, the camo alias and attachments; "
                 .. "malformed items give nil",
             func = function()
