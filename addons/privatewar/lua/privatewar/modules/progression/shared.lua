@@ -37,7 +37,8 @@ MODULE.Settings = {
 
 local lib = (rawget(PW, "Progression") or {}) --[[@as PW.ProgressionLib]]
 PW.Progression = lib
-PW.Unlocks = (rawget(PW, "Unlocks") or {}) --[[@as PW.UnlocksLib]]
+local unlocks = (rawget(PW, "Unlocks") or {}) --[[@as PW.UnlocksLib]]
+PW.Unlocks = unlocks
 
 if SERVER then
     AddCSLuaFile("privatewar/modules/progression/cl_entitlements.lua")
@@ -55,8 +56,7 @@ include("privatewar/modules/progression/sh_unlocks.lua")
 include("privatewar/modules/progression/sh_entitlements.lua")
 include("privatewar/modules/progression/sh_storage.lua")
 
----Whether purchases count right now: only while the economy module is active (06 d.6: disabling it leaves level-only
----unlocks, and prices are ignored).
+---Whether purchases count right now: only while the economy module is active (06 d.6).
 ---@return boolean
 function lib._OwnedActive()
     local economy = rawget(PW, "Economy") --[[@as PW.EconomyLib?]]
@@ -71,22 +71,153 @@ local function viewOf(ply)
     return lib._LocalView()
 end
 
+function unlocks._BindPolicy(view, ply)
+    view.override = function(kind, id)
+        local answer = PW.Ask("PW_UnlockOverride", ply, kind, id)
+        if type(answer) == "boolean" then return answer end
+        return nil
+    end
+    view.hint = function(kind, id) return unlocks._CheckHint(PW.Ask("PW_UnlockHint", kind, id)) end
+    return view
+end
+
+function unlocks.IsUnlocked(ply, kind, id)
+    return unlocks._Decide(viewOf(ply), kind, id)
+end
+
+function unlocks.Requirement(ply, kind, id)
+    return unlocks._Requirement(viewOf(ply), kind, id)
+end
+
+function unlocks.IsEntitled(ply, kind, id)
+    if type(kind) ~= "string" or type(id) ~= "string" then return false end
+    local key = unlocks._EntitlementKey(unlocks.KeyOf(lib._OwnedKey(kind, id)))
+    if key == nil then return false end
+    local view = viewOf(ply)
+    return (view.granted ~= nil and view.granted(key)) or (view.owned ~= nil and view.owned(key))
+end
+
+function unlocks.ListEntitled(ply)
+    if SERVER then
+        local state = lib._StateOf(PW._Progression, ply)
+        return unlocks._ListEntitled(state.owned, state.grants)
+    end
+    local file = lib.GetLocalFile()
+    return unlocks._ListEntitled(file ~= nil and file.owned or nil, unlocks._LocalFile().grants)
+end
+
+function unlocks.LockedOptions(ply, weaponId, build)
+    return lib._LockedOptions(viewOf(ply), weaponId, build)
+end
+
+function unlocks.AttachmentLimit(ply, weaponId)
+    local view = viewOf(ply)
+    if view.unlockAll then return view.maxAttachments end
+    return lib._AttachmentLimit(view.weaponLevel(weaponId), view.maxAttachments)
+end
+
 function lib.IsUnlocked(ply, kind, id)
-    return lib._IsUnlocked(viewOf(ply), kind, id)
+    return ((PW.Unlocks --[[@as PW.UnlocksLib]]).IsUnlocked(ply, kind, id))
 end
 
 function lib.LockedOptions(ply, weaponId, build)
-    return lib._LockedOptions(viewOf(ply), weaponId, build)
+    return (PW.Unlocks --[[@as PW.UnlocksLib]]).LockedOptions(ply, weaponId, build)
+end
+
+function lib.AttachmentLimit(ply, weaponId)
+    return (PW.Unlocks --[[@as PW.UnlocksLib]]).AttachmentLimit(ply, weaponId)
 end
 
 function lib._EntitledOptionOf(ply, weaponId, option)
     return lib._EntitledOption(viewOf(ply), weaponId, option)
 end
 
-function lib.AttachmentLimit(ply, weaponId)
+---@param entity PW.Entity
+---@param kind string
+---@return table<string, any>
+local function optionsOf(entity, kind)
+    local field = kind == "camos" and "Camos" or "Attachments"
+    local entries = (entity --[[@as table<string, any>]])[field]
+    return istable(entries) and entries --[[@as table<string, any>]] or {}
+end
+
+---@param ids string[]
+---@param view PW.ProgressionView
+---@param weapon PW.Entity
+---@param kind string
+local function collectUnlockedOptions(ids, view, weapon, kind)
+    for option in pairs(optionsOf(weapon, kind)) do
+        if type(option) == "string" then
+            local id = weapon.ClassName .. ":" .. option
+            if unlocks._Decide(view, kind, id) then ids[#ids + 1] = id end
+        end
+    end
+end
+
+function unlocks.ListUnlocked(ply, kind)
     local view = viewOf(ply)
-    if view.unlockAll then return view.maxAttachments end
-    return lib._AttachmentLimit(view.weaponLevel(weaponId), view.maxAttachments)
+    ---@type string[]
+    local ids = {}
+    if kind == "attachments" or kind == "camos" then
+        local weapons = PW.Registries.weapons
+        for _, weapon in ipairs(weapons ~= nil and weapons.GetEnabledList() or {}) do
+            collectUnlockedOptions(ids, view, weapon, kind)
+        end
+    else
+        local registry = PW.Registries[kind]
+        for _, definition in ipairs(registry ~= nil and registry.GetEnabledList() or {}) do
+            if unlocks._Decide(view, kind, definition.ClassName) then ids[#ids + 1] = definition.ClassName end
+        end
+    end
+    table.sort(ids)
+    return ids
+end
+
+---@param out table<string, PW.UnlockItem>
+---@param weapon PW.Entity
+---@param kind string
+---@param source string
+local function collectOptions(out, weapon, kind, source)
+    for id, definition in pairs(optionsOf(weapon, kind)) do
+        if istable(definition) and definition.Hidden ~= true and unlocks._Spec(definition.Unlock).reward == source then
+            local item = { kind = kind, id = id, weapon = weapon.ClassName }
+            local key = unlocks.KeyOf(item)
+            if key ~= nil then out[key] = item end
+        end
+    end
+end
+
+---@param out table<string, PW.UnlockItem>
+---@param kind string
+---@param definition PW.Entity
+---@param source string
+local function collectReward(out, kind, definition, source)
+    if unlocks._Spec(definition.Unlock).reward == source then
+        local item = { kind = kind, id = definition.ClassName }
+        local key = unlocks._EntitlementKey(unlocks.KeyOf(item))
+        if key ~= nil then out[key] = item end
+    end
+    if kind == "weapons" then
+        collectOptions(out, definition, "attachments", source)
+        collectOptions(out, definition, "camos", source)
+    end
+end
+
+function unlocks.ListRewards(source)
+    if unlocks._CheckSource(source) == nil then return {} end
+    ---@type table<string, PW.UnlockItem>
+    local byKey = {}
+    for kind, registry in pairs(PW.Registries) do
+        for _, definition in ipairs(registry.GetEnabledList()) do
+            collectReward(byKey, kind, definition, source)
+        end
+    end
+    local keys = table.GetKeys(byKey) --[[@as string[] ]]
+    table.sort(keys)
+    ---@type PW.UnlockItem[]
+    local items = {}
+    for index, key in ipairs(keys) do items[index] = byKey[key] end
+    return items
 end
 
 function lib.GetWeaponLevel(ply, weaponClass)

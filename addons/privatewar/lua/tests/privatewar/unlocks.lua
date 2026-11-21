@@ -32,6 +32,31 @@ local function view()
     }
 end
 
+---@param registries table<string, PW.Registry>
+---@param run fun()
+local function withRegistries(registries, run)
+    local prior = PW.Registries
+    PW.Registries = registries
+    local ok, err = pcall(run)
+    PW.Registries = prior
+    assert(ok, err)
+end
+
+---@param kind string
+---@param definitions table<string, table<string, any>>
+---@return PW.Registry
+local function registry(kind, definitions)
+    local reg = PW.Registry.New(kind, { log = function() end })
+    for id, definition in pairs(definitions) do reg.Register(definition, id) end
+    reg.ResolveAll()
+    return reg
+end
+
+---@return Player
+local function playerForView()
+    return player.GetHumans()[1] or NULL --[[@as Player]]
+end
+
 return {
     groupName = "PW unlock authority",
     cases = {
@@ -303,6 +328,37 @@ return {
             end
         },
         {
+            name = "Compatibility: PW.Progression.IsUnlocked, LockedOptions and AttachmentLimit answer like PW.Unlocks",
+            func = function()
+                local u, p, ply = lib(), assert(PW.Progression), playerForView()
+                local original = PW.Ask
+                stub(PW, "Ask").with(function(name, ...)
+                    ---@type any[]
+                    local args = { ... }
+                    if name == "PW_UnlockOverride" then
+                        local actor, kind, id = args[1], args[2], args[3]
+                        if kind == "perks" and id == "scavenger" then
+                            expect(actor).to.equal(ply)
+                            return false
+                        end
+                    elseif name == "PW_UnlockHint" then
+                        local kind, id = args[1], args[2]
+                        if kind == "perks" and id == "scavenger" then return "#test.hint" end
+                    end
+                    return original(name, ...)
+                end)
+                expect({ u.IsUnlocked(ply, "perks", "scavenger") }).to.deepEqual({ false, "override" })
+                expect({ p.IsUnlocked(ply, "perks", "scavenger") }).to.deepEqual({ false })
+                expect(u.Requirement(ply, "perks", "scavenger").hint).to.equal("#test.hint")
+                local testBuild = { ["1"] = "optic" }
+                expect(p.LockedOptions(ply, "weapon_ar2", testBuild))
+                    .to.deepEqual(u.LockedOptions(ply, "weapon_ar2", testBuild))
+                expect(p.AttachmentLimit(ply, "weapon_ar2")).to.equal(u.AttachmentLimit(ply, "weapon_ar2"))
+                stub(u, "IsUnlocked").with(function() return true, "grant" end)
+                expect({ p.IsUnlocked(ply, "perks", "scavenger") }).to.deepEqual({ true })
+            end
+        },
+        {
             name = "Keys: KeyOf and ParseKey accept the bundle item shape, the camo alias and attachments; "
                 .. "malformed items give nil",
             func = function()
@@ -329,6 +385,78 @@ return {
                 end
                 expect(unlocks.KeyOf({ kind = "camos", id = "gold" })).to.beNil()
                 expect(unlocks.KeyOf({ kind = "attachments", weapon = "bad:weapon", id = "optic" })).to.beNil()
+            end
+        },
+        {
+            name = "Describe: names of entities, camos and options; an unknown item is marked invalid",
+            func = function()
+                local u = lib()
+                local registries = {
+                    perks = registry("perks", { mark = { Name = "Mark" } }),
+                    weapons = registry("weapons", { rifle = { Name = "Rifle",
+                        Attachments = { red_dot = {} }, Camos = { gold = { Name = "Gold" } } } })
+                }
+                withRegistries(registries, function()
+                    local entity = u.Describe({ kind = "perks", id = "mark" })
+                    expect({ entity.key, entity.name, entity.valid }).to.deepEqual({ "perks:mark", "Mark", true })
+                    local camo = u.Describe({ kind = "camo", weapon = "rifle", id = "gold" })
+                    expect({ camo.kind, camo.weapon, camo.name, camo.valid }).to.deepEqual({
+                        "camos", "rifle", "Gold", true
+                    })
+                    local option = u.Describe("attachments:rifle:red_dot")
+                    expect({ option.name, option.valid }).to.deepEqual({ "red_dot", true })
+                    expect(u.Describe("perks:unknown").valid).to.beFalse()
+                    expect(u.Describe("camos:absent:gold").valid).to.beFalse()
+                end)
+            end
+        },
+        {
+            name = "ListUnlocked: the enabled ids of a kind that are unlocked, sorted",
+            func = function()
+                local u = lib()
+                local rewards = registry("perks", { zulu = {}, alpha = {}, gated = { Unlock = false }, disabled = {} })
+                rewards._Disable("disabled", "test")
+                local original = PW.Ask
+                stub(PW, "Ask").with(function(name, ...)
+                    if name == "PW_UnlockOverride" then
+                        ---@type any[]
+                        local args = { ... }
+                        local kind, id = args[2], args[3]
+                        if kind == "perks" and id == "gated" then return false end
+                    end
+                    return original(name, ...)
+                end)
+                withRegistries({ perks = rewards, modules = PW.Registries.modules }, function()
+                    expect(u.ListUnlocked(playerForView(), "perks")).to.deepEqual({ "alpha", "zulu" })
+                    expect(u.ListUnlocked(playerForView(), "unregistered")).to.deepEqual({})
+                end)
+            end
+        },
+        {
+            name = "ListRewards: entities, attachments and camos with a matching reward source, sorted by key; reward "
+                .. "alone opens nothing",
+            func = function()
+                local u = lib()
+                local reward = { level = false, reward = "challenge" }
+                local perks = registry("perks", { zulu = { Unlock = reward }, alpha = { Unlock = reward },
+                    other = { Unlock = { level = false, reward = "event" } }, disabled = { Unlock = reward } })
+                perks._Disable("disabled", "test")
+                local weapons = registry("weapons", { rifle = {
+                    Attachments = { suppressor = { Unlock = reward }, hidden = { Unlock = reward, Hidden = true } },
+                    Camos = { gold = { Unlock = reward } }
+                } })
+                withRegistries({ perks = perks, weapons = weapons }, function()
+                    expect(u.ListRewards("challenge")).to.deepEqual({
+                        { kind = "attachments", weapon = "rifle", id = "suppressor" },
+                        { kind = "camos", weapon = "rifle", id = "gold" },
+                        { kind = "perks", id = "alpha" },
+                        { kind = "perks", id = "zulu" }
+                    })
+                    local v = view()
+                    v.lookup = assert(PW.Progression)._RegistryLookup
+                    expect({ u._Decide(v, "perks", "alpha") }).to.deepEqual({ false, "grant_only" })
+                    expect({ u._Decide(v, "camos", "rifle:gold") }).to.deepEqual({ false, "grant_only" })
+                end)
             end
         }
     }

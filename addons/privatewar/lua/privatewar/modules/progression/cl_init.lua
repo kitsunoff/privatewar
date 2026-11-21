@@ -38,8 +38,8 @@ end
 
 function lib._LocalView()
     local levels = localState.levels
+    local ply = LocalPlayer()
     if levels == nil then
-        local ply = LocalPlayer()
         levels = {
             level = IsValid(ply) and lib.GetLevel(ply) or 1, weapons = {},
             unlockAll = PW.Setting("progression.unlockall") == true, maxAttachments = 5
@@ -52,9 +52,10 @@ function lib._LocalView()
             return stored ~= nil and stored.owned ~= nil and stored.owned[key] == true
         end
     end
-    return lib._ViewFromLevels(levels --[[@as PW.ProgressionLevels]], lib._RegistryLookup, owned, function(key)
+    local view = lib._ViewFromLevels(levels --[[@as PW.ProgressionLevels]], lib._RegistryLookup, owned, function(key)
         return unlocks._LocalFile().grants[key] ~= nil
     end)
+    return unlocks._BindPolicy(view, ply)
 end
 
 function lib.GetCurrency()

@@ -195,3 +195,46 @@ function lib._RegistryLookup(kind, id)
     warnBadUnlock(entity, kind, id)
     return entity
 end
+
+---@param weaponId string
+---@param option string
+---@return boolean
+local function offeredOption(weaponId, option)
+    local adapters = PW.Adapters
+    if adapters == nil then return false end
+    local slots = adapters.CallFor(weaponId, "GetSlots", weaponId, {}) --[[@as PW.Slot[]?]]
+    for _, slot in ipairs(slots or {}) do
+        local options = adapters.CallFor(weaponId, "GetOptions", weaponId, slot.id) --[[@as PW.Option[]?]]
+        for _, entry in ipairs(options or {}) do
+            if entry.id == option then return true end
+        end
+    end
+    return false
+end
+
+function unlocks._Known(key)
+    local kind, id, weaponId, option = unlocks.ParseKey(key)
+    if kind == nil or id == nil then return false end
+    if weaponId == nil or option == nil then return lib._RegistryLookup(kind, id) ~= nil end
+    local weapon = lib._RegistryLookup("weapons", weaponId)
+    if weapon == nil then return false end
+    return entryOf(weapon, kind == "camos" and "Camos" or "Attachments", option) ~= nil
+        or offeredOption(weaponId, option)
+end
+
+function unlocks.Describe(item)
+    local key = unlocks._EntitlementKey(unlocks.KeyOf(item))
+    local kind, id, weaponId, option = unlocks.ParseKey(key or "")
+    if key == nil or kind == nil or id == nil then
+        return { key = "", kind = "", id = "", name = "Unknown item", valid = false }
+    end
+    local entity = nil
+    if weaponId == nil then
+        entity = lib._RegistryLookup(kind, id)
+    elseif kind == "camos" and option ~= nil then
+        local weapon = lib._RegistryLookup("weapons", weaponId)
+        entity = weapon ~= nil and entryOf(weapon, "Camos", option) or nil
+    end
+    local name = entity ~= nil and type(entity.Name) == "string" and entity.Name or option or id
+    return { key = key, kind = kind, id = id, weapon = weaponId, name = name, valid = unlocks._Known(key) }
+end

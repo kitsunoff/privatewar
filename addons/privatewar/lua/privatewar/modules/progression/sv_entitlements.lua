@@ -46,36 +46,6 @@ function lib._OnUpload(store, ply, raw)
     return true
 end
 
----@param weaponId string
----@param option string
----@return boolean
-local function offeredOption(weaponId, option)
-    local adapters = PW.Adapters
-    if adapters == nil then return false end
-    local slots = adapters.CallFor(weaponId, "GetSlots", weaponId, {}) --[[@as PW.Slot[]?]]
-    for _, slot in ipairs(slots or {}) do
-        local options = adapters.CallFor(weaponId, "GetOptions", weaponId, slot.id) --[[@as PW.Option[]?]]
-        for _, entry in ipairs(options or {}) do
-            if entry.id == option then return true end
-        end
-    end
-    return false
-end
-
----@param key string
----@return boolean
-local function known(key)
-    local kind, id, weaponId, option = lib.ParseKey(key)
-    if kind == nil or id == nil then return false end
-    if weaponId == nil or option == nil then return progression._RegistryLookup(kind, id) ~= nil end
-    local weapon = progression._RegistryLookup("weapons", weaponId)
-    if weapon == nil then return false end
-    local field = kind == "camos" and "Camos" or "Attachments"
-    local entries = weapon[field]
-    if istable(entries) and (entries --[[@as table<string, any>]])[option] ~= nil then return true end
-    return offeredOption(weaponId, option)
-end
-
 ---@param items (PW.UnlockItem|string)[]
 ---@param forGrant boolean
 ---@return string[]?, string?
@@ -95,7 +65,7 @@ local function itemKeys(items, forGrant)
         local key = lib._EntitlementKey(lib.KeyOf(item))
         if key == nil then return nil, "badkey" end
         if not seen[key] then
-            if forGrant and not known(key) then return nil, "unknown" end
+            if forGrant and not lib._Known(key) then return nil, "unknown" end
             keys[#keys + 1] = key
             seen[key] = true
         end

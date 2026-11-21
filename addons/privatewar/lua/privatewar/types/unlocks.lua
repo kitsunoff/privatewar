@@ -41,7 +41,7 @@
 ---@class PW.UnlockItemView
 ---@field key string
 ---@field kind string
----@field id string
+---@field id string canonical decision id, "<weapon>:<option>" for options
 ---@field weapon? string
 ---@field name string
 ---@field valid boolean resolves on this host
@@ -88,6 +88,17 @@
 ---@field ParseKey fun(key: string): string?, string?, string?, string?
 ---@field _Decide fun(view: PW.ProgressionView, kind: string, id: string): boolean, PW.UnlockReason
 ---@field _Requirement fun(view: PW.ProgressionView, kind: string, id: string): PW.UnlockRequirement
+---@field IsUnlocked fun(ply: Player, kind: string, id: string): boolean, PW.UnlockReason
+---@field LockedOptions fun(ply: Player, weaponId: string, build: table<string, string|false>): table<string, boolean>
+---@field AttachmentLimit fun(ply: Player, weaponId: string): integer
+---@field Requirement fun(ply: Player, kind: string, id: string): PW.UnlockRequirement
+---@field IsEntitled fun(ply: Player, kind: string, id: string): boolean
+---@field ListEntitled fun(ply: Player): table<string, PW.UnlockGrantMeta>
+---@field ListUnlocked fun(ply: Player, kind: string): string[]
+---@field Describe fun(item: PW.UnlockItem|string): PW.UnlockItemView
+---@field ListRewards fun(source: string): PW.UnlockItem[]
+---@field _Known fun(key: string): boolean
+---@field _BindPolicy fun(view: PW.ProgressionView, ply: Player): PW.ProgressionView
 ---@field FilePath string
 ---@field FileVersion integer
 ---@field UploadMaxBytes integer

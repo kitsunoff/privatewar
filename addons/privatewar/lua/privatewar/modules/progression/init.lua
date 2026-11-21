@@ -217,7 +217,8 @@ function lib._ViewOf(store, ply, lookup)
     if store.ownedActive() then
         owned = function(key) return lib._GetOwned(store, ply)[key] == true end
     end
-    return {
+    ---@type PW.ProgressionView
+    local view = {
         level = lib._Level(store, ply),
         weaponLevel = function(weaponId) return lib._WeaponLevelOf(store, ply, weaponId) end,
         lookup = lookup, unlockAll = params.unlockAll, maxAttachments = isnumber(cap) and cap --[[@as number]] or 5,
@@ -227,6 +228,7 @@ function lib._ViewOf(store, ply, lookup)
             return grants ~= nil and grants[key] ~= nil
         end
     }
+    return (PW.Unlocks --[[@as PW.UnlocksLib]])._BindPolicy(view, ply)
 end
 
 -- Hooks --------------------------------------------------------------------------------------------------------------
