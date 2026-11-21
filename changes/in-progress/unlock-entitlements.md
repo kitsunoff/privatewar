@@ -96,6 +96,10 @@ edited by this record.
 - [ ] A key is `"<kind>:<id>"` exactly as today's owned keys (`sh_wallet.lua:17-25`): options are
   `"attachments:<weapon>:<option>"` and `"camos:<weapon>:<option>"`. Same pattern `^%l[%l_]*:[%w_%-%.:]+$`, at most
   `MaxKeyLength` (96) bytes.
+- [ ] `Grant` and `Describe` recognize a weapon option as a camo only when it is listed in that weapon's `Camos`;
+  all other offered or curated options use `attachments`. The wrong namespace does not resolve, even if the
+  adapter calls an option cosmetic. This matches gunsmith validation and the existing shop camo rule. It does
+  not change key syntax or remove well-formed keys received in an upload.
 - [ ] APIs that take items accept the bundle item shape (`docs/api/economy.md` "Kinds"), so challenge rewards and
   bundles share one format:
 
@@ -599,6 +603,7 @@ New cases, `unlocks_storage.lua` (server glue with fake stores; one engine smoke
   progression.json"
 - [ ] 21. "Revoke: both realms notify the revoking source once"
 - [ ] 22. "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved"
+- [ ] 23. "Grant rejects an option with a mismatched entitlement kind"
 
 New cases, `unlocks_ui.lua` (pure UI models, server runner):
 
