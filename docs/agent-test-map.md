@@ -77,6 +77,23 @@ continued infected play, synchronous relationship/effect rollback, ordinary-mode
 their existing engine assertions too. Read `role_policy.lua`, `player_overrides.lua`, `bots_input.lua`,
 `infection_runtime.lua`, `infection_melee_smoke.lua` and the full T-11.14 contract before changing those seams.
 
+## Tactical stims (T-11.20)
+
+The [mandatory inventory](../TASKS.md#t-1120-tactical-stims) lists each exact test name under its suite.
+
+| Regression area | Suite | Required coverage |
+| --- | --- | --- |
+| Temporary movement | `player_overrides_move_sources.lua` | Sorted multiplication, profile/stat composition, baseline recovery, spawn reset, no health mutation |
+| Shared rules | `stims.lua` | Ticks, caps, item overrides, effect lines, tuning bounds |
+| Item lifecycle | `stims_items.lua` | Refusals, delays, expiry, instance cleanup, inheritance and owner-only message |
+| Equipment input | `stims_equipment.lua` | Live-phase weapon-less use only, reject grenade/index, charge/cooldown, spawn, Stockpile, sounds and categories |
+| Presentation | `hud_stims.lua` | Active-only lines, cached text, placement clear of streaks |
+| Bots | `stims_bots.lua` | Heal-only policy and a native bot's successful heal |
+| Optional animation | `integration_stims.lua` | Capability selection, no-dependency fallback and explicit optional session skip |
+
+Core grenade tests remain mandatory. `equipment.lua` now checks actual receiver registration, in addition to
+`stims_equipment.lua` invoking that receiver and asserting that a grenade cannot be spent through it.
+
 ## Weapon adapters
 
 | Task | Mandatory clause | Suite | Exact existing case name |
