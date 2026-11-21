@@ -249,6 +249,45 @@ return {
             end
         },
         {
+            name = "Economy: a granted item counts as owned in a quote; a purchase refreshes the classes",
+            func = function()
+                local u = unlocks()
+                local p, economy = assert(PW.Progression), assert(PW.Economy)
+                local store, deltas, _, refreshes = server()
+                local ply = playerStub()
+                local buyable = "perks:soft_landing"
+                p._SetState(store, ply, { xp = 0, weapons = {}, currency = 200 })
+                expect(u._OnUpload(store, ply, { grants = { [item] = true }, claims = {} })).to.beTrue()
+                local shop = economy._NewStore({
+                    progression = store,
+                    catalogue = function()
+                        return { perks = {
+                            scavenger = { Name = "Scavenger", Price = 100, Unlock = false },
+                            soft_landing = { Name = "Soft Landing", Price = 80 }
+                        } }
+                    end,
+                    read = function() return nil end,
+                    notify = function() end
+                })
+                local context = economy._Context(shop, ply)
+                expect(context.owned(item)).to.beTrue()
+                expect(context.unlocked("perks", "scavenger")).to.beFalse()
+                expect(p._GetOwned(store, ply)[item]).to.beNil()
+                local quote, reason = economy._Quote(context, item)
+                expect(quote).to.beNil()
+                expect(reason).to.equal("owned")
+                expect({ economy._Buy(shop, ply, item) }).to.deepEqual({ false, "owned" })
+                expect(store.players[ply].currency).to.equal(200)
+                expect(#refreshes).to.equal(1)
+                expect({ economy._Buy(shop, ply, buyable) }).to.deepEqual({ true, "" })
+                expect(store.players[ply].currency).to.equal(120)
+                expect(p._GetOwned(store, ply)[buyable]).to.beTrue()
+                expect(assert(store.players[ply].grants)[buyable]).to.beNil()
+                expect(refreshes).to.deepEqual({ ply, ply })
+                expect(#deltas).to.equal(1)
+            end
+        },
+        {
             name = "Claim only: an empty grant with a grant id records the claim once; HasClaim answers on both realms",
             func = function()
                 local u = unlocks()
