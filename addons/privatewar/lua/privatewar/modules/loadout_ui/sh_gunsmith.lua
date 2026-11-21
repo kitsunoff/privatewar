@@ -17,8 +17,21 @@ local serverNote = "Conflicts between attachments are checked by the server when
 ---@field hidden boolean
 ---@field cosmetic boolean
 ---@field unlock number the weapon level of a curated option, 0 when uncurated
+---@field requirement? PW.UnlockRequirement
 ---@field levelCounted boolean counted toward the weapon level limit
 ---@field cost number
+
+---@param input PW.LoadoutUIGunsmithInput
+---@param id string
+---@param entity table<string, any>
+---@return PW.UnlockRequirement?
+local function requirementOf(input, id, entity)
+    if input.optionRequirement ~= nil then return input.optionRequirement(id) end
+    if input.unlockAll or PW.Unlocks == nil then return nil end
+    local req = PW.Unlocks._StaticRequirement(entity, true)
+    if req.weaponLevel ~= nil and input.weaponLevel >= req.weaponLevel then return nil end
+    return req
+end
 
 ---@param input PW.LoadoutUIGunsmithInput
 ---@param slotCosmetic boolean
@@ -32,11 +45,13 @@ local function factsOf(input, slotCosmetic, id, optionCosmetic)
     local entry = istable(entries[id]) and entries[id] or {}
     local camo = istable(camos[id]) and camos[id] or nil
     local cosmetic = slotCosmetic or optionCosmetic or entry.Cosmetic == true or camo ~= nil
-    local unlock = lib._Required(entry.Unlock)
-    if camo ~= nil then unlock = lib._Required(camo.Unlock) end
+    local curated = camo or entry
+    local req = requirementOf(input, id, curated)
+    local entitled = input.optionEntitled ~= nil and input.optionEntitled(id)
     return {
-        hidden = entry.Hidden == true, cosmetic = cosmetic, unlock = unlock,
-        levelCounted = not cosmetic and entry.Unlock == nil,
+        hidden = entry.Hidden == true or curated.Hidden == true or (req ~= nil and req.reason == "hidden"),
+        cosmetic = cosmetic, unlock = lib._Required(curated.Unlock), requirement = req,
+        levelCounted = not cosmetic and entry.Unlock == nil and not entitled,
         cost = cosmetic and 0 or (isnumber(entry.Cost) and entry.Cost or 1)
     }
 end
@@ -78,6 +93,28 @@ end
 ---@field levelCount integer
 ---@field levelLimit? integer
 
+---@param facts PW.LoadoutUIOptionFacts
+---@param input PW.LoadoutUIGunsmithInput
+---@return boolean
+local function isLocked(facts, input)
+    if facts.hidden then return true end
+    if facts.requirement ~= nil then return not facts.requirement.unlocked end
+    return not input.unlockAll and input.weaponLevel < facts.unlock
+end
+
+---@param option PW.LoadoutUIGunsmithOption
+---@param facts PW.LoadoutUIOptionFacts
+local function showRequirement(option, facts)
+    option.locked = true
+    local req, unlocks = facts.requirement, PW.Unlocks
+    if req ~= nil and unlocks ~= nil then
+        option.lockText, option.reason = unlocks.LockText(req)
+        if req.hint ~= option.reason then option.hint = req.hint end
+        return
+    end
+    option.lockText, option.reason = "LV " .. facts.unlock, "Unlocks at weapon level " .. facts.unlock
+end
+
 ---@param option PW.LoadoutUIGunsmithOption
 ---@param facts PW.LoadoutUIOptionFacts
 ---@param current? PW.LoadoutUIOptionFacts
@@ -86,9 +123,8 @@ end
 local function lockOption(option, facts, current, input, counts)
     if input.banned[option.id] then
         option.locked, option.lockText, option.reason = true, "BANNED", "Banned in this match"
-    elseif facts.unlock > 0 and not input.unlockAll and input.weaponLevel < facts.unlock then
-        option.locked, option.lockText = true, "LV " .. facts.unlock
-        option.reason = "Unlocks at weapon level " .. facts.unlock
+    elseif isLocked(facts, input) then
+        showRequirement(option, facts)
     elseif not option.selected and not facts.cosmetic then
         local newCount = counts.count - ((current ~= nil and not current.cosmetic) and 1 or 0) + 1
         local newLevel = counts.levelCount - ((current ~= nil and current.levelCounted) and 1 or 0) + 1
@@ -137,7 +173,7 @@ local function makeSlot(input, info, counts)
     }
 end
 
----The curated options of a build above the weapon level (the lockedOptions check of the preview).
+---The locked options of a build (the lockedOptions check of the preview).
 ---@param input PW.LoadoutUIGunsmithInput
 ---@param info table<string, PW.LoadoutUISlotInfo>
 ---@param build table<string, string|false>
@@ -146,8 +182,7 @@ local function lockedIn(input, info, build)
     ---@type table<string, boolean>
     local locked = {}
     for slotId, value in pairs(build) do
-        local unlock = isstring(value) and pickedFacts(input, info, slotId, value --[[@as string]]).unlock or 0
-        if unlock > 0 and not input.unlockAll and input.weaponLevel < unlock then
+        if isstring(value) and isLocked(pickedFacts(input, info, slotId, value --[[@as string]]), input) then
             locked[value --[[@as string]]] = true
         end
     end
@@ -170,12 +205,14 @@ local function preview(input, info, counts)
             names[option.id] = isstring(option.name) and option.name or option.id
         end
     end
+    local entitled = input.optionEntitled
     ---@type PW.LoadoutContext
     local ctx = {
         lookup = function() return nil end, budget = 0, maxattachments = input.cap,
         adapterOptions = function() return offered end,
         isCosmetic = function(_, slotId, id) return pickedFacts(input, info, slotId, id).cosmetic end,
         lockedOptions = function(_, single) return lockedIn(input, info, single) end,
+        entitledOption = entitled ~= nil and function(_, id) return entitled(id) end or nil,
         attachmentLimit = function() return counts.levelLimit end
     }
     local _, problems = (PW.Loadout --[[@as PW.LoadoutLib]])._ValidateBuild(input.weaponId, input.weapon,

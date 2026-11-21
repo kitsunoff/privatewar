@@ -108,9 +108,10 @@ function lib.LiveInput(value)
     local rules = lib_._Context(setting, lib_._RegistryLookup)
     ctx.budget, ctx.maxattachments = rules.budget, rules.maxattachments
     ctx.bannedWeapons, ctx.bannedAttachments = rules.bannedWeapons, rules.bannedAttachments
-    local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
-    if progression ~= nil and progression.IsUnlocked ~= nil then
-        ctx.isUnlocked = function(kind, id) return progression.IsUnlocked(LocalPlayer(), kind, id) end
+    local unlocks = PW.Unlocks
+    if unlocks ~= nil then
+        ctx.isUnlocked = function(kind, id) return (unlocks.IsUnlocked(LocalPlayer(), kind, id)) end
+        ctx.requirement = function(kind, id) return unlocks.Requirement(LocalPlayer(), kind, id) end
     end
     return {
         declared = PW._Loadout.slots, order = PW._Loadout.order, loadout = value, ctx = ctx,
@@ -140,6 +141,23 @@ local function weaponProgress(weaponId)
     return progression.GetWeaponLevel(LocalPlayer(), weaponId), unlockAll
 end
 
+---@param weapon table<string, any>
+---@param weaponId string
+---@param input PW.LoadoutUIGunsmithInput
+local function bindOptionUnlocks(weapon, weaponId, input)
+    local unlocks = PW.Unlocks
+    if unlocks == nil then return end
+    local camos = istable(weapon.Camos) and weapon.Camos --[[@as table<string, any>]] or {}
+    ---@param id string
+    local function kindOf(id)
+        return istable(camos[id]) and "camos" or "attachments"
+    end
+    input.optionRequirement = function(id)
+        return unlocks.Requirement(LocalPlayer(), kindOf(id), weaponId .. ":" .. id)
+    end
+    input.optionEntitled = function(id) return unlocks.IsEntitled(LocalPlayer(), kindOf(id), weaponId .. ":" .. id) end
+end
+
 function lib.LiveGunsmith(draft)
     local slotId = draft.weaponSlot
     local items = slotId ~= nil and loadout()._Items(draft.loadout[slotId]) or nil
@@ -153,7 +171,8 @@ function lib.LiveGunsmith(draft)
     local slots = adapters ~= nil and adapters.CallFor(weaponId, "GetSlots", weaponId, build) or {}
     local weapon = loadout()._RegistryLookup("weapons", weaponId) or {}
     local level, unlockAll = weaponProgress(weaponId)
-    return {
+    ---@type PW.LoadoutUIGunsmithInput
+    local gunsmith = {
         weaponId = weaponId, weapon = weapon, weaponName = phrase(isstring(weapon.Name) and weapon.Name or weaponId),
         build = build, slots = istable(slots) and slots or {}, weaponLevel = level, unlockAll = unlockAll,
         cap = slot ~= nil and slot.maxattachments or input.ctx.maxattachments,
@@ -163,6 +182,8 @@ function lib.LiveGunsmith(draft)
             return istable(options) and options or {}
         end
     }
+    bindOptionUnlocks(weapon, weaponId, gunsmith)
+    return gunsmith
 end
 
 -- Draft and navigation -------------------------------------------------------------------------------------------

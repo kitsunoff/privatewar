@@ -22,6 +22,13 @@ local function operators()
     return PW.Operators --[[@as PW.OperatorsLib]]
 end
 
+---@param text? string
+---@return string?
+local function phrase(text)
+    local store = PW.UI.Store
+    return store ~= nil and store.UnlockPhrase ~= nil and store.UnlockPhrase(text) or text
+end
+
 ---@param view PWLoadoutOperatorView
 ---@param id string
 ---@return string path
@@ -47,13 +54,16 @@ local function preview(view, id)
     else
         details:SetTitle(entry.name)
         details:SetRows({ { "Source", entry.source == "store" and "Store" or "Stock" }, { "Model", entry.path } })
-        details:SetText(entry.source == "store" and "A store model: visible to everyone in matches." or nil)
         ---@type string?
         local reason = nil
         for _, card in ipairs(view.cardList.cards) do
             if card.id == id then reason = card.reason end
         end
-        details:SetWarning(entry.locked and reason or nil)
+        local req = entry.requirement
+        local hint = req ~= nil and req.hint ~= req.text and phrase(req.hint) or nil
+        local note = entry.source == "store" and "A store model: visible to everyone in matches." or nil
+        details:SetText(hint or reason or note)
+        details:SetWarning(hint ~= nil and reason or nil)
     end
     view:InvalidateLayout(true)
 end
@@ -79,6 +89,7 @@ local function refresh(view)
     local choice = lib.LocalChoice ~= nil and (lib.LocalChoice --[[@as fun(): string]])() or lib.Auto
     local own = GetConVar("cl_playermodel")
     local cards, selected = lib.Cards(view.entries, choice, own ~= nil and own:GetString() or nil)
+    for _, card in ipairs(cards) do card.text, card.reason = phrase(card.text), phrase(card.reason) end
     view.cardList:SetCards(cards, selected)
     wirePreview(view)
     preview(view, selected)

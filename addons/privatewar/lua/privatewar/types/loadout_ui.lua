@@ -40,6 +40,7 @@
 ---@field locked boolean focusable, cannot be picked; see reason
 ---@field reason? string why it is locked (unlock level, store, banned, already picked)
 ---@field lockText? string short text next to the lock glyph ("LV 12", "STORE")
+---@field hint? string an additional reward hint when the reason already describes another path
 ---@field new? boolean granted and unseen
 
 ---@alias PW.LoadoutUIBudgetState "unlimited"|"ok"|"full"|"over"
@@ -76,6 +77,7 @@
 ---@field slots PW.Slot[] ADAPTER:GetSlots(weaponId, build); empty = no gunsmith
 ---@field options fun(slotId: string): PW.Option[] ADAPTER:GetOptions(weaponId, slotId)
 ---@field optionRequirement? fun(optionId: string): PW.UnlockRequirement
+---@field optionEntitled? fun(optionId: string): boolean
 ---@field weaponLevel integer
 ---@field unlockAll boolean
 ---@field cap integer the match cap of the weapon slot (loadout.maxattachments, wildcards included)
@@ -92,6 +94,7 @@
 ---@field locked boolean
 ---@field reason? string
 ---@field lockText? string
+---@field hint? string
 ---@field unlock? integer the weapon level of a curated option
 ---@field new? boolean granted and unseen
 
@@ -169,8 +172,8 @@
 ---@field Budget fun(cost: number, budget: number): PW.LoadoutUIBudget
 ---The level an Unlock field asks for (an integer or { level = N }); 0 without one.
 ---@field _Required fun(unlock: any): number
----Display text of an entity's lock: "LV <n>", "STORE" or "LOCKED", and the longer reason.
----@field LockText fun(entity: table<string, any>): string, string
+---Display text of an entity's lock: the badge, the longer reason and any distinct reward hint.
+---@field LockText fun(entity: table<string, any>, requirement?: PW.UnlockRequirement): string, string, string?
 ---A copy of the loadout with one row set (id nil or "" clears it); a new weapon drops the old build; then Normalize.
 ---@field SetItem fun(input: PW.LoadoutUIEditorInput, rowId: string, id?: string): PW.Loadout
 ---Drops slots the effective set no longer has, positions past a slot's count and builds of slots without a weapon.

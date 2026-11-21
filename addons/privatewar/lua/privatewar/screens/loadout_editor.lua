@@ -43,6 +43,13 @@ local function kit()
     return PW.UI --[[@as PW.UILib]]
 end
 
+---@param text? string
+---@return string?
+local function phrase(text)
+    local store = kit().Store
+    return store ~= nil and store.UnlockPhrase ~= nil and store.UnlockPhrase(text) or text
+end
+
 ---@param view PWLoadoutEditorView
 ---@return PW.LoadoutUIRow?
 local function currentRow(view)
@@ -65,15 +72,19 @@ local function gunsmithSlot(view)
 end
 
 ---@param view PWLoadoutEditorView
-local function showInfo(view)
+---@param choice? PW.LoadoutUIOption
+local function showInfo(view, choice)
     local result = ui().DraftResult ~= nil and ui().DraftResult() or nil
     local draft = view.draft
     local title = result ~= nil and result.title or (draft.dirty and "Unsaved changes" or "No changes")
     view.info:SetTitle(title)
     view.info:SetRows({ { "NAME", draft.name }, { "COST", view.model.meter.text } })
-    view.info:SetText(result ~= nil and #result.lines > 0 and table.concat(result.lines, ", ") or nil)
+    local reason = choice ~= nil and phrase(choice.reason) or nil
+    local hint = choice ~= nil and phrase(choice.hint) or nil
+    local resultText = result ~= nil and #result.lines > 0 and table.concat(result.lines, ", ") or nil
+    view.info:SetText(hint or reason or resultText)
     local check = view.model.check
-    view.info:SetWarning(check ~= nil and ("Not usable: " .. check) or nil)
+    view.info:SetWarning(hint ~= nil and reason or (check ~= nil and ("Not usable: " .. check) or nil))
     local slot = gunsmithSlot(view)
     view.gunsmith:SetText(slot ~= nil and ("GUNSMITH: " .. string.upper(slot)) or "GUNSMITH")
     view.gunsmith:SetLocked(slot == nil, "Pick a weapon first")
@@ -85,7 +96,19 @@ local function updateRows(view)
     for _, row in ipairs(view.model.rows) do
         local panel = view.rows[row.id]
         panel.pwLabel, panel.pwValue, panel.pwSide = row.label, row.itemName, row.costText
-        panel.pwProblem, panel.pwChosen = row.problem, row.id == view.rowId
+        panel.pwProblem, panel.pwChosen = phrase(row.problem), row.id == view.rowId
+    end
+end
+
+---@param view PWLoadoutEditorView
+---@param options PW.LoadoutUIOption[]
+local function wireChoices(view, options)
+    for index, panel in ipairs(view.picker.panels) do
+        local base, option = panel.PWOnFocus, options[index]
+        panel.PWOnFocus = function(card)
+            base(card)
+            showInfo(view, option)
+        end
     end
 end
 
@@ -97,16 +120,18 @@ local function showPicker(view)
     ---@type PW.UICard[]
     local cards = {}
     local selected = noneId
-    for index, option in ipairs(ui().Options(view.input, row, view.model.slots)) do
+    local options = ui().Options(view.input, row, view.model.slots)
+    for index, option in ipairs(options) do
         ---@type PW.UICard
         local card = { id = option.id == "" and noneId or option.id, title = option.name }
         card.badge = option.costText ~= "" and option.costText or nil
-        card.locked, card.reason, card.lockText = option.locked, option.reason, option.lockText
-        card.text = option.description or option.reason
+        card.locked, card.reason, card.lockText = option.locked, phrase(option.reason), option.lockText
+        card.text = option.description or card.reason
         if option.selected then selected = card.id end
         cards[index] = card
     end
     view.picker:SetCards(cards, selected)
+    wireChoices(view, options)
     updateRows(view)
     local root = kit().CurrentRoot() --[[@as PWRoot?]]
     if root ~= nil then root.focusDirty = 2 end
@@ -131,7 +156,7 @@ local function rebuildRows(view)
         panel:DockMargin(0, 0, 0, kit().Draw.Px(6))
         view.rowsPanel:AddItem(panel)
         panel.PWOnFocus = function()
-            if view.rowId ~= id then chooseRow(view, id) end
+            if view.rowId ~= id then chooseRow(view, id) else showInfo(view) end
         end
         panel.DoClick = function()
             chooseRow(view, id)

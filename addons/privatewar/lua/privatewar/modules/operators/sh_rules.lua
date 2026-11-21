@@ -193,10 +193,12 @@ function lib.Cards(entries, choice, auto)
     }
     for _, entry in ipairs(entries) do
         local lockText, reason = lockOf(entry)
+        local hint = entry.requirement ~= nil and entry.requirement.hint or nil
+        local text = entry.source == "store" and "From the store." or "Stock player model."
         cards[#cards + 1] = {
             id = entry.id, title = entry.name, locked = entry.locked, lockText = lockText, reason = reason,
             badge = entry.source == "store" and not entry.locked and "STORE" or nil,
-            text = entry.source == "store" and "From the store." or "Stock player model.", footer = entry.path
+            text = hint ~= nil and hint ~= reason and hint or text, footer = entry.path
         }
     end
     local selected = lib.Auto

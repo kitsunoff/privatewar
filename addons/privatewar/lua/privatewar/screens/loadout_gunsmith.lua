@@ -41,6 +41,13 @@ local function kit()
     return PW.UI --[[@as PW.UILib]]
 end
 
+---@param text? string
+---@return string?
+local function phrase(text)
+    local store = kit().Store
+    return store ~= nil and store.UnlockPhrase ~= nil and store.UnlockPhrase(text) or text
+end
+
 ---@param view PWLoadoutGunsmithView
 ---@return PW.LoadoutUIGunsmithSlot?
 local function currentSlot(view)
@@ -53,7 +60,8 @@ local function currentSlot(view)
 end
 
 ---@param view PWLoadoutGunsmithView
-local function showInfo(view)
+---@param option? PW.LoadoutUIGunsmithOption
+local function showInfo(view, option)
     local model, input = view.model, view.input
     local result = ui().DraftResult ~= nil and ui().DraftResult() or nil
     view.info:SetTitle(result ~= nil and result.title or (view.draft.dirty and "Unsaved changes" or "Preview"))
@@ -66,10 +74,24 @@ local function showInfo(view)
     view.info:SetRows(rows)
     local lines = result ~= nil and result.lines or {}
     local note = model ~= nil and model.gunsmith and model.note or nil -- without a gunsmith the big card says it
-    view.info:SetText(#lines > 0 and table.concat(lines, ", ") or note)
+    local reason = option ~= nil and phrase(option.reason) or nil
+    local hint = option ~= nil and phrase(option.hint) or nil
+    view.info:SetText(hint or reason or (#lines > 0 and table.concat(lines, ", ") or note))
     local problems = model ~= nil and model.problems or {}
-    view.info:SetWarning(#problems > 0 and table.concat(problems, ", ") or nil)
+    view.info:SetWarning(hint ~= nil and reason or (#problems > 0 and table.concat(problems, ", ") or nil))
     view:InvalidateLayout()
+end
+
+---@param view PWLoadoutGunsmithView
+---@param options PW.LoadoutUIGunsmithOption[]
+local function wireChoices(view, options)
+    for index, panel in ipairs(view.picker.panels) do
+        local base, option = panel.PWOnFocus, options[index]
+        panel.PWOnFocus = function(card)
+            base(card)
+            showInfo(view, option)
+        end
+    end
 end
 
 ---@param view PWLoadoutGunsmithView
@@ -94,12 +116,13 @@ local function showPicker(view)
         ---@type PW.UICard
         local card = { id = option.id == "" and defaultId or option.id, title = option.name }
         card.badge = option.costText ~= "" and option.costText or nil
-        card.locked, card.reason, card.lockText = option.locked, option.reason, option.lockText
-        card.text = option.reason
+        card.locked, card.reason, card.lockText = option.locked, phrase(option.reason), option.lockText
+        card.text = card.reason
         if option.selected then selected = card.id end
         cards[index] = card
     end
     view.picker:SetCards(cards, selected)
+    wireChoices(view, slot.options)
     updateRows(view)
     local root = kit().CurrentRoot() --[[@as PWRoot?]]
     if root ~= nil then root.focusDirty = 2 end
@@ -116,13 +139,16 @@ local function rebuildRows(view)
         panel:DockMargin(0, 0, 0, kit().Draw.Px(6))
         view.rowsPanel:AddItem(panel)
         panel.PWOnFocus = function()
-            if view.slotId == id then return end
-            view.slotId = id
-            showPicker(view)
+            if view.slotId ~= id then
+                view.slotId = id
+                showPicker(view)
+            end
+            showInfo(view)
         end
         panel.DoClick = function()
             view.slotId = id
             showPicker(view)
+            showInfo(view)
             ui().FocusLater(view.picker:FocusIndex(view.picker.focusIndex, 1))
         end
         view.rows[id], view.rowIds[index] = panel, id

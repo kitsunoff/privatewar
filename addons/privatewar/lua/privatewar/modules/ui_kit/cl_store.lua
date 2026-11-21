@@ -43,6 +43,18 @@ function store.LiveLookup()
     end
 end
 
+---@param progression PW.ProgressionLib
+---@param me Player
+---@param key string
+---@return boolean
+local function liveOwned(progression, me, key)
+    local unlocks, economy = PW.Unlocks, PW.Economy
+    if unlocks == nil then return progression.IsOwned(me, key) end
+    return store._OwnsKey(key, function(kind, id)
+        return economy ~= nil and economy.IsOwned(me, kind, id)
+    end, function(kind, id) return unlocks.IsEntitled(me, kind, id) end)
+end
+
 function store.LiveFacts()
     local me = LocalPlayer()
     local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
@@ -52,12 +64,22 @@ function store.LiveFacts()
             pending = pending }
     end
     local lib_ = progression --[[@as PW.ProgressionLib]]
+    local unlocks = PW.Unlocks
     return {
         currency = lib_.GetCurrency(me),
-        owned = function(key) return lib_.IsOwned(me, key) end,
-        unlocked = function(kind, id) return lib_.IsUnlocked(me, kind, id) end,
+        owned = function(key) return liveOwned(lib_, me, key) end,
+        unlocked = function(kind, id)
+            if unlocks == nil then return lib_.IsUnlocked(me, kind, id) end
+            return (unlocks.IsUnlocked(me, kind, id))
+        end,
+        requirement = unlocks ~= nil and function(kind, id) return unlocks.Requirement(me, kind, id) end or nil,
         pending = pending
     }
+end
+
+function store.UnlockPhrase(text)
+    if text ~= nil and text:sub(1, 1) == "#" then return language.GetPhrase(text:sub(2)) end
+    return text
 end
 
 function store.OpenBundle(key)

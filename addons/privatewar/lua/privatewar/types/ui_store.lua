@@ -4,8 +4,8 @@
 -- lua/privatewar/screens/store_home.lua, store_bundle.lua and progress_home.lua.
 
 ---State of a store offer for the local player, in the order the server's quote checks it.
----"pending": a request for it is in flight; "owned": bought (a bundle: its key or every item); "unlocked": the level
----already unlocks a single entity; "funds": the price is above the balance; "buyable": none of these.
+---"pending": a request is in flight; "owned": bought or granted (a bundle: its key or every item); "unlocked":
+---a single entity is already accessible; "funds": the price is above the balance; "buyable": none of these.
 ---@alias PW.UIStoreState "pending"|"owned"|"unlocked"|"funds"|"buyable"
 
 ---The rotation a bundle is featured in.
@@ -14,8 +14,8 @@
 ---What the store model reads about the local player.
 ---@class PW.UIStoreFacts
 ---@field currency number the balance
----@field owned fun(key: string): boolean purchased ("<kind>:<id>")
----@field unlocked fun(kind: string, id: string): boolean unlocked for the player (level, purchase or unlockall)
+---@field owned fun(key: string): boolean purchased or granted ("<kind>:<id>")
+---@field unlocked fun(kind: string, id: string): boolean unlocked for the player
 ---@field requirement? fun(kind: string, id: string): PW.UnlockRequirement
 ---@field pending? string the key of a purchase request in flight
 
@@ -63,6 +63,8 @@
 ---@field requirement? PW.UnlockRequirement
 ---@field new? boolean granted and unseen
 
+---@alias PW.UIStoreOwnershipCheck fun(kind: string, id: string): boolean
+
 ---Store view model (pure). Currency is shown as "<n> CR".
 ---@class PW.UIStoreLib
 ---@field Currency string the currency suffix, "CR"
@@ -75,6 +77,7 @@
 ---@field SecondsToRotation fun(now: number, period: "daily"|"weekly"): number
 ---@field CountdownText fun(seconds: number): string "2d 4h", "13h 20m", "4m 05s"
 ---@field OfferState fun(offer: PW.EconomyOffer, facts: PW.UIStoreFacts): PW.UIStoreState
+---@field _OwnsKey fun(key: string, bought: PW.UIStoreOwnershipCheck, entitled: PW.UIStoreOwnershipCheck): boolean
 ---@field OfferCards fun(offers: PW.EconomyOffer[], facts: PW.UIStoreFacts): PW.UICard[]
 ---@field Sections fun(store: PW.EconomyStoreView, facts: PW.UIStoreFacts, now: number): PW.UIStoreSection[]
 ---@field SectionCards fun(sections: PW.UIStoreSection[]): PW.UICard[]
@@ -103,6 +106,7 @@
 ---@field LiveLookup? fun(): PW.LoadoutLookup
 ---Client. The local player's balance, purchases, unlocks and the request in flight.
 ---@field LiveFacts? fun(): PW.UIStoreFacts
+---@field UnlockPhrase? fun(text?: string): string? resolve a reward hint that uses a language phrase
 ---Client. Pushes the bundle details screen (store_bundle) for a bundle key on the open root.
 ---@field OpenBundle? fun(key: string)
 ---@field TakeBundle? fun(): string?
