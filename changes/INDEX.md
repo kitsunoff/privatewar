@@ -31,7 +31,6 @@ human-acceptance evidence; planned status is retained.
 
 ## In progress
 
-- [After-match rotation by default for playlists](in-progress/aftermatch-rotation-default.md)
 - [Programmatic unlocks and entitlements](in-progress/unlock-entitlements.md)
 - [Stim equipment: heal, speed and armor stims](in-progress/stim-equipment.md)
 - [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
@@ -42,7 +41,10 @@ human-acceptance evidence; planned status is retained.
 
 ## Done
 
-No migrated records; historical completion evidence remains in TASKS.md.
+- [After-match rotation by default for playlists](done/aftermatch-rotation-default.md): local overnight integration;
+  human checkpoint pending.
+
+Historical completion evidence for unmigrated work remains in TASKS.md.
 
 ## Remaining queue and history
 
