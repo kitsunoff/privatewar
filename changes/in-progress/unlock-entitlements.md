@@ -22,7 +22,7 @@ API contracts, Steam Deck access or publication. Each needs the user's explicit 
 `cf7c4ed` on branch `docs/plan-mwbase-stims-unlocks-challenges`; re-check them before editing. Paths without a prefix
 are relative to `addons/privatewar/lua/privatewar/`.
 
-Dependent work: the weekly challenges record (`changes/planned/weekly-challenges.md`, note 32, planned in parallel)
+Dependent work: the weekly challenges record (`changes/in-progress/weekly-challenges.md`, note 32, planned in parallel)
 grants its rewards through the interface in section 10. Nothing in this record depends on it.
 
 ## 1. User request

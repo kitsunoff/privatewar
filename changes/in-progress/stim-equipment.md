@@ -12,7 +12,7 @@ default of every open question, except where an answer below says otherwise. Thi
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
 Related: the items' `Unlock` field must stay valid under [programmatic unlocks](unlock-entitlements.md); stim usage
-  may later become a [weekly challenge](../planned/weekly-challenges.md) event (not in this scope).
+  may later become a [weekly challenge](weekly-challenges.md) event (not in this scope).
 
 Research: [Arctic's Combat Stims research](../../notes/30-arctic-stims-research.md). This record is tracking, not
 authorization: it does not authorize implementation, design or contract changes, Steam Deck access, redistribution or

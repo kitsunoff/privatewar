@@ -8,7 +8,7 @@ refer to branch `docs/plan-mwbase-stims-unlocks-challenges` at `cf7c4ed`; an imp
 
 The user wants unlocks controlled programmatically, not only by player or weapon level: weapons, perks, equipment,
 streaks, wildcards, attachments, camos, operators (`models`) and calling cards must be openable by any source, starting
-with weekly challenge rewards (`changes/planned/weekly-challenges.md`, note 32, planned in parallel). This note
+with weekly challenge rewards (`changes/in-progress/weekly-challenges.md`, note 32, planned in parallel). This note
 inventories every place where "is X unlocked or available" is decided today, the data flow, storage and trust model,
 networking and tests, then proposes a generic design.
 

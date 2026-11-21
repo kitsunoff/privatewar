@@ -13,7 +13,8 @@ publication. Paths: `P = addons/privatewar/lua/privatewar/`, `T = addons/private
 at `cf7c4ed`. Numbers are **proposed defaults, user to confirm**.
 
 Related: card unlocks must stay valid under [programmatic unlocks](../in-progress/unlock-entitlements.md) (cards are natural
-[weekly challenge](weekly-challenges.md) rewards); the selection flow mirrors operators (`docs/api/operators.md`).
+[weekly challenge](../in-progress/weekly-challenges.md) rewards); the selection flow mirrors operators
+(`docs/api/operators.md`).
 
 ## 1. User request
 
@@ -128,7 +129,7 @@ Related: card unlocks must stay valid under [programmatic unlocks](../in-progres
   with weekly challenges); the four level cards need no other change.
 - [ ] Each weekly challenge template grants its card through `Rewards.items` (`{ kind = "cards", id = ... }`) when the
   challenge is completed: `headshots` (C2), `longshots` (C8), `captures` (C10), `streak_kills` (C15), `life_kills`
-  (C20), `wins` (C17) in `changes/planned/weekly-challenges.md` section 7. Which tier grants it is open question 7.
+  (C20), `wins` (C17) in `changes/in-progress/weekly-challenges.md` section 7. Which tier grants it is open question 7.
 - [ ] The three existing samples (`bomb`, `gold_medal`, `lightning`, store and bundle items) stay; their 16-pixel icons
   are drawn **centred** on a rarity plate, never stretched (pure layout case in section 7).
 
