@@ -2,7 +2,8 @@ HUDELEMENT.Order = 31
 HUDELEMENT.Phases = { "LIVE" }
 
 local hud = PW.HUD --[[@as PW.HudLib?]]
-local right, bottom, lineHeight = 1880, 830, 30
+-- Always reserve the right-edge streak column and its input hints.
+local right, bottom, lineHeight = 1660, 830, 30
 local fallback = Color(255, 255, 255)
 
 ---@type string[]

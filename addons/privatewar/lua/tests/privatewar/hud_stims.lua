@@ -59,7 +59,7 @@ return {
                 f.marks.pw_stim_heal_until = 11
                 f.step()
                 expect(f.draws[1].text).to.equal("SPEED 4.3")
-                expect(f.draws[2]).to.deepEqual({ text = "HEALING", font = "small", x = 1880, y = 830 })
+                expect(f.draws[2]).to.deepEqual({ text = "HEALING", font = "small", x = 1660, y = 830 })
                 expect(f.draws[1].y < 830).to.beTrue()
                 expect(f.builds).to.equal(1)
                 f.now = 10.005
@@ -72,6 +72,21 @@ return {
                 f.marks.pw_stim_heal_until = 12 -- a different unchanged visible label doesn't require a rebuild
                 f.step()
                 expect(f.builds).to.equal(2)
+            end
+        },
+        {
+            name = "Stims HUD stays left of the streak column and above the equipment rows",
+            func = function()
+                local f = fixture()
+                f.marks.pw_stim_speed_until = 14.21
+                f.marks.pw_stim_heal_until = 11
+                f.marks.pw_stim_armor_until = 12
+                f.step()
+                expect(f.draws).to.deepEqual({
+                    { text = "SPEED 4.3", font = "small", x = 1660, y = 770 },
+                    { text = "HEALING", font = "small", x = 1660, y = 800 },
+                    { text = "ARMOR", font = "small", x = 1660, y = 830 }
+                })
             end
         },
         {
