@@ -94,12 +94,16 @@ local function moveFacts(bot, f)
 end
 
 ---@param bot Player
----@return integer
-local function lethalCount(bot)
-    local equipment = rawget(PW, "Equipment") --[[@as table<string, any>?]]
-    local count = equipment ~= nil and equipment.Count or nil
-    if not isfunction(count) then return 0 end
-    return tonumber(count(bot, "lethal")) or 0
+---@param facts PW.BotCombatFacts
+local function equipmentFacts(bot, facts)
+    local equipment = PW.Equipment
+    if equipment == nil then
+        facts.lethal, facts.tactical, facts.tacticalItem = 0, 0, nil
+        return
+    end
+    facts.lethal = equipment.Count(bot, "lethal")
+    facts.tactical = equipment.Count(bot, "tactical")
+    facts.tacticalItem = equipment.Item(bot, "tactical")
 end
 
 ---@param board PW.BotBoard
@@ -113,7 +117,7 @@ function lib.Refresh(bot, board)
     local f = board.tactics
     if f == nil then
         f = { at = 0, pos = bot:GetPos(), health = 0, maxHealth = 0, clip = -1, capacity = 0, reserve = 0,
-            reloading = false, lethal = 0, profile = lib.DefaultProfile }
+            reloading = false, lethal = 0, tactical = 0, tacticalItem = nil, profile = lib.DefaultProfile }
         board.tactics = f
     end
     f.at, f.pos = CurTime(), bot:GetPos()
@@ -122,7 +126,7 @@ function lib.Refresh(bot, board)
     moveFacts(bot, f)
     local hurt = store.hurt[bot]
     f.hurtAt, f.attacker = hurt and hurt.at or nil, hurt and hurt.attacker or nil
-    f.lethal = lethalCount(bot)
+    equipmentFacts(bot, f)
     f.profile = profileOf(board)
 end
 
