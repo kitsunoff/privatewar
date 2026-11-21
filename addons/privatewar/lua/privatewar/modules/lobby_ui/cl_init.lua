@@ -25,6 +25,7 @@ local lib = PW.Lobby --[[@as PW.LobbyLib]]
 ---@field players? integer player count at the last refresh
 ---@field picker? PW.LobbyPickerOpts the options of the map picker to open next (OpenPicker)
 ---@field flowKey? string the START button countdown label shown last ("" for the normal button)
+---@field afterMatch? string last replicated vote.aftermatch value seen by the lobby
 
 ---@type PW.LobbyClientView
 local view = rawget(lib, "_View") or { selection = {} }
@@ -115,6 +116,14 @@ local function flowFacts()
     return { phase = PW.Phase.GetPhase(), phaseEnd = PW.Phase.GetEnd(), now = CurTime(), changeAt = changeAt }
 end
 
+---@return string?
+local function afterMatchSetting()
+    local me = LocalPlayer()
+    if view.state == nil or not view.state.canStart or not IsValid(me) or
+        not PW.Can(me, PW.Settings.Privilege) or not IsValid(PW.Modules.Get("vote")) then return nil end
+    return PW.Setting("vote.aftermatch")
+end
+
 function lib.Input()
     local ui = kit() --[[@as PW.UILib]]
     local list = playlists()
@@ -123,7 +132,7 @@ function lib.Input()
         fits = lib._Fits(rawget(PW, "Registries") or {}, game.GetMap()),
         playlists = list ~= nil and list.GetState() or false, players = ui.CollectPlayers(),
         maxPlayers = game.MaxPlayers(), seen = ui.SeenSet(), shortOf = shortOf, entry = entryFacts(),
-        flow = flowFacts()
+        flow = flowFacts(), afterMatch = afterMatchSetting()
     }
 end
 
@@ -194,6 +203,18 @@ local function currentRoot()
     local ui = kit()
     local root = ui ~= nil and ui.CurrentRoot ~= nil and ui.CurrentRoot() or nil
     return root --[[@as PWRoot?]]
+end
+
+function lib._AfterMatchButton(parent)
+    local button = vgui.Create("PWButton", parent) --[[@as PWButton]]
+    button:SetVariant("secondary")
+    button:SetAlignLeft(true)
+    button.DoClick = function()
+        local root, ui = currentRoot(), kit()
+        local forms = ui ~= nil and ui.Settings or nil
+        if root ~= nil and forms ~= nil and forms.Open(root.model, "server") then root:Rebuild() end
+    end
+    return button
 end
 
 function lib.OpenCustom(section)
@@ -272,14 +293,15 @@ local function markSeen()
 end
 
 -- The root closes itself outside LOBBY and PREMATCH or when a module is disabled; the party follows joins and leaves;
--- the START button follows its countdown (one refresh per shown second).
+-- the START button follows its countdown, and the after-match shortcut follows the replicated setting.
 local function watch()
     if not rootOpen() or not shouldShow() then return lib.Close() end
     local count = player.GetCount()
     local over = lib._StartButton(flowFacts())
     local key = over ~= nil and over.label or ""
-    if count ~= view.players or key ~= view.flowKey then
-        view.players, view.flowKey = count, key
+    local afterMatch = afterMatchSetting()
+    if count ~= view.players or key ~= view.flowKey or afterMatch ~= view.afterMatch then
+        view.players, view.flowKey, view.afterMatch = count, key, afterMatch
         notify()
     end
 end

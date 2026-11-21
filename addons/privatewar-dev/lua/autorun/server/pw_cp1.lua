@@ -7,7 +7,7 @@
 -- The commands answer the server console and the listen host only (the dev bridge); other players are ignored.
 
 ---@type string[]
-local cvarNames = { "pw_countdown", "pw_postmatch_time", "pw_vote_time", "pw_prematch_timeout", "pw_aftermatch" }
+local cvarNames = { "pw_countdown", "pw_postmatch_time", "pw_vote_time", "pw_prematch_timeout", "pw_vote_aftermatch" }
 
 ---@param name string
 ---@return string

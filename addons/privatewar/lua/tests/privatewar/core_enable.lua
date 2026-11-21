@@ -100,7 +100,7 @@ local function startToLive(state)
     assert(match().GetPhase() == "LIVE", "not LIVE")
 end
 
----LIVE -> POSTMATCH -> LOBBY (pw_aftermatch "lobby").
+---LIVE -> POSTMATCH -> LOBBY (the injected after-match setting is "lobby").
 ---@param state table<string, any>
 local function finishToLobby(state)
     assert(match().Finish(), "Finish failed")
@@ -167,7 +167,7 @@ return {
     cases = {
         {
             -- FCVAR_ARCHIVE is passed like the other pw_* ConVars, but GMod does not report it in GetFlags for Lua
-            -- ConVars on the server (pw_aftermatch reads false as well), so the flag itself is not asserted.
+            -- ConVars on the server, so the flag itself is not asserted.
             name = "Every entity gets pw_<kind>_<id>_enabled (default 1); abstract entities get none",
             func = function(state)
                 newRegistry(state, { alpha = {}, beta = {}, base = { Abstract = true } })

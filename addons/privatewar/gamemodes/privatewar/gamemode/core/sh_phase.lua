@@ -24,7 +24,7 @@ function PW.Phase.CanTransition(from, to)
     return targets ~= nil and targets[to] == true
 end
 
----@param value string
+---@param value any answer to PW_AfterMatch; only "rotation" opts in
 ---@return PW.AfterMatch
 function PW.Phase._AfterMatch(value)
     if value == "rotation" then return "rotation" end

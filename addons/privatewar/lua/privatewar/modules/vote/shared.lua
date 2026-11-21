@@ -1,7 +1,7 @@
 -- Vote module (T-2.13; 08-lobby.md d.5; 00-core.md d.2, d.5; 02-modes.md d.2, d.5b; docs/api/modes.md "Vote
 -- module"). Shared and pure: candidate selection over the active playlist, the recent-maps list, casting, tally,
 -- the early-end decision, the random tie break, the wire form of pw_vote_state and the model of the vote screen.
--- Server glue (sessions, messages, the PW_NextMatch answer): init.lua. The vote screen: cl_init.lua.
+-- Server glue (sessions, messages, PW_AfterMatch and PW_NextMatch answers): init.lua. The vote screen: cl_init.lua.
 --
 -- Messages (server module vote owns them):
 --   pw_vote_cast     any human, VOTE: uint8 option index; a new vote replaces the previous one
@@ -12,6 +12,12 @@
 MODULE.Name = "Vote"
 
 MODULE.Settings = {
+    aftermatch = {
+        scope = "server", type = "enum", default = "auto",
+        options = { "auto", "lobby", "rotation" },
+        label = "After the match",
+        description = "Auto: playlists continue with a vote for the next match, Custom games return to the lobby."
+    },
     options = { scope = "server", type = "int", default = 3, min = 1, max = 8, label = "Vote options" },
     allowrepeat = { scope = "server", type = "bool", default = false, label = "Offer the same map and mode again" }
 }
@@ -24,6 +30,14 @@ lib.RecentCount = 2
 
 -- The rule "exclude recent maps" switches itself off below this many maps in the playlist (08-lobby.md d.5).
 local minMapsForRecent = 3
+
+---@param setting string value of vote.aftermatch
+---@param activePlaylist string active playlist id ("" = Custom)
+---@return PW.AfterMatch
+function lib.ResolveAfterMatch(setting, activePlaylist)
+    if setting == "rotation" or setting == "lobby" then return setting end
+    return activePlaylist ~= "" and "rotation" or "lobby"
+end
 
 ---@param name any
 ---@return boolean

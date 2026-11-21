@@ -3,7 +3,7 @@
 --
 -- Checkpoint CP-1 item 2 (TASKS.md), from the Mac while the game runs on the Deck:
 --   1. Optional, shorter phases: bash scripts/deck/cmd.sh "pw_countdown 5" "pw_postmatch_time 5"
---   2. bash scripts/deck/cmd.sh pw_dev_start            (pw_aftermatch lobby: ends back in LOBBY)
+--   2. bash scripts/deck/cmd.sh pw_dev_start            (pw_vote_aftermatch lobby: ends back in LOBBY)
 --   3. bash scripts/deck/logs.sh --once                 "[PW] dev: phase ..." lines, LOBBY -> PREMATCH ->
 --      PREMATCH (countdown) -> LIVE -> POSTMATCH -> LOBBY; "ends in" is pw_phase_end - CurTime().
 --   4. Map change: bash scripts/deck/cmd.sh "pw_dev_start gm_flatgrass"; the new map comes up in PREMATCH.
