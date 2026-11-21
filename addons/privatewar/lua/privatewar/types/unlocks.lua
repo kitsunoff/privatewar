@@ -71,6 +71,8 @@
 ---@field LockText fun(req: PW.UnlockRequirement): string?, string?
 ---@field KeyOf fun(item: PW.UnlockItem|string): string?
 ---@field ParseKey fun(key: string): string?, string?, string?, string?
+---@field _Decide fun(view: PW.ProgressionView, kind: string, id: string): boolean, PW.UnlockReason
+---@field _Requirement fun(view: PW.ProgressionView, kind: string, id: string): PW.UnlockRequirement
 
 ---@class PW
 ---@field Unlocks? PW.UnlocksLib the progression unlock authority

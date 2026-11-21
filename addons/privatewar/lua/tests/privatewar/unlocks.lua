@@ -7,6 +7,31 @@ local function lib()
     return unlocks
 end
 
+---@return PW.ProgressionView
+local function view()
+    ---@type table<string, table<string, table<string, any>>>
+    local catalogue = {
+        perks = {
+            plain = {}, level = { Unlock = 20 }, reward = { Unlock = false },
+            hinted = { Unlock = { level = false, hint = "Win a round" } },
+            price = { Price = 600 }, reward_sale = { Unlock = { level = false, hint = "#pw.hint" }, Price = 600 }
+        },
+        weapons = {
+            rifle = {
+                Attachments = { optic = { Unlock = 12 }, hidden = { Hidden = true, Unlock = 2 } },
+                Camos = { gold = { Unlock = 30 } }
+            }
+        }
+    }
+    return {
+        level = 3, weaponLevel = function() return 5 end, unlockAll = false, maxAttachments = 6,
+        lookup = function(kind, id)
+            local entries = catalogue[kind]
+            return entries ~= nil and entries[id] or nil
+        end
+    }
+end
+
 return {
     groupName = "PW unlock authority",
     cases = {
@@ -31,6 +56,122 @@ return {
                 for _, malformed in ipairs({ true, "20", {}, math.huge, -math.huge, 0 / 0, { level = "12" } }) do
                     expect(spec(malformed)).to.deepEqual({ level = 0, declared = true })
                 end
+            end
+        },
+        {
+            name = "Decide: any source opens; the reason names the first source that did",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                v.level, v.unlockAll = 40, true
+                v.override = function() return true end
+                v.granted = function(key) return key == "perks:level" end
+                v.owned = function(key) return key == "perks:level" end
+                expect({ decide(v, "perks", "not_installed") }).to.deepEqual({ false, "unknown" })
+                expect({ decide(v, "attachments", "rifle") }).to.deepEqual({ false, "unknown" })
+                expect({ decide(v, "attachments", "missing:optic") }).to.deepEqual({ false, "unknown" })
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "override" })
+                v.override = nil
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "unlockall" })
+                v.unlockAll = false
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "grant" })
+                v.granted = nil
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "purchase" })
+                v.owned = nil
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "level" })
+                expect({ decide(v, "perks", "plain") }).to.deepEqual({ true, "default" })
+                expect({ decide(v, "attachments", "rifle:iron") }).to.deepEqual({ true, "default" })
+                expect({ decide(v, "attachments", "rifle:optic") }).to.deepEqual({ false, "weapon_level" })
+                v.weaponLevel = function() return 30 end
+                expect({ decide(v, "camos", "rifle:gold") }).to.deepEqual({ true, "weapon_level" })
+            end
+        },
+        {
+            name = "Decide: Hidden beats every source, including unlockall, grants and the override hook",
+            func = function()
+                local v = view()
+                local called = 0
+                v.unlockAll = true
+                v.granted, v.owned = function() return true end, function() return true end
+                v.override = function()
+                    called = called + 1
+                    return true
+                end
+                expect({ lib()._Decide(v, "attachments", "rifle:hidden") }).to.deepEqual({ false, "hidden" })
+                expect(called).to.equal(0)
+            end
+        },
+        {
+            name = "Decide: Unlock = false opens only through a grant or a purchase, never by level",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                v.level = 1000
+                expect({ decide(v, "perks", "reward") }).to.deepEqual({ false, "grant_only" })
+                expect({ decide(v, "perks", "hinted") }).to.deepEqual({ false, "grant_only" })
+                v.owned = function(key) return key == "perks:reward" end
+                expect({ decide(v, "perks", "reward") }).to.deepEqual({ true, "purchase" })
+                v.granted = function(key) return key == "perks:reward" end
+                expect({ decide(v, "perks", "reward") }).to.deepEqual({ true, "grant" })
+            end
+        },
+        {
+            name = "Decide: unlockall opens grant-only items and every level gate",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                v.unlockAll = true
+                expect({ decide(v, "perks", "reward") }).to.deepEqual({ true, "unlockall" })
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "unlockall" })
+                expect({ decide(v, "camos", "rifle:gold") }).to.deepEqual({ true, "unlockall" })
+            end
+        },
+        {
+            name = "Decide: grants count with the economy module disabled; purchases do not",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                v.owned = function(key) return key == "perks:level" end
+                v.granted = function(key) return key == "perks:reward" end
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "purchase" })
+                v.owned = nil
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ false, "level" })
+                expect({ decide(v, "perks", "reward") }).to.deepEqual({ true, "grant" })
+            end
+        },
+        {
+            name = "Decide: a priced entity without Unlock stays for sale only; a grant opens it",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                v.level = 1000
+                v.owned = function() return false end
+                expect({ decide(v, "perks", "price") }).to.deepEqual({ false, "price" })
+                v.granted = function(key) return key == "perks:price" end
+                expect({ decide(v, "perks", "price") }).to.deepEqual({ true, "grant" })
+                v.owned, v.granted = nil, nil
+                expect({ decide(v, "perks", "price") }).to.deepEqual({ true, "default" })
+            end
+        },
+        {
+            name = "Hook: PW_UnlockOverride true opens and false locks after Hidden; nil keeps the rules",
+            func = function()
+                local v, decide = view(), lib()._Decide
+                ---@type boolean?
+                local answer
+                v.override = function(kind, id)
+                    local result = PW.Ask("PW_UnlockOverride", NULL, kind, id)
+                    if type(result) == "boolean" then return result end
+                    return nil
+                end
+                stub(PW, "Ask").with(function(hookName, ply, kind, id)
+                    expect(hookName).to.equal("PW_UnlockOverride")
+                    expect(ply).to.equal(NULL)
+                    expect(kind).to.equal("perks")
+                    expect(id).to.equal("level")
+                    return answer
+                end)
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ false, "level" })
+                answer = true
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ true, "override" })
+                answer, v.unlockAll = false, true
+                expect({ decide(v, "perks", "level") }).to.deepEqual({ false, "override" })
+                expect({ decide(v, "attachments", "rifle:hidden") }).to.deepEqual({ false, "hidden" })
             end
         },
         {
@@ -66,6 +207,45 @@ return {
                 expect(hidden.reason).to.equal("hidden")
                 expect(hidden.lockText).to.beNil()
                 expect(hidden.text).to.beNil()
+                local v = view()
+                ---@type string[]
+                local asked = {}
+                v.hint = function(kind, id)
+                    local result = PW.Ask("PW_UnlockHint", kind, id)
+                    if type(result) == "string" then return result end
+                    return nil
+                end
+                stub(PW, "Ask").with(function(hookName, kind, id)
+                    expect(hookName).to.equal("PW_UnlockHint")
+                    asked[#asked + 1] = kind .. ":" .. id
+                    if id == "hinted" then return "#pw.weekly.dynamic" end
+                    return nil
+                end)
+                v.owned = function() return false end
+                local requirement = unlocks._Requirement
+                expect(requirement(v, "perks", "level")).to.deepEqual({
+                    unlocked = false, reason = "level", level = 20, lockText = "LV 20", text = "Unlocks at level 20"
+                })
+                expect(requirement(v, "attachments", "rifle:optic")).to.deepEqual({
+                    unlocked = false, reason = "weapon_level", weaponLevel = 12,
+                    lockText = "LV 12", text = "Unlocks at weapon level 12"
+                })
+                expect(requirement(v, "perks", "price")).to.deepEqual({
+                    unlocked = false, reason = "price", price = 600,
+                    lockText = "600 CR", text = "Buy it in the STORE for 600 CR"
+                })
+                expect(requirement(v, "perks", "hinted")).to.deepEqual({
+                    unlocked = false, reason = "grant_only", hint = "#pw.weekly.dynamic",
+                    lockText = "REWARD", text = "#pw.weekly.dynamic"
+                })
+                local fallback = requirement(v, "perks", "reward_sale")
+                expect(fallback.hint).to.equal("#pw.hint")
+                expect(fallback.lockText).to.equal("600 CR")
+                expect(requirement(v, "perks", "plain").text).to.beNil()
+                expect(requirement(v, "attachments", "rifle:hidden").text).to.beNil()
+                expect(asked).to.deepEqual({
+                    "perks:level", "attachments:rifle:optic", "perks:price", "perks:hinted", "perks:reward_sale"
+                })
             end
         },
         {
