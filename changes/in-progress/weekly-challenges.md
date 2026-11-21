@@ -7,6 +7,11 @@ Recorded: 2026-11-21
 The independent rotation and filter work started on 2026-11-22 on `feat/weekly-challenges` from
 `f5199de`. Remaining implementation and integration wait for the unlock authority. Gates and human acceptance are pending.
 
+Early scope evidence (2026-11-22, `19b1f71`): steps 1–4 are committed, with `nix develop --command make check`
+and pre-commit passing. Full Deck RED was 2144 passed, 23 failed, 0 skipped. After steps 1–3, all 14 of their new
+cases passed and the 10 step-4 cases failed as expected, including the dot-separator regression. Full Deck GREEN
+at `19b1f71` was 2168 passed, 0 failed, 0 skipped. This does not cover the remaining steps or approve integration.
+
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
