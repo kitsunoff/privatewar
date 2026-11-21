@@ -287,6 +287,52 @@ return {
             end
         },
         {
+            name = "Server rejects a locked operator: a grant-only model choice is refused until granted",
+            func = function()
+                local u, p, ops = unlocks(), assert(PW.Progression), assert(PW.Operators)
+                local store = server()
+                local path, fallback = "models/player/combine_super_soldier.mdl", ops.FallbackPath
+                local applied = ""
+                local ply = {
+                    IsValid = function() return true end, IsPlayer = function() return true end,
+                    IsBot = function() return false end, Alive = function() return false end,
+                    GetInfo = function() return ops.FallbackName end, Nick = function() return "Test operator" end,
+                    SetModel = function(_, value) applied = value end, SetPlayerColor = function() end,
+                    Team = function() return 0 end
+                } --[[@as Player]]
+                local lookup = p._RegistryLookup
+                stub(p, "_RegistryLookup").with(function(kind, id)
+                    if kind == "models" and id == "combine_elite" then return { Model = path, Unlock = false } end
+                    return lookup(kind, id)
+                end)
+                stub(p, "IsUnlocked").with(function() return true end)
+                local operators = assert(ops._NewStore)({
+                    log = function() end, stock = function() return { [ops.FallbackName] = fallback } end,
+                    economy = function() return { { id = "combine_elite", name = "Elite", path = path } } end
+                })
+                local oldStore, key = PW._Progression, "models:combine_elite"
+                PW._Progression = store
+                local request, spawn = assert(ops._OnRequest), assert(ops._OnSetModel)
+                local ok, err = pcall(function()
+                    expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                    expect(request(operators, ply, ops.Auto)).to.beTrue()
+                    expect({ request(operators, ply, key) }).to.deepEqual({ false, "locked" })
+                    expect(operators.requested[ply]).to.equal(ops.Auto)
+                    expect(spawn(operators, ply)).to.equal(fallback)
+                    expect(applied).to.equal(fallback)
+                    expect(u._Grant(store, ply, { key }, { source = "challenge" })).to.equal(1)
+                    expect(request(operators, ply, key)).to.beTrue()
+                    expect(spawn(operators, ply)).to.equal(path)
+                    expect(applied).to.equal(path)
+                    expect(u._Revoke(store, ply, { key }, { source = "admin" })).to.equal(1)
+                    expect(spawn(operators, ply)).to.equal(fallback)
+                    expect(operators.requested[ply]).to.equal(key)
+                end)
+                PW._Progression = oldStore
+                assert(ok, err)
+            end
+        },
+        {
             name = "Bots unaffected: bot pools and bot operators never call PW.Unlocks.IsUnlocked; Grant refuses bots",
             async = true,
             timeout = 10,

@@ -23,12 +23,15 @@
 ---@field name string display name
 ---@field path string model path
 ---@field source "stock"|"store"
----@field locked boolean an economy entry the player neither owns nor reached the level of
+---@field locked boolean an economy entry not accessible to this player
 ---@field price? number locked only: the price
 ---@field unlock? number locked only: the level that unlocks it
+---@field requirement? PW.UnlockRequirement locked only
 
 ---Why a requested choice was not used.
 ---@alias PW.OperatorReject "unknown"|"locked"
+---@alias PW.OperatorUnlocked fun(id: string): boolean
+---@alias PW.OperatorRequirement fun(id: string): PW.UnlockRequirement
 
 ---Facts for the player colour.
 ---@class PW.OperatorColourFacts
@@ -43,7 +46,7 @@
 ---@field log? PW.LogFn
 ---@field stock? fun(): table<string, string> default player_manager.AllValidModels
 ---@field economy? fun(): PW.OperatorEconomyInput[] default the enabled entries of the models registry
----@field unlocked? fun(ply: Player, id: string): boolean default PW.Progression.IsUnlocked(ply, "models", id)
+---@field unlocked? fun(ply: Player, id: string): boolean default PW.Unlocks.IsUnlocked(ply, "models", id)
 ---@field teams? fun(): integer default #PW.Teams.GetActive()
 ---@field teamColour? fun(team: integer): Color? default team.GetColor
 ---@field phase? fun(): string default PW.Match.GetPhase
@@ -97,7 +100,7 @@
 ---Pure: the picker cards (Auto first) and the selected card id.
 ---@field Cards fun(entries: PW.OperatorEntry[], choice: string?, auto: string?): PW.UICard[], string
 ---Shared: the live input (stock models and the enabled economy entries) with an unlock check.
----@field LiveInput fun(unlocked?: fun(id: string): boolean): PW.OperatorListInput
+---@field LiveInput fun(unlocked?: PW.OperatorUnlocked, requirement?: PW.OperatorRequirement): PW.OperatorListInput
 ---Client: the operator list of the local player.
 ---@field LocalList? fun(): PW.OperatorEntry[]
 ---Client: the local choice (the client setting).

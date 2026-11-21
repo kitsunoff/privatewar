@@ -1,7 +1,7 @@
 -- Operators, pure rules (06-progression.md d.7; 10-frontend.md d.6). Plain data in, plain data out, so the
 -- server-side test runner covers them:
---   List: the operator list of one player: the active economy `models` entries (owned or free ones selectable, the
---     others locked with their price or level) and every stock player model (player_manager.AllValidModels, which
+--   List: the operator list of one player: the active economy `models` entries (unlocked ones selectable, the
+--     others show their requirement) and every stock player model (player_manager.AllValidModels, which
 --     includes installed Workshop playermodels). A stock entry whose model path belongs to an active economy entry is
 --     dropped: the economy rule governs that model.
 --   Resolve: the entry a choice gives: the chosen entry when it exists and is not locked, else the player's own GMod
@@ -43,9 +43,11 @@ local function economyEntry(entry, unlocked)
     local open = unlocked(entry.id)
     local price = isnumber(entry.price) and entry.price > 0 and math.floor(entry.price) or nil
     local unlock = isnumber(entry.unlock) and math.floor(entry.unlock) or nil
+    local requirement = not open and entry.requirement or nil
+    if requirement ~= nil then price, unlock = requirement.price, requirement.level end
     return {
         id = "models:" .. entry.id, name = entry.name, path = entry.path, source = "store", locked = not open,
-        price = not open and price or nil, unlock = not open and unlock or nil
+        price = not open and price or nil, unlock = not open and unlock or nil, requirement = requirement
     }
 end
 
@@ -168,6 +170,9 @@ end
 ---@return string? reason
 local function lockOf(entry)
     if not entry.locked then return nil, nil end
+    local unlocks = PW.Unlocks
+    if entry.requirement ~= nil and unlocks ~= nil then return unlocks.LockText(entry.requirement) end
+    -- Older pure callers may supply only the level and price.
     if entry.price ~= nil then
         return string.format("%d CR", entry.price), string.format("Buy it in the STORE for %d", entry.price)
     end

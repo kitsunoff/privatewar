@@ -43,9 +43,9 @@ end
 ---@param id string
 ---@return boolean
 local function engineUnlocked(ply, id)
-    local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
-    if progression == nil or progression.IsUnlocked == nil then return true end
-    return progression.IsUnlocked(ply, "models", id)
+    local unlocks = PW.Unlocks
+    if unlocks == nil then return true end
+    return (unlocks.IsUnlocked(ply, "models", id))
 end
 
 ---@return integer
