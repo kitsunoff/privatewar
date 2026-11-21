@@ -9,8 +9,18 @@
 ---@field reward? string grant source for reward discovery, not a condition
 ---@field declared boolean whether the raw field was not nil
 
----@alias PW.UnlockReason "unknown"|"hidden"|"override"|"unlockall"|"grant"|"purchase"|"grant_only"|"price"
----| "level"|"weapon_level"|"default"
+---@alias PW.UnlockReason
+---| "unknown"
+---| "hidden"
+---| "override"
+---| "unlockall"
+---| "grant"
+---| "purchase"
+---| "grant_only"
+---| "price"
+---| "level"
+---| "weapon_level"
+---| "default"
 
 ---@class PW.UnlockRequirement
 ---@field unlocked boolean
@@ -51,6 +61,16 @@
 ---@field batch PW.ProgressionBatch
 
 ---@class PW.UnlocksLib
+---@field MaxHintLength integer
+---@field MaxSourceLength integer
+---@field _CheckHint fun(value: any): string?
+---@field _CheckSource fun(value: any): string?
+---@field _Price fun(entity: table<string, any>): integer?
+---@field _Spec fun(unlock: any): PW.UnlockSpec
+---@field _StaticRequirement fun(entity: table<string, any>?, isOption: boolean): PW.UnlockRequirement
+---@field LockText fun(req: PW.UnlockRequirement): string?, string?
+---@field KeyOf fun(item: PW.UnlockItem|string): string?
+---@field ParseKey fun(key: string): string?, string?, string?, string?
 
 ---@class PW
 ---@field Unlocks? PW.UnlocksLib the progression unlock authority
