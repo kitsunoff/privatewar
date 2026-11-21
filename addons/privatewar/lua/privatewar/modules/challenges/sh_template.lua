@@ -260,7 +260,8 @@ local function objectivesOf(raw)
 end
 
 function lib._Compile(id, raw, customTypes)
-    if id == "bonus" or #id > 40 or not string.match(id, "^[a-z][a-z0-9_]*$") then
+    -- The template is the first id segment; a dot always starts the next segment.
+    if id == "bonus" or #id > lib._MaxInstanceId or not string.match(id, "^[a-z][a-z0-9_]*$") then
         return nil, "invalid or reserved template id"
     end
     if type(raw) ~= "table" then return nil, "expected a template table" end

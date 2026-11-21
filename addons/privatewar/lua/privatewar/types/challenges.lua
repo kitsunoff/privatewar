@@ -152,6 +152,35 @@
 ---@field params table<string, PW.ChallengeParam>
 ---@field objectives PW.ChallengeCompiledObjective[]
 
+---@class PW.ChallengeCandidate
+---@field template PW.ChallengeTemplate
+---Resolved available values after host catalogue checks. An absent map uses unsourced static lists only.
+---@field values? table<string, string[]>
+
+---@class PW.ChallengeSelectOptions
+---@field count? integer
+---@field bonusNeeded? integer
+---@field seed? integer
+---@field bonusPool? PW.ChallengeRewardItem[]
+---@field tierDefaults? table<PW.ChallengeTier, PW.ChallengeReward>
+
+---@class PW.ChallengeInstance
+---@field id string template id followed by one dot-separated value per sorted parameter key
+---@field template string
+---@field tier PW.ChallengeTier
+---@field params PW.ChallengeParams
+---@field targets integer[]
+---@field reward PW.ChallengeReward
+
+---@class PW.ChallengeWeek
+---@field index integer
+---@field label string
+---@field startsAt integer
+---@field endsAt integer
+---@field seed integer
+---@field items PW.ChallengeInstance[]
+---@field bonus { needed: integer, reward: PW.ChallengeReward }
+
 ---@class PW.ChallengesLib
 ---Monday-based week index for a UTC Unix timestamp.
 ---@field WeekIndex fun(unixUtc: number): integer
@@ -164,6 +193,9 @@
 ---@field _ArrayLength fun(value: any): integer?
 ---@field _CompileFilters fun(filters: any, ctx: PW.ChallengeFilterContext): PW.ChallengeBinder?, string?
 ---@field _FormatText fun(text: string, template: PW.ChallengeTemplate, ctx: PW.ChallengeTextContext): string
+---@field _MaxInstanceId integer
+---Select from validated templates with availability already resolved; no clock, registries or global RNG.
+---@field _Select fun(i: integer, pool: PW.ChallengeCandidate[], opts: PW.ChallengeSelectOptions): PW.ChallengeWeek
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib
