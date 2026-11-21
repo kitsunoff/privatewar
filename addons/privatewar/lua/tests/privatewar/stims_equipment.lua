@@ -1,4 +1,5 @@
 local message = "pw_equipment_use"
+local stimCounts = { stim_heal = 1, stim_speed = 2, stim_armor = 1 }
 ---@type { bot: Player?, owned: boolean }
 local pool = { owned = false }
 
@@ -29,6 +30,14 @@ local function botOf()
     return bot
 end
 
+---@param state table<string, any>
+---@param id string
+local function equipItem(state, id)
+    state.actualItem = id
+    assert(equipment()._Lookup(id), id .. " is not registered")
+    assert(equipment()._OnSpawn)(state.ply)
+end
+
 return {
     groupName = "PW stim equipment key and inventory",
     beforeAll = function()
@@ -41,8 +50,20 @@ return {
     beforeEach = function(state)
         state.previousEquipment = PW._Equipment
         state.previousNet = PW._Net
+        rawset(state, "actualItem", nil)
+        rawset(state, "perk", nil)
         state.phase, state.now, state.uses, state.accept = "LIVE", 1, 0, true
-        state.ply = {} --[[@as Player]]
+        ---@type table<string, number>
+        local marks = {}
+        state.ply = {
+            IsValid = function() return true end, IsBot = function() return true end,
+            Alive = function() return true end,
+            Health = function() return 40 end, GetMaxHealth = function() return 100 end,
+            Armor = function() return 0 end,
+            EmitSound = function() end, ViewPunch = function() end,
+            GetNW2Float = function(_, key, default) return marks[key] or default end,
+            SetNW2Float = function(_, key, value) marks[key --[[@as string]]] = value --[[@as number]] end
+        } --[[@as Player]]
         state.item = {
             ClassName = "test_stim_key", Name = "Test Stim", Count = 2,
             OnUse = function(self, owner)
@@ -51,8 +72,11 @@ return {
             end
         }
         PW._Equipment = assert(equipment()._NewStore)({
-            lookup = function() return state.item end,
-            resolve = function() return { tactical = "test_stim_key" } end,
+            lookup = function(id)
+                if id == "test_stim_key" then return state.item end
+                return equipment()._Lookup(id)
+            end,
+            resolve = function() return { tactical = state.actualItem or "test_stim_key" } end,
             publish = function() end,
             clock = function() return state.now end,
             phase = function() return state.phase end,
@@ -66,6 +90,7 @@ return {
         PW._Net.defs[message] = state.previousNet.defs[message]
     end,
     afterEach = function(state)
+        if state.perk ~= nil then state.perk:Remove() end
         for ply in pairs(assert(PW._Equipment).players) do assert(equipment()._Clear)(ply) end
         PW._Equipment, PW._Net = state.previousEquipment, state.previousNet
     end,
@@ -164,6 +189,71 @@ return {
                 state.accept = true
                 expect(clientUse(state.ply, "tactical")).to.beTrue()
                 expect(entry.last).to.equal(state.now)
+            end
+        },
+        {
+            name = "Speed stim has two uses and refuses the second while active",
+            func = function(state)
+                equipItem(state, "stim_speed")
+                ---@type function?
+                local inject
+                stub(_G.timer, "Create").with(function(_, _, _, fn) if inject == nil then inject = fn end end)
+                ---@type number?
+                local source
+                stub(assert(PW.PlayerOverrides), "MoveSource").with(function(_, _, mult) source = mult end)
+                expect(equipment().Count(state.ply, "tactical")).to.equal(2)
+                expect(clientUse(state.ply, "tactical")).to.beTrue()
+                assert(inject)()
+                expect(source).to.equal(1.2)
+                local now = state.now --[[@as number]]
+                state.now = now + 1
+                expect(clientUse(state.ply, "tactical")).to.beFalse()
+                expect(equipment().Count(state.ply, "tactical")).to.equal(1)
+            end
+        },
+        {
+            name = "Counts refill on spawn",
+            func = function(state)
+                for id, count in pairs(stimCounts) do
+                    equipItem(state, id)
+                    expect(equipment().Count(state.ply, "tactical")).to.equal(count)
+                    expect(clientUse(state.ply, "tactical")).to.beTrue()
+                    expect(equipment().Count(state.ply, "tactical")).to.equal(count - 1)
+                    expect(assert(equipment()._OnSpawn)(state.ply)).to.beTrue()
+                    expect(equipment().Count(state.ply, "tactical")).to.equal(count)
+                end
+            end
+        },
+        {
+            name = "Stockpile adds one use to a stim in the tactical slot",
+            func = function(state)
+                equipItem(state, "stim_speed")
+                local stockpile = assert(PW.Registries).perks.Get("stockpile")
+                state.perk = PW.Instance(assert(stockpile), state.ply)
+                assert(equipment()._GiveWeapons)(state.ply)
+                expect(equipment().Count(state.ply, "tactical")).to.equal(3)
+                expect(clientUse(state.ply, "tactical")).to.beTrue()
+                assert(equipment()._GiveWeapons)(state.ply)
+                expect(equipment().Count(state.ply, "tactical")).to.equal(2)
+            end
+        },
+        {
+            name = "Item sounds exist in the mounted game content",
+            func = function()
+                for id in pairs(stimCounts) do
+                    local definition = assert(equipment()._Lookup(id), id)
+                    expect(file.Exists("sound/" .. assert(rawget(definition, "Sound")), "GAME")).to.beTrue()
+                end
+            end
+        },
+        {
+            name = "Loadout accepts each stim in the tactical slot and rejects it in the lethal slot",
+            func = function(state)
+                local loadout = assert(PW.Loadout)
+                for id in pairs(stimCounts) do
+                    expect(loadout.Validate(state.ply, { tactical = id })).to.beTrue()
+                    expect(loadout.Validate(state.ply, { lethal = id })).to.beFalse()
+                end
             end
         }
     }
