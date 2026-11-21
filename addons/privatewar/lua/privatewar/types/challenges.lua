@@ -112,6 +112,12 @@
 ---@field Rewards? PW.ChallengeReward|table<PW.ChallengeTier, PW.ChallengeReward>
 
 ---@class PW.ChallengesLib
+---Monday-based week index for a UTC Unix timestamp.
+---@field WeekIndex fun(unixUtc: number): integer
+---The ISO 8601 week label, using the calendar year of the Thursday.
+---@field WeekLabel fun(index: integer): string
+---Start inclusive, end exclusive, in UTC Unix seconds.
+---@field WeekBounds fun(index: integer): integer, integer
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib
