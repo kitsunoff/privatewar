@@ -29,3 +29,20 @@
 
 ---Client-only notification after the server accepts a built-in stim use.
 ---@alias PW.StimInjectedNotification fun(itemId: string)
+
+---@class PW.StimAnimation
+---@field anim string registered first-person animation name
+---@field skin integer local gesture skin
+
+---@alias PW.StimBackend "gcal"|"vmanip"
+
+---@class PW.StimsArcticLib
+---@field Anims table<string, PW.StimAnimation>
+---@field _PickBackend fun(hasGcal: boolean, hasVManip: boolean, gcalHas: boolean, vmanipHas: boolean): PW.StimBackend?
+---@field _AnimFor fun(itemId: string, anims: table<string, string>|table<string, PW.StimAnimation>): string?
+---@field _ShouldSwap fun(current: string?): boolean
+---@field _VialOriginal? string server's original value, retained across registry reloads
+---@field _MissingWarned? boolean client diagnostic latch, retained until map change
+
+---@class PW
+---@field StimsArctic? PW.StimsArcticLib only present when the optional integration is mounted
