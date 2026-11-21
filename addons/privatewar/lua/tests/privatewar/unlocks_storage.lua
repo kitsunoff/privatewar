@@ -32,9 +32,315 @@ local function wire()
     }
 end
 
+local item = "perks:scavenger"
+
+---@param bot? boolean
+---@return Player
+local function playerStub(bot)
+    return {
+        IsValid = function() return true end, IsPlayer = function() return true end,
+        IsBot = function() return bot == true end
+    } --[[@as Player]]
+end
+
+---@return PW.ProgressionStore, PW.ProgressionDelta[], any[][], Player[]
+local function server()
+    ---@type PW.ProgressionDelta[], any[][], Player[]
+    local deltas, notes, refreshes = {}, {}, {}
+    local store = assert(PW.Progression)._NewStore({
+        read = function() return nil end,
+        publish = function() end,
+        notify = function(...) notes[#notes + 1] = { ... } end,
+        sendDelta = function(_, delta) deltas[#deltas + 1] = delta end,
+        refresh = function(ply) refreshes[#refreshes + 1] = ply end
+    })
+    return store, deltas, notes, refreshes
+end
+
 return {
     groupName = "PW unlock storage",
     cases = {
+        {
+            name = "Grant: adds new keys once; a repeated grant id adds nothing and answers claimed",
+            func = function()
+                local u = unlocks()
+                local store, deltas = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                local opts = { source = "challenge", grant = "weekly:1" }
+                local added, reason = u._Grant(store, ply, { item, item, { kind = "perks", id = "scavenger" } }, opts)
+                expect(added).to.equal(1)
+                expect(reason).to.beNil()
+                expect({ u._Grant(store, ply, { "perks:soft_landing" }, opts) }).to.deepEqual({ 0, "claimed" })
+                expect(#deltas).to.equal(1)
+                local entry = assert(assert(store.players[ply].grants)[item])
+                expect(entry.source).to.equal("challenge")
+                expect(entry.grant).to.equal("weekly:1")
+                expect(entry.at > 0).to.beTrue()
+                expect(assert(store.players[ply].grants)["perks:soft_landing"]).to.beNil()
+            end
+        },
+        {
+            name = "Grant: refuses bots, bad sources, bad grant ids, malformed and unknown items, too many items "
+                .. "and a full set",
+            func = function()
+                local u = unlocks()
+                local store, deltas = server()
+                local ply = playerStub()
+                local opts = { source = "event" }
+                expect({ u._Grant(store, playerStub(true), { item }, opts) }).to.deepEqual({ 0, "bot" })
+                expect({ u._Grant(store, NULL --[[@as Player]], { item }, opts) }).to.deepEqual({ 0, "badplayer" })
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                expect({ u._Grant(store, ply, { item }, { source = "Bad" }) }).to.deepEqual({ 0, "badsource" })
+                expect({ u._Grant(store, ply, { item }, { source = "event", grant = "bad id" }) })
+                    .to.deepEqual({ 0, "badgrant" })
+                expect({ u._Grant(store, ply, { item, "bad id" }, opts) }).to.deepEqual({ 0, "badkey" })
+                expect({ u._Grant(store, ply, { item, "perks:pwtest_missing_unlock" }, opts) })
+                    .to.deepEqual({ 0, "unknown" })
+                ---@type string[]
+                local tooMany = {}
+                for index = 1, u.MaxGrantPerCall + 1 do tooMany[index] = item end
+                expect({ u._Grant(store, ply, tooMany, opts) }).to.deepEqual({ 0, "toomany" })
+                expect(assert(store.players[ply].grants)).to.deepEqual({})
+                local full = playerStub()
+                ---@type table<string, boolean>
+                local uploaded = {}
+                for index = 1, u.MaxGrants do uploaded["perks:full_" .. index] = true end
+                expect(u._OnUpload(store, full, { grants = uploaded, claims = {} })).to.beTrue()
+                expect({ u._Grant(store, full, { item }, opts) }).to.deepEqual({ 0, "full" })
+                expect(table.Count(assert(store.players[full].grants))).to.equal(u.MaxGrants)
+                expect(#deltas).to.equal(0)
+            end
+        },
+        {
+            name = "Revoke: removes grants only, never purchases; revoking twice removes nothing more",
+            func = function()
+                local u = unlocks()
+                local p = assert(PW.Progression)
+                local store, deltas = server()
+                local ply = playerStub()
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 0, "notready" })
+                p._SetState(store, ply, { xp = 0, weapons = {}, owned = { [item] = true } })
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                local opts = { source = "challenge", grant = "reward" }
+                expect({ u._Grant(store, ply, { item }, opts) }).to.deepEqual({ 1 })
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 1 })
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 0 })
+                expect(assert(store.players[ply].grants)[item]).to.beNil()
+                expect(assert(store.players[ply].owned)[item]).to.beTrue()
+                expect(u._HasClaim(store.players[ply].claims, "reward")).to.beTrue()
+                expect(#deltas).to.equal(2)
+                expect(deltas[2].revoked).to.deepEqual({ [item] = "admin" })
+            end
+        },
+        {
+            name = "Grant and revoke: the delta carries them and the client file applies them once per batch id",
+            func = function()
+                local u = unlocks()
+                local p = assert(PW.Progression)
+                local store, deltas = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                expect({ u._Grant(store, ply, { item }, { source = "event" }) }).to.deepEqual({ 1 })
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 1 })
+                local current = u._FileFromJson(nil)
+                expect(#deltas).to.equal(2)
+                for index, delta in ipairs(deltas) do
+                    local writer, reader = wire()
+                    p._EncodeDelta(delta, writer)
+                    local fromWire = p._DecodeDelta(reader)
+                    expect(fromWire.granted or {}).to.deepEqual(delta.granted or {})
+                    expect(fromWire.revoked or {}).to.deepEqual(delta.revoked or {})
+                    local updated, applied = u._ApplyDelta(current, fromWire)
+                    expect(applied).to.beTrue()
+                    expect(updated.grants[item] ~= nil).to.equal(index == 1)
+                    local _, again = u._ApplyDelta(updated, fromWire)
+                    expect(again).to.beFalse()
+                    current = updated
+                end
+            end
+        },
+        {
+            name = "Grant: classes are refreshed at once and PW_UnlockGranted fires with the new keys, source and "
+                .. "grant id",
+            func = function()
+                local u = unlocks()
+                local store, _, notes, refreshes = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                local opts = { source = "challenge", grant = "weekly:2" }
+                expect({ u._Grant(store, ply, { item }, opts) }).to.deepEqual({ 1 })
+                expect(refreshes).to.deepEqual({ ply, ply })
+                expect(notes).to.deepEqual({ { "PW_UnlockGranted", ply, { item }, "challenge", "weekly:2" } })
+            end
+        },
+        {
+            name = "Upload: keys and claims are validated, bounded and accepted once; Grant waits for readiness",
+            func = function()
+                local u = unlocks()
+                local store, _, _, refreshes = server()
+                local ply = playerStub()
+                expect(u._IsReady(store, ply)).to.beFalse()
+                local writer, reader = wire()
+                writer.uint(1, 8)
+                writer.uint(u.MaxGrants + 1, 16)
+                expect(u._OnUpload(store, ply, u._DecodeUpload(reader))).to.beFalse()
+                expect(u._IsReady(store, ply)).to.beFalse()
+                expect(u._IsReady(store, NULL --[[@as Player]])).to.beFalse()
+                expect(u._IsReady(store, playerStub(true))).to.beFalse()
+                expect({ u._Grant(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 0, "notready" })
+                expect(u._OnUpload(store, ply, { grants = { [item] = true, ["bad key"] = true },
+                    claims = { ["weekly:1"] = true, ["bad id"] = true } })).to.beTrue()
+                expect(u._IsReady(store, ply)).to.beTrue()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beFalse()
+                expect(assert(store.players[ply].grants)).to.deepEqual({ [item] = { source = "grant", at = 0 } })
+                expect(store.players[ply].claims).to.deepEqual({ ["weekly:1"] = 0 })
+                expect(refreshes).to.deepEqual({ ply })
+            end
+        },
+        {
+            name = "Upload: keys of content not installed on this host are kept",
+            func = function()
+                local u = unlocks()
+                local store = server()
+                local ply = playerStub()
+                local absent = "camos:pwtest_not_installed:gold"
+                expect(u._OnUpload(store, ply, { grants = { [absent] = true }, claims = {} })).to.beTrue()
+                expect(assert(store.players[ply].grants)[absent]).to.deepEqual({ source = "grant", at = 0 })
+            end
+        },
+        {
+            name = "Net: pw_unlocks_upload is registered with an owner, a rate and the size bound; a second upload "
+                .. "is ignored",
+            func = function()
+                local u = unlocks()
+                local p = assert(PW.Progression)
+                local store, _, _, refreshes = server()
+                local ply = player.GetHumans()[1] or playerStub()
+                local definition = assert(PW._Net.defs.pw_unlocks_upload)
+                expect(definition.who).to.equal("any")
+                expect(definition.rate).to.equal(0.5)
+                expect(definition.maxLen).to.equal(u.UploadMaxBytes)
+                local owner = assert(definition.owner)
+                expect(owner).to.equal(assert(PW.Registries.modules.GetStored("progression")))
+                expect(IsValid(owner)).to.beTrue()
+                expect(util.NetworkStringToID("pw_unlocks_upload") > 0).to.beTrue()
+                local readerCalls = 0
+                stub(p, "_NetReader").with(function()
+                    readerCalls = readerCalls + 1
+                    local writer, reader = wire()
+                    u._EncodeUpload(u._FileFromJson(nil), writer)
+                    return reader
+                end)
+                local previous = PW._Progression
+                PW._Progression = store
+                local ok, err = pcall(function()
+                    expect(u.IsReady(ply)).to.beFalse()
+                    definition.handler(ply, 39)
+                    expect(u.IsReady(ply)).to.beFalse()
+                    definition.handler(ply, 40)
+                    expect(u.IsReady(ply)).to.beTrue()
+                    definition.handler(ply, 40)
+                    expect(readerCalls).to.equal(1)
+                    expect(refreshes).to.deepEqual({ ply })
+                end)
+                PW._Progression = previous
+                assert(ok, err)
+            end
+        },
+        {
+            name = "Claim only: an empty grant with a grant id records the claim once; HasClaim answers on both realms",
+            func = function()
+                local u = unlocks()
+                local store, deltas, notes = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                local options = { source = "challenge", grant = "weekly:xp" }
+                local count, reason = u._Grant(store, ply, {}, options)
+                expect(count).to.equal(0)
+                expect(reason).to.beNil()
+                expect({ u._Grant(store, ply, {}, options) }).to.deepEqual({ 0, "claimed" })
+                expect(#deltas).to.equal(1)
+                expect(#notes).to.equal(0)
+                local localFile = u._ApplyDelta(u._FileFromJson(nil), deltas[1])
+                expect(u._HasClaim(store.players[ply].claims, "weekly:xp")).to.beTrue()
+                expect(u._HasClaim(localFile.claims, "weekly:xp")).to.beTrue()
+                expect(u._HasClaim(localFile.claims, "missing")).to.beFalse()
+            end
+        },
+        {
+            name = "Batching: XP and currency queued before a Grant travel in its delta; the client writes "
+                .. "unlocks.json before progression.json",
+            func = function()
+                local u = unlocks()
+                local p = assert(PW.Progression)
+                local store, deltas = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                p._OnScoreEvent(store, ply, "kill", 0, 25)
+                p._AddCurrency(store, ply, 10)
+                expect(#deltas).to.equal(0)
+                local opts = { source = "challenge", grant = "weekly:xp" }
+                expect({ u._Grant(store, ply, { item }, opts) }).to.deepEqual({ 1 })
+                expect(#deltas).to.equal(1)
+                local batch = deltas[1]
+                expect(batch.xp).to.equal(25)
+                expect(batch.earned).to.equal(10)
+                expect(assert(batch.granted)[item].grant).to.equal("weekly:xp")
+                expect(assert(batch.claims)["weekly:xp"] > 0).to.beTrue()
+                expect(store.pending[ply]).to.beNil()
+            end
+        },
+        {
+            name = "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved",
+            func = function()
+                local u = unlocks()
+                local p = assert(PW.Progression)
+                local store, deltas, notes, refreshes = server()
+                local ply = playerStub()
+                p._AddCurrency(store, ply, 5)
+                local pending = store.pending[ply]
+                local opts = { source = "challenge", grant = "weekly:first" }
+                expect(u._IsReady(store, ply)).to.beFalse()
+                expect({ u._Grant(store, ply, { item }, opts) }).to.deepEqual({ 0, "notready" })
+                expect({ u._Grant(store, ply, {}, opts) }).to.deepEqual({ 0, "notready" })
+                expect(u._HasClaim(store.players[ply].claims, "weekly:first")).to.beFalse()
+                expect(assert(store.players[ply].grants)[item]).to.beNil()
+                expect(store.pending[ply]).to.equal(pending)
+                expect(#deltas + #notes + #refreshes).to.equal(0)
+                ---@type table<string, boolean>
+                local keys = {}
+                for index = 1, u.MaxGrants do keys["perks:uploaded_" .. index] = true end
+                expect(u._OnUpload(store, ply, { grants = keys, claims = {} })).to.beTrue()
+                expect(u._IsReady(store, ply)).to.beTrue()
+                expect({ u._Grant(store, ply, { item }, opts) }).to.deepEqual({ 0, "full" })
+                expect(u._HasClaim(store.players[ply].claims, "weekly:first")).to.beFalse()
+                local kept = assert(store.players[ply].grants)
+                expect(table.Count(kept)).to.equal(u.MaxGrants)
+                for key in pairs(keys) do expect(kept[key]).toNot.beNil() end
+                expect(kept[item]).to.beNil()
+                expect(store.pending[ply]).to.equal(pending)
+                expect(#deltas + #notes).to.equal(0)
+                expect(refreshes).to.deepEqual({ ply })
+            end
+        },
+        {
+            name = "Revoke: both realms notify the revoking source once",
+            func = function()
+                local u = unlocks()
+                local store, deltas, notes = server()
+                local ply = playerStub()
+                expect(u._OnUpload(store, ply, { grants = {}, claims = {} })).to.beTrue()
+                expect({ u._Grant(store, ply, { item }, { source = "challenge" }) }).to.deepEqual({ 1 })
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 1 })
+                expect({ u._Revoke(store, ply, { item }, { source = "admin" }) }).to.deepEqual({ 0 })
+                expect(notes).to.deepEqual({
+                    { "PW_UnlockGranted", ply, { item }, "challenge" },
+                    { "PW_UnlockRevoked", ply, { item }, "admin" }
+                })
+                expect(deltas[2].revoked).to.deepEqual({ [item] = "admin" })
+            end
+        },
         {
             name = "Migration: a v2 progression.json with owned keys and no unlocks.json lists purchases as "
                 .. "entitlements; nothing is lost and progression.json stays at version 2",

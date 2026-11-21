@@ -13,6 +13,10 @@ function lib._CheckGrantId(value)
     return nil
 end
 
+function lib._HasClaim(claims, grant)
+    return claims ~= nil and lib._CheckGrantId(grant) ~= nil and claims[grant] ~= nil
+end
+
 function lib._CheckTime(value)
     if isnumber(value) and value >= 0 and value < 2 ^ 32 and math.floor(value) == value then return value end
     return nil

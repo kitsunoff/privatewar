@@ -16,7 +16,7 @@
 ---@field batch PW.ProgressionBatch
 
 ---XP earned since the last delta (server).
----@class PW.ProgressionPending
+---@class PW.ProgressionPending : PW.UnlockDeltaPart
 ---@field xp number
 ---@field weapons table<string, number>
 
@@ -84,6 +84,7 @@
 ---@field batches table<Player, PW.ProgressionBatch> the id of the last delta sent, weak keys
 ---@field matches table<Player, PW.ProgressionMatch> this match's records, weak keys
 ---@field uploaded table<Player, boolean> players whose join upload was accepted, weak keys
+---@field unlocksUploaded table<Player, boolean> humans whose separate unlock upload was accepted
 ---@field nextFlush? number time of the next 10 s flush (nil until the first tick)
 ---@field sendDelta fun(ply: Player, delta: PW.ProgressionDelta)
 ---@field sendLevels fun(ply: Player, levels: PW.ProgressionLevels)

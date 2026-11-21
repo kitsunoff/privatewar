@@ -107,6 +107,17 @@
 ---@field _DecodeUpload fun(reader: PW.ProgressionReader): PW.UnlockUpload?
 ---@field _EncodeDeltaPart fun(part: PW.UnlockDeltaPart, writer: PW.ProgressionWriter)
 ---@field _DecodeDeltaPart fun(reader: PW.ProgressionReader): PW.UnlockDeltaPart
+---@field _Grant fun(store: PW.ProgressionStore, ply: Player, items: (PW.UnlockItem|string)[],
+---opts: PW.UnlockGrantOptions): integer, string?
+---@field _Revoke fun(store: PW.ProgressionStore, ply: Player, items: (PW.UnlockItem|string)[],
+---opts: PW.UnlockGrantOptions): integer, string?
+---@field _OnUpload fun(store: PW.ProgressionStore, ply: Player, raw: PW.UnlockUpload?): boolean
+---@field _IsReady fun(store: PW.ProgressionStore, ply: Player): boolean
+---@field _HasClaim fun(claims: table<string, integer>?, grant: string): boolean
+---@field IsReady fun(ply: Player): boolean server only
+---@field HasClaim fun(ply: Player, grant: string): boolean
+---@field Grant fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
+---@field Revoke fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
 
 ---@class PW
 ---@field Unlocks? PW.UnlocksLib the progression unlock authority
