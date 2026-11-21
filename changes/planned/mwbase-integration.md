@@ -10,7 +10,7 @@ direction for implementation; push, PR, merge to `main` and publication still ne
 
 Related: [TFA integration](tfa-integration.md) shares the `PW.WeaponConVars` helper defined here (§6.5); whichever
 change lands first creates it. Weapon and attachment unlocks stay compatible with
-[programmatic unlocks](unlock-entitlements.md).
+[programmatic unlocks](../in-progress/unlock-entitlements.md).
 
 Research: [MW Base research](../../notes/29-mwbase-research.md) (cited below as `notes/29 §N`), with
 [`notes/08`](../../notes/08-weapon-adapters.md) §3 and §6.3 and [`notes/12`](../../notes/12-weapon-stat-modifiers.md)

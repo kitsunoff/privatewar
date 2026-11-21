@@ -15,7 +15,7 @@ This record is tracking, not authorization. It does not authorize implementation
 Deck access, pushes or publication. Every number marked "proposed default" is unapproved. Existing decisions in
 `design/` and frozen contracts in `docs/api/` stay in force until the user approves the changes listed in section 2.
 
-Depends on [unlock entitlements](unlock-entitlements.md) (planned in parallel; see
+Depends on [unlock entitlements](../in-progress/unlock-entitlements.md) (planned in parallel; see
 [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md)). Item rewards and the
 reward idempotency ledger are delivered only through that system (`PW.Unlocks.Grant` with a claim id). XP and currency
 rewards go through the existing `PW.Progression.AddXP` and `PW.Progression.AddCurrency`. Implementation of this record
@@ -909,7 +909,7 @@ The automated cases never replace the human checkpoint (section 14).
 ## Evidence and links
 
 - Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md).
-- Dependency: [unlock entitlements](unlock-entitlements.md) and
+- Dependency: [unlock entitlements](../in-progress/unlock-entitlements.md) and
   [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md).
 - Related: [scheduled events](../in-progress/scheduled-events.md) (UTC handling, playlist availability), store rotation
   `addons/privatewar/lua/privatewar/modules/economy/sh_rotation.lua`, `design/06-progression.md` d.0, d.1, d.3, d.5, d.6.

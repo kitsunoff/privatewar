@@ -12,7 +12,7 @@ This record is tracking only; it does not authorize implementation, design or AP
 publication. Paths: `P = addons/privatewar/lua/privatewar/`, `T = addons/privatewar/lua/tests/privatewar/`; checked
 at `cf7c4ed`. Numbers are **proposed defaults, user to confirm**.
 
-Related: card unlocks must stay valid under [programmatic unlocks](unlock-entitlements.md) (cards are natural
+Related: card unlocks must stay valid under [programmatic unlocks](../in-progress/unlock-entitlements.md) (cards are natural
 [weekly challenge](weekly-challenges.md) rewards); the selection flow mirrors operators (`docs/api/operators.md`).
 
 ## 1. User request
@@ -123,7 +123,7 @@ Related: card unlocks must stay valid under [programmatic unlocks](unlock-entitl
 - [ ] Readability does not depend on the art: the banner always draws a left-to-right dark gradient under the name
   (`bg` token, alpha about 0.85 at the left edge fading to 0 at 55 % of the width) before the text. Pure layout case
   in section 7: `Name plate gradient is drawn under the name on every card`.
-- [ ] The `{ level = false, reward = ... }` form exists only after [programmatic unlocks](unlock-entitlements.md).
+- [ ] The `{ level = false, reward = ... }` form exists only after [programmatic unlocks](../in-progress/unlock-entitlements.md).
   Until then the six challenge cards are registered but hidden from the picker (or the whole challenge half ships
   with weekly challenges); the four level cards need no other change.
 - [ ] Each weekly challenge template grants its card through `Rewards.items` (`{ kind = "cards", id = ... }`) when the

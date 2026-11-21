@@ -1,15 +1,18 @@
 # Stim equipment: healing stim and speed stim
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-21
+
+Implementation started 2026-11-22 on `feat/stim-equipment` from `226330a`. Scope is the approved three stims,
+equipment input, bot and HUD support, and optional animation integration. Gates and human acceptance are pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
 Related: the items' `Unlock` field must stay valid under [programmatic unlocks](unlock-entitlements.md); stim usage
-may later become a [weekly challenge](weekly-challenges.md) event (not in this scope).
+  may later become a [weekly challenge](../planned/weekly-challenges.md) event (not in this scope).
 
 Research: [Arctic's Combat Stims research](../../notes/30-arctic-stims-research.md). This record is tracking, not
 authorization: it does not authorize implementation, design or contract changes, Steam Deck access, redistribution or

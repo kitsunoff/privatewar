@@ -1,8 +1,11 @@
 # After-match rotation by default for playlists
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-21
+
+Implementation started 2026-11-22 on `feat/aftermatch-rotation-default` from `226330a`. Scope is the
+approved after-match setting, default routing, and lobby controls. Gates and human acceptance are pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design

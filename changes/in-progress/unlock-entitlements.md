@@ -1,8 +1,11 @@
 # Programmatic unlocks and entitlements
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-21
+
+Implementation started 2026-11-22 on `feat/unlock-entitlements` from `226330a`. Scope is the approved
+unlock authority, grants and claims, persistence, validation, and presentation. Gates and human acceptance are pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
