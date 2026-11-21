@@ -380,6 +380,62 @@ return {
             end
         },
         {
+            name = "Admin commands: the privilege is checked; grant, revoke and list work on a shared player",
+            func = function()
+                local u, p = unlocks(), assert(PW.Progression)
+                local playerTarget = assert(player.GetHumans()[1], "admin command case needs the shared listen host")
+                local privilege = "pw_unlocks_admin"
+                expect(assert(PW._Privileges.defs[privilege]).MinAccess).to.equal("superadmin")
+                local commands = concommand.GetTable()
+                for _, name in ipairs({ "pw_unlock_grant", "pw_unlock_revoke", "pw_unlock_list" }) do
+                    expect(type(commands[name])).to.equal("function")
+                end
+                local admin = assert(u._AdminCommand)
+                local store, deltas = server()
+                local allow, checks = false, 0
+                stub(PW, "Can").with(function(caller, requested)
+                    expect(caller).to.equal(playerTarget)
+                    expect(requested).to.equal(privilege)
+                    checks = checks + 1
+                    return allow
+                end)
+                ---@type string[]
+                local lines = {}
+                ---@param line string
+                local function out(line) lines[#lines + 1] = line end
+                local prior, bought = PW._Progression, "models:swat"
+                local userId = tostring(playerTarget:UserID())
+                PW._Progression = store
+                local ok, err = pcall(function()
+                    p._SetState(store, playerTarget, { xp = 0, weapons = {}, owned = { [bought] = true } })
+                    expect(admin(playerTarget, "grant", { userId, item }, out)).to.beFalse()
+                    expect(admin(playerTarget, "revoke", { userId, item }, out)).to.beFalse()
+                    expect(admin(playerTarget, "list", { userId }, out)).to.beFalse()
+                    expect(checks).to.equal(3)
+                    expect(u._OnUpload(store, playerTarget, { grants = {}, claims = {} })).to.beTrue()
+                    expect(u.ListEntitled(playerTarget)[item]).to.beNil()
+                    allow = true
+                    expect(admin(playerTarget, "grant", { "__no_exact_player__", item }, out)).to.beFalse()
+                    expect(admin(playerTarget, "grant", { userId, item }, out)).to.beTrue()
+                    expect(assert(u.ListEntitled(playerTarget)[item]).source).to.equal("admin")
+                    expect(#deltas).to.equal(1)
+                    expect(admin(nil, "list", { playerTarget:Nick() }, out)).to.beTrue()
+                    expect({ lines[#lines - 1], lines[#lines] }).to.deepEqual({
+                        bought .. " (purchase)", item .. " (admin)"
+                    })
+                    expect(admin(playerTarget, "revoke", { playerTarget:Nick(), item }, out)).to.beTrue()
+                    expect(#deltas).to.equal(2)
+                    expect(u.ListEntitled(playerTarget)[item]).to.beNil()
+                    expect(assert(u.ListEntitled(playerTarget)[bought]).source).to.equal("purchase")
+                    expect(admin(nil, "list", { userId }, out)).to.beTrue()
+                    expect(lines[#lines]).to.equal(bought .. " (purchase)")
+                    expect(checks).to.equal(6)
+                end)
+                PW._Progression = prior
+                assert(ok, err)
+            end
+        },
+        {
             name = "Economy: a granted item counts as owned in a quote; a purchase refreshes the classes",
             func = function()
                 local u = unlocks()

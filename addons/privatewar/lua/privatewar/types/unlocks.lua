@@ -75,7 +75,10 @@
 ---@field writeProgression fun(stored: PW.ProgressionFile)
 ---@field notify fun(name: string, ...: any)
 
+---@alias PW.UnlockAdminAction "grant"|"revoke"|"list"
+
 ---@class PW.UnlocksLib
+---@field _AdminCommand? fun(caller: Player?, action: PW.UnlockAdminAction, args: string[], out?: PW.LogFn): boolean
 ---@field MaxHintLength integer
 ---@field MaxSourceLength integer
 ---@field _CheckHint fun(value: any): string?

@@ -213,3 +213,91 @@ PW.Net.Receive("pw_unlocks_upload", { who = "any", rate = 0.5, maxLen = lib.Uplo
         if store == nil or len < 40 or playerRefusal(ply) ~= nil or lib._IsReady(store, ply) then return end
         lib._OnUpload(store, ply, decodeUpload(len))
     end)
+
+local adminPrivilege = "pw_unlocks_admin"
+PW.Privilege(adminPrivilege, "superadmin")
+
+---@type table<PW.UnlockAdminAction, string>
+local adminSyntax = {
+    grant = "pw_unlock_grant <player> <key>",
+    revoke = "pw_unlock_revoke <player> <key>",
+    list = "pw_unlock_list <player>"
+}
+
+---@param id string
+---@return Player?
+local function adminTarget(id)
+    local humans = player.GetHumans()
+    for _, ply in ipairs(humans) do
+        if tostring(ply:UserID()) == id then return ply end
+    end
+    ---@type Player?
+    local target
+    for _, ply in ipairs(humans) do
+        if ply:Nick() == id then
+            if target ~= nil then return nil end
+            target = ply
+        end
+    end
+    return target
+end
+
+---@param line string
+local function printAdmin(line)
+    print("[PW] " .. line)
+end
+
+---@param target Player
+---@param out PW.LogFn
+local function listAdmin(target, out)
+    local entries = lib.ListEntitled(target)
+    local keys = table.GetKeys(entries) --[[@as string[] ]]
+    table.sort(keys)
+    out(string.format("Entitlements for %q (%d):", target:Nick(), #keys))
+    for _, key in ipairs(keys) do out(string.format("%s (%s)", key, entries[key].source)) end
+end
+
+function lib._AdminCommand(caller, action, args, out)
+    out = out or printAdmin
+    if caller ~= nil and IsValid(caller) and not PW.Can(caller, adminPrivilege) then
+        out("Unlock command denied: needs " .. adminPrivilege)
+        return false
+    end
+    local syntax = adminSyntax[action]
+    if syntax == nil then return false end
+    if #args ~= (action == "list" and 1 or 2) then
+        out("Usage: " .. syntax)
+        return false
+    end
+    local target = adminTarget(args[1])
+    if target == nil then
+        out(string.format("No unique human player matches %q", args[1]))
+        return false
+    end
+    if action == "list" then
+        listAdmin(target, out)
+        return true
+    end
+    local apply = action == "grant" and lib.Grant or lib.Revoke
+    local count, reason = apply(target, { args[2] }, { source = "admin" })
+    if reason ~= nil then
+        out(string.format("Unlock %s refused: %s", action, reason))
+        return false
+    end
+    out(string.format("Unlock %s: %d affected for %q", action, count, target:Nick()))
+    return true
+end
+
+---@param action PW.UnlockAdminAction
+local function registerAdmin(action)
+    local help = "Private War: " .. adminSyntax[action]
+        .. " (player user id or exact name; needs " .. adminPrivilege .. ")"
+    concommand.Add("pw_unlock_" .. action, function(caller, _, args)
+        if not IsValid(module) then return end
+        assert(lib._AdminCommand)(IsValid(caller) and caller or nil, action, args)
+    end, nil, help)
+end
+
+registerAdmin("grant")
+registerAdmin("revoke")
+registerAdmin("list")
