@@ -264,6 +264,54 @@
 ---@field items PW.ChallengeFileItems
 ---@field bonus boolean
 
+---@class PW.ChallengeMatchContext
+---@field mode string
+---@field modeBase string[]
+---@field playlist string
+
+---@class PW.ChallengeServerDeps
+---@field utc fun(): integer
+---@field clock fun(): number
+---@field phase fun(): PW.PhaseName
+---@field players fun(): Player[]
+---@field isPlayer fun(ply: Player): boolean
+---@field catalogue fun(): PW.ChallengeCandidate[]
+---@field options? fun(): PW.ChallengeSelectOptions
+---@field matchContext fun(): PW.ChallengeMatchContext
+---@field schedule fun(name: string, interval: number, times: integer, run: fun())
+---@field log fun(message: string)
+---@field sendState fun(owner: Player, state: PW.ChallengeWireState)
+---@field sendProgress fun(owner: Player, items: PW.ChallengeFileItems)
+---@field sendDelta fun(owner: Player, delta: PW.ChallengeDelta)
+
+---@class PW.ChallengeConnection
+---@field upload? PW.ChallengeFileWeeks validated, bounded rows; projected only when their week is active
+---@field progress PW.ChallengeProgressState
+---@field dirty table<string, boolean>
+---@field persist boolean
+---@field lastSend? number
+---@field batch? PW.ChallengeBatch
+---@field presentAt? number
+---@field spawnedAt? number
+---@field lifeKills integer
+---@field attachments table<string, table<string, boolean>>
+
+---@class PW.ChallengeServer
+---@field deps PW.ChallengeServerDeps
+---@field players table<Player, PW.ChallengeConnection>
+---@field week PW.ChallengeWeek
+---@field templates table<string, PW.ChallengeTemplate>
+---@field modes table<string, PW.ChallengeCombine>
+---@field plan PW.ChallengeProgressPlan
+---@field match? PW.ChallengeMatchContext
+---@field serial integer
+---@field roundOpen boolean
+---@field backwardsLogged boolean
+---@field weaponFacts table<string, { category: string?, kind: PW.WeaponKind? }>
+
+---@alias PW.ChallengeEventFacts table<string, any>
+---@alias PW.ChallengeEventCallback fun(ply: Player, kind: string, facts?: PW.ChallengeEventFacts)
+
 ---@alias PW.ChallengeWireWriter fun(value: integer, width: integer)
 ---@alias PW.ChallengeWireReader fun(width: integer): integer
 
@@ -339,9 +387,29 @@
 ---@field _ValidWeekLabel fun(label: any): boolean
 ---@field _ValidInstanceId fun(id: any): boolean
 ---@field _BoundCounter fun(value: any): integer
+---@field GetWeek? fun(): PW.ChallengeWeek?
+---@field GetActive? fun(): PW.ChallengeInstance[]
+---@field GetProgress? fun(ply: Player, id: string): PW.ChallengeProgress?
+---@field ProgressInterval number
+---@field _NewServer fun(deps: PW.ChallengeServerDeps): PW.ChallengeServer
+---@field _ScheduleServer fun(server: PW.ChallengeServer)
+---@field _RefreshWeek fun(server: PW.ChallengeServer, refreshCatalogue?: boolean)
+---@field _ChallengeConnection fun(server: PW.ChallengeServer, ply: Player): PW.ChallengeConnection
+---@field _ChallengeHuman fun(server: PW.ChallengeServer, ply: Player): boolean
+---@field _ChallengeParticipant fun(server: PW.ChallengeServer, ply: Player): boolean
+---@field _OpenMatch fun(server: PW.ChallengeServer)
+---@field _AcceptUpload fun(server: PW.ChallengeServer, ply: Player, rows: PW.ChallengeFileWeeks)
+---@field _SendChallengeState fun(server: PW.ChallengeServer, ply: Player)
+---@field _FlushChallengeProgress fun(server: PW.ChallengeServer, ply: Player, force?: boolean)
+---@field _FlushChallengeDelta fun(server: PW.ChallengeServer, ply: Player)
+---@field _FlushChallenges fun(server: PW.ChallengeServer, view: boolean, file: boolean, force?: boolean)
+---@field _ChallengeBoundary fun(server: PW.ChallengeServer, ply: Player, boundary: PW.ChallengeProgressBoundary)
+---@field _ChallengeEvent fun(server: PW.ChallengeServer, ply: Player, kind: string, facts?: PW.ChallengeEventFacts)
+---@field _ChallengeCatalogue fun(): PW.ChallengeCandidate[]
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib
+---@field _ChallengeServer? PW.ChallengeServer
 
 ---@type PW.Challenge
 CHALLENGE = nil
