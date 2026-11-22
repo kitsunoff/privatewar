@@ -1,6 +1,6 @@
 # 15 — Calling cards
 
-Art prompts for the ten calling cards of `changes/planned/calling-card-kill-banner.md`. Generate one image per prompt;
+Art prompts for the ten calling cards of `changes/in-progress/calling-card-kill-banner.md`. Generate one image per prompt;
 paste the shared block first, then the card block. Final in-game asset: 512×128 (4:1) PNG under
 `addons/privatewar/materials/privatewar/cards/`.
 

@@ -5,7 +5,8 @@ Status: `in-progress`
 Recorded: 2026-11-21
 
 The independent rotation and filter work started on 2026-11-22 on `feat/weekly-challenges` from
-`f5199de`. Remaining implementation and integration wait for the unlock authority. Gates and human acceptance are pending.
+`f5199de`. Remaining implementation resumed on `53f04d4`, which includes the local unlock authority and tactical
+stims. Whole-feature gates and human acceptance are pending.
 
 Early scope evidence (2026-11-22, `19b1f71`): steps 1–4 are committed, with `nix develop --command make check`
 and pre-commit passing. Full Deck RED was 2144 passed, 23 failed, 0 skipped. After steps 1–3, all 14 of their new

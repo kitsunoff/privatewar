@@ -1,8 +1,12 @@
 # Calling cards: equip a card, show the victim's card to the killer
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-22
+
+Implementation started on 2026-11-22 on `feat/calling-card-kill-banner` from `76ed4c8`.
+The unlock authority is available locally. The implementation, gameplay verification and human checkpoint
+are pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
