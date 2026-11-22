@@ -33,6 +33,7 @@ human-acceptance evidence; planned status is retained.
 - [Calling cards: equip a card, show the victim's card to the killer](planned/calling-card-kill-banner.md)
 - [Progression rebalance: pacing, attachment spread and long tail](planned/progression-rebalance.md) (questions for
   the maintainer open)
+- [Search and Destroy bot behaviour: site choice, route variety, corner checks, empty grenade](planned/snd-bot-behaviour.md)
 
 ## In progress
 
