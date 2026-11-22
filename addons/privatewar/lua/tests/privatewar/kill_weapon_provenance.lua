@@ -15,6 +15,8 @@ local function participants()
         IsValid = function() return true end, IsPlayer = function() return true end,
         Alive = function() return true end,
         Team = function() return 1 end, SetNW2Int = function() end,
+        GetPos = function() return vector_origin end, Crouching = function() return false end,
+        IsOnGround = function() return true end, KeyDown = function() return false end,
         GetActiveWeapon = function() return held end
     } --[[@as Player]]
     held = {
@@ -23,6 +25,7 @@ local function participants()
     } --[[@as Weapon]]
     local victim = {
         IsValid = function() return true end, IsPlayer = function() return true end,
+        IsBot = function() return false end, GetPos = function() return vector_origin end,
         LastHitGroup = function() return HITGROUP_GENERIC end
     } --[[@as Player]]
     return owner, victim, held

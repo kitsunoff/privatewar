@@ -55,10 +55,14 @@ local function fakePlayer(team, opts)
     local fake = { team = team, spawns = 0, published = published, hitGroup = opts.hitGroup or HITGROUP_CHEST }
     fake.IsValid = function() return true end
     fake.IsPlayer = function() return true end
+    fake.IsBot = function() return false end
     fake.Team = function(self) return self.team end
     fake.SetTeam = function(self, value) self.team = value end
     fake.LastHitGroup = function(self) return self.hitGroup end
     fake.GetActiveWeapon = function() return NULL end
+    fake.GetPos = function() return vector_origin end
+    fake.Crouching = function() return false end
+    fake.IsOnGround = function() return true end
     ---@param _ any
     ---@param key string
     ---@param value integer
@@ -69,10 +73,11 @@ local function fakePlayer(team, opts)
     return fake --[[@as Player]]
 end
 
----A CTakeDamageInfo stand-in: only GetInflictor is read.
+---A CTakeDamageInfo stand-in for a non-explosive hit with no weapon inflictor.
 ---@return CTakeDamageInfo
 local function fakeDamage()
-    return { GetInflictor = function() return NULL end } --[[@as CTakeDamageInfo]]
+    return { GetInflictor = function() return NULL end,
+        IsDamageType = function() return false end } --[[@as CTakeDamageInfo]]
 end
 
 ---@param state table<string, any>
@@ -162,6 +167,45 @@ return {
                 expect(rules().GetTeamKills(1)).to.equal(1)
                 expect(rules().GetTeamKills(2)).to.equal(0)
                 expect(fields(attacker).published[rules()._KillsKey]).to.equal(1)
+            end
+        },
+        {
+            name = "ScoreKill builds one kill context with victim, headshot, distance and stance facts",
+            func = function()
+                local victim = fakePlayer(2, { hitGroup = HITGROUP_HEAD })
+                local attacker = fakePlayer(1)
+                fields(victim).IsBot = function() return true end
+                fields(victim).GetPos = function() return Vector(2000, 0, 0) end
+                fields(attacker).GetPos = function() return vector_origin end
+                fields(attacker).Crouching = function() return true end
+                fields(attacker).IsOnGround = function() return false end
+                local dmg = DamageInfo()
+                dmg:SetDamageType(DMG_BLAST)
+
+                ---@type table[]
+                local events = {}
+                hook.Add("PW_ScoreEvent", listenerId, function(...) events[#events + 1] = { ... } end)
+                rules().ScoreKill(victim, attacker, dmg)
+
+                expect(#events).to.equal(2)
+                expect(events[1][1]).to.equal(attacker)
+                expect(events[1][2]).to.equal("kill")
+                expect(events[2][2]).to.equal("headshot")
+                expect(events[1][5]).to.beNil()
+                local context = events[1][6] --[[@as table<string, any>?]]
+                expect(type(context)).to.equal("table")
+                assert(context ~= nil)
+                expect(rawequal(context, events[2][6])).to.beTrue()
+                expect(context.victim).to.equal(victim)
+                expect(context.victimBot).to.beTrue()
+                expect(context.headshot).to.beTrue()
+                expect(math.abs(context.distance - 38.1) < 0.000001).to.beTrue()
+                expect(context.ads).to.beNil()
+                expect(context.crouch).to.beTrue()
+                expect(context.airborne).to.beTrue()
+                expect(context.explosive).to.beTrue()
+                expect(context.streakKill).to.beFalse()
+                expect(context.streak).to.beNil()
             end
         },
         {
