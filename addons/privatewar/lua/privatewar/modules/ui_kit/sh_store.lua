@@ -29,7 +29,7 @@ local kindLabels = {
 
 ---@type table<PW.UIStoreState, string>
 local stateFooters = {
-    buyable = "On sale", funds = "Not enough credits", owned = "Owned", unlocked = "Unlocked by your level",
+    buyable = "On sale", funds = "Not enough credits", owned = "Owned", unlocked = "Already unlocked",
     pending = "Waiting for the server"
 }
 
@@ -71,6 +71,33 @@ function store.CountdownText(seconds)
     if days > 0 then return string.format("%dd %dh", days, hours) end
     if hours > 0 then return string.format("%dh %02dm", hours, minutes) end
     return string.format("%dm %02ds", minutes, secs)
+end
+
+function store._OwnsKey(key, bought, entitled)
+    local unlocks = PW.Unlocks
+    if unlocks == nil then return false end
+    local kind, id = unlocks.ParseKey(key)
+    if kind == nil or id == nil then return false end
+    -- Bundles can be purchased as their own key but cannot be granted entitlements.
+    return bought(kind, id) or (kind ~= "bundles" and entitled(kind, id))
+end
+
+function store._IsUnlockNew(grants, seen, key)
+    return grants[key] ~= nil and lib.Seen.IsNew(seen, "unlock:" .. key)
+end
+
+function store._HasUnseenGrants(grants, seen)
+    for key in pairs(grants) do
+        if store._IsUnlockNew(grants, seen, key) then return true end
+    end
+    return false
+end
+
+function store._FocusUnlockCard(grants, seen, key, card)
+    if not store._IsUnlockNew(grants, seen, key) then return false end
+    lib.Seen.Mark(seen, "unlock:" .. key)
+    card.new = false
+    return true
 end
 
 ---@param offer PW.EconomyOffer
@@ -200,7 +227,7 @@ end
 
 ---@type table<PW.UIStoreState, string>
 local lockReasons = {
-    owned = "You own this item", unlocked = "Your level already unlocks this item",
+    owned = "You own this item", unlocked = "This item is already unlocked",
     pending = "Waiting for the server"
 }
 
@@ -231,7 +258,7 @@ end
 local resultTexts = {
     badkey = "The server rejected the request", unknown = "%s is not sold any more",
     notoffered = "%s has left the rotation", owned = "You already own %s",
-    unlocked = "Your level already unlocks %s", funds = "Not enough credits for %s (balance %s)"
+    unlocked = "%s is already unlocked", funds = "Not enough credits for %s (balance %s)"
 }
 
 function store.ResultText(result, name)
@@ -288,7 +315,17 @@ local function describe(entry, lookup)
     local weapon = lookup("weapons", weaponId)
     local camos = weapon ~= nil and istable(weapon.Camos) and weapon.Camos --[[@as table<string, any>]] or {}
     local camo = istable(camos[camoId]) and camos[camoId] --[[@as table<string, any>]] or nil
-    return string.format("%s %s camo", nameOf(weapon, weaponId), nameOf(camo, camoId)), nil
+    return string.format("%s %s camo", nameOf(weapon, weaponId), nameOf(camo, camoId)), camo
+end
+
+---@param entry PW.EconomyItem
+---@param entity? table<string, any>
+---@param facts PW.UIStoreFacts
+---@return PW.UnlockRequirement?
+local function requirementOf(entry, entity, facts)
+    if facts.requirement ~= nil then return facts.requirement(entry.kind, entry.id) end
+    local unlocks = PW.Unlocks
+    return unlocks ~= nil and unlocks._StaticRequirement(entity, entry.kind == "camos") or nil
 end
 
 function store.ItemViews(offer, lookup, facts)
@@ -304,7 +341,9 @@ function store.ItemViews(offer, lookup, facts)
         end
         items[index] = {
             key = entry.key, kind = entry.kind, id = entry.id, name = name, label = store.KindLabel(entry.kind),
-            state = state, preview = store.Preview(entry.kind, entity)
+            state = state, preview = store.Preview(entry.kind, entity),
+            requirement = state == "locked" and requirementOf(entry, entity, facts) or nil,
+            new = facts.isNew ~= nil and facts.isNew(entry.key)
         }
     end
     return items
@@ -316,9 +355,15 @@ local itemBadges = { owned = "OWNED", unlocked = "UNLOCKED" }
 function store.ItemCards(items)
     ---@type PW.UICard[]
     local cards = {}
+    local unlocks = PW.Unlocks
     for index, entry in ipairs(items) do
+        local badge, reason = nil, nil
+        local req = entry.requirement
+        if req ~= nil and unlocks ~= nil then badge, reason = unlocks.LockText(req) end
         cards[index] = {
-            id = entry.key, title = entry.name, tags = entry.label, badge = itemBadges[entry.state], locked = false
+            id = entry.key, title = entry.name, tags = entry.label, badge = itemBadges[entry.state],
+            locked = false, lockText = badge, text = reason, new = entry.new,
+            footer = req ~= nil and req.hint ~= reason and req.hint or nil
         }
     end
     return cards

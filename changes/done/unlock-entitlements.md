@@ -1,11 +1,25 @@
 # Programmatic unlocks and entitlements
 
-Status: `in-progress`
+Status: `done`
 
 Recorded: 2026-11-21
 
-Implementation started 2026-11-22 on `feat/unlock-entitlements` from `226330a`. Scope is the approved
-unlock authority, grants and claims, persistence, validation, and presentation. Gates and human acceptance are pending.
+Implemented on `feat/unlock-entitlements` from `226330a` and merged locally into
+`integration/overnight-2026-11-22` at `ee66ed4` on 2026-11-22. Not merged into `main`.
+
+Verification on 2026-11-22:
+
+- All 47 mandatory test names and inherited assertions were reviewed. Test-first focused runs were used for
+  the implementation steps. The option-kind regression ran 50 passed, 1 failed, 0 skipped before its fix and
+  51 passed, 0 failed, 0 skipped after it.
+- The first full run was 2175 passed, 5 failed, 0 skipped: the standalone clickable-hint fixture exposed
+  misplaced client event registration. After moving registration to module initialization, the five unchanged
+  cases passed. At `2d89273`, `make check` and the full Deck run passed (2181 passed, 0 failed, 0 skipped).
+- Coordinator task gates on `fc02af2`: `nix develop --command make check` passed, and
+  `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test` passed 2181, 0 failed, 0 skipped.
+- Steam Deck screenshots verified the operator and LOADOUT `NEW` marks clearing on focus without writing
+  player files or changing the saved operator choice. The live grant toast, controller, peer-to-peer and
+  version-skew checks remain part of the unchecked human checkpoint below.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
@@ -22,7 +36,7 @@ API contracts, Steam Deck access or publication. Each needs the user's explicit 
 `cf7c4ed` on branch `docs/plan-mwbase-stims-unlocks-challenges`; re-check them before editing. Paths without a prefix
 are relative to `addons/privatewar/lua/privatewar/`.
 
-Dependent work: the weekly challenges record (`changes/planned/weekly-challenges.md`, note 32, planned in parallel)
+Dependent work: the weekly challenges record (`changes/in-progress/weekly-challenges.md`, note 32, planned in parallel)
 grants its rewards through the interface in section 10. Nothing in this record depends on it.
 
 ## 1. User request
@@ -96,6 +110,10 @@ edited by this record.
 - [ ] A key is `"<kind>:<id>"` exactly as today's owned keys (`sh_wallet.lua:17-25`): options are
   `"attachments:<weapon>:<option>"` and `"camos:<weapon>:<option>"`. Same pattern `^%l[%l_]*:[%w_%-%.:]+$`, at most
   `MaxKeyLength` (96) bytes.
+- [ ] `Grant` and `Describe` recognize a weapon option as a camo only when it is listed in that weapon's `Camos`;
+  all other offered or curated options use `attachments`. The wrong namespace does not resolve, even if the
+  adapter calls an option cosmetic. This matches gunsmith validation and the existing shop camo rule. It does
+  not change key syntax or remove well-formed keys received in an upload.
 - [ ] APIs that take items accept the bundle item shape (`docs/api/economy.md` "Kinds"), so challenge rewards and
   bundles share one format:
 
@@ -599,6 +617,7 @@ New cases, `unlocks_storage.lua` (server glue with fake stores; one engine smoke
   progression.json"
 - [ ] 21. "Revoke: both realms notify the revoking source once"
 - [ ] 22. "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved"
+- [ ] 23. "Grant rejects an option with a mismatched entitlement kind"
 
 New cases, `unlocks_ui.lua` (pure UI models, server runner):
 

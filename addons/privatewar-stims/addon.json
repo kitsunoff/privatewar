@@ -1,0 +1,13 @@
+{
+	"title": "Private War: Arctic's Combat Stims integration",
+	"type": "tool",
+	"tags": ["fun"],
+	"ignore": [
+		".*",
+		"**/.*",
+		"lua/tests/*",
+		"*.md",
+		"*.sh",
+		"*.nix"
+	]
+}

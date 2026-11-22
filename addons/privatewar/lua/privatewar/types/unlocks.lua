@@ -1,0 +1,148 @@
+---@meta
+-- Unlock authority types (06-progression.md d.8).
+
+---@alias PW.UnlockField integer|false|{ level?: integer|false, hint?: string, reward?: string }
+---@alias PW.UnlockKeyCheck fun(key: string): boolean
+
+---@class PW.UnlockSpec
+---@field level integer|false 0 = open; false = no level path
+---@field hint? string plain text or a language phrase
+---@field reward? string grant source for reward discovery, not a condition
+---@field declared boolean whether the raw field was not nil
+
+---@alias PW.UnlockReason
+---| "unknown"
+---| "hidden"
+---| "override"
+---| "unlockall"
+---| "grant"
+---| "purchase"
+---| "grant_only"
+---| "price"
+---| "level"
+---| "weapon_level"
+---| "default"
+
+---@class PW.UnlockRequirement
+---@field unlocked boolean
+---@field reason PW.UnlockReason
+---@field level? integer required player level
+---@field weaponLevel? integer required weapon level
+---@field price? integer present if purchasable
+---@field hint? string policy hint, then the definition's hint
+---@field lockText? string short badge
+---@field text? string requirement sentence
+
+---@class PW.UnlockItem
+---@field kind string registry kind, "attachments" or "camos" ("camo" is an alias)
+---@field id string entity or option id
+---@field weapon? string required for options only
+
+---@class PW.UnlockItemView
+---@field key string
+---@field kind string
+---@field id string canonical decision id, "<weapon>:<option>" for options
+---@field weapon? string
+---@field name string
+---@field valid boolean resolves on this host
+
+---@class PW.UnlockGrantOptions
+---@field source string
+---@field grant? string idempotency key
+
+---@class PW.UnlockGrantMeta
+---@field source string
+---@field at integer Unix time; 0 when unknown
+---@field grant? string
+
+---@class PW.UnlocksFile
+---@field v integer
+---@field grants table<string, PW.UnlockGrantMeta>
+---@field claims table<string, integer> grant id to Unix time
+---@field batch PW.ProgressionBatch
+
+---@class PW.UnlockUpload
+---@field grants table<string, boolean> granted keys, without metadata
+---@field claims table<string, boolean> claimed ids, without timestamps
+
+---@class PW.UnlockDeltaPart
+---@field granted? table<string, PW.UnlockGrantMeta>
+---@field revoked? table<string, string> key to the revoking source
+---@field claims? table<string, integer>
+
+---@class PW.UnlockClientIO
+---@field writeUnlocks fun(stored: PW.UnlocksFile)
+---@field writeProgression fun(stored: PW.ProgressionFile)
+---@field notify fun(name: string, ...: any)
+
+---@alias PW.UnlockAdminAction "grant"|"revoke"|"list"
+
+---@class PW.UnlocksLib
+---@field _AdminCommand? fun(caller: Player?, action: PW.UnlockAdminAction, args: string[], out?: PW.LogFn): boolean
+---@field MaxHintLength integer
+---@field MaxSourceLength integer
+---@field _CheckHint fun(value: any): string?
+---@field _CheckSource fun(value: any): string?
+---@field _Price fun(entity: table<string, any>): integer?
+---@field _Spec fun(unlock: any): PW.UnlockSpec
+---@field _StaticRequirement fun(entity: table<string, any>?, isOption: boolean): PW.UnlockRequirement
+---@field LockText fun(req: PW.UnlockRequirement): string?, string?
+---@field KeyOf fun(item: PW.UnlockItem|string): string?
+---@field ParseKey fun(key: string): string?, string?, string?, string?
+---@field _Decide fun(view: PW.ProgressionView, kind: string, id: string): boolean, PW.UnlockReason
+---@field _Requirement fun(view: PW.ProgressionView, kind: string, id: string): PW.UnlockRequirement
+---@field IsUnlocked fun(ply: Player, kind: string, id: string): boolean, PW.UnlockReason
+---@field LockedOptions fun(ply: Player, weaponId: string, build: table<string, string|false>): table<string, boolean>
+---@field AttachmentLimit fun(ply: Player, weaponId: string): integer
+---@field Requirement fun(ply: Player, kind: string, id: string): PW.UnlockRequirement
+---@field IsEntitled fun(ply: Player, kind: string, id: string): boolean
+---@field ListEntitled fun(ply: Player): table<string, PW.UnlockGrantMeta>
+---@field ListUnlocked fun(ply: Player, kind: string): string[]
+---@field Describe fun(item: PW.UnlockItem|string): PW.UnlockItemView
+---@field ListRewards fun(source: string): PW.UnlockItem[]
+---@field _Known fun(key: string): boolean
+---@field _BindPolicy fun(view: PW.ProgressionView, ply: Player): PW.ProgressionView
+---@field FilePath string
+---@field FileVersion integer
+---@field UploadMaxBytes integer
+---@field MaxGrants integer
+---@field MaxClaims integer
+---@field MaxGrantIdLength integer
+---@field MaxGrantPerCall integer
+---@field MaxDeltaGrants integer
+---@field MaxDeltaRevokes integer
+---@field MaxDeltaClaims integer
+---@field _CheckGrantId fun(value: any): string?
+---@field _EntitlementKey fun(value: any): string?
+---@field _CheckTime fun(value: any): integer?
+---@field _CheckGrants fun(raw: any, limit?: integer): table<string, PW.UnlockGrantMeta>
+---@field _CheckClaims fun(raw: any, limit?: integer): table<string, integer>
+---@field _FileFromJson fun(decoded: any): PW.UnlocksFile
+---@field _FileToJson fun(stored: PW.UnlocksFile): PW.UnlocksFile
+---@field _ListEntitled fun(owned: table<string, boolean>?, granted: table<string, PW.UnlockGrantMeta>?):
+---table<string, PW.UnlockGrantMeta>
+---@field _ApplyDelta fun(current: PW.UnlocksFile, delta: PW.ProgressionDelta):
+---PW.UnlocksFile, boolean, PW.UnlockDeltaPart?
+---@field _EncodeUpload fun(stored: PW.UnlocksFile, writer: PW.ProgressionWriter)
+---@field _DecodeUpload fun(reader: PW.ProgressionReader): PW.UnlockUpload?
+---@field _EncodeDeltaPart fun(part: PW.UnlockDeltaPart, writer: PW.ProgressionWriter)
+---@field _DecodeDeltaPart fun(reader: PW.ProgressionReader): PW.UnlockDeltaPart
+---@field _Grant fun(store: PW.ProgressionStore, ply: Player, items: (PW.UnlockItem|string)[],
+---opts: PW.UnlockGrantOptions): integer, string?
+---@field _Revoke fun(store: PW.ProgressionStore, ply: Player, items: (PW.UnlockItem|string)[],
+---opts: PW.UnlockGrantOptions): integer, string?
+---@field _OnUpload fun(store: PW.ProgressionStore, ply: Player, raw: PW.UnlockUpload?): boolean
+---@field _IsReady fun(store: PW.ProgressionStore, ply: Player): boolean
+---@field _HasClaim fun(claims: table<string, integer>?, grant: string): boolean
+---@field IsReady fun(ply: Player): boolean server only
+---@field HasClaim fun(ply: Player, grant: string): boolean
+---@field Grant fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
+---@field Revoke fun(ply: Player, items: (PW.UnlockItem|string)[], opts: PW.UnlockGrantOptions): integer, string?
+---@field _ClientDelta fun(state: PW.ProgressionLocal, delta: PW.ProgressionDelta, ply: Player, io: PW.UnlockClientIO):
+---boolean
+---@field _LocalFile fun(): PW.UnlocksFile client only
+---@field _WriteLocal fun(stored: PW.UnlocksFile) client only
+---@field _UploadLocal fun() client only
+
+---@class PW
+---@field Unlocks? PW.UnlocksLib the progression unlock authority

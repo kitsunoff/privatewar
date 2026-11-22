@@ -17,7 +17,7 @@
 ---@field Name string
 ---@field Model string model path, for example "models/player/swat.mdl"
 ---@field Price? number currency; a model with a Price and no Unlock is for sale only
----@field Unlock? integer|{ level: integer } player level
+---@field Unlock? PW.UnlockField player level or entitlement condition
 ---@field Rarity? string
 ---@field Description? string
 
@@ -26,7 +26,7 @@
 ---@field Name string
 ---@field Material string material path, for example "icon16/medal_gold_1.png"
 ---@field Price? number
----@field Unlock? integer|{ level: integer }
+---@field Unlock? PW.UnlockField player level or entitlement condition
 ---@field Rarity? string
 ---@field Description? string
 

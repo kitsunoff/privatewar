@@ -108,6 +108,8 @@ return {
                     end)
                     local progression = must(PW.Progression)
                     stub(progression, "IsUnlocked").with(function() locked = locked + 1 return false end)
+                    local unlocks = must(PW.Unlocks)
+                    stub(unlocks, "IsUnlocked").with(function() locked = locked + 1 return false, "override" end)
                     local bots = must(PW.BotLoadouts)
                     stub(bots, "Harvest").with(function() end) -- isolate bot validation from human upload repair
                     ---@return integer

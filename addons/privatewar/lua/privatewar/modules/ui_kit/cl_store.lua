@@ -43,6 +43,18 @@ function store.LiveLookup()
     end
 end
 
+---@param progression PW.ProgressionLib
+---@param me Player
+---@param key string
+---@return boolean
+local function liveOwned(progression, me, key)
+    local unlocks, economy = PW.Unlocks, PW.Economy
+    if unlocks == nil then return progression.IsOwned(me, key) end
+    return store._OwnsKey(key, function(kind, id)
+        return economy ~= nil and economy.IsOwned(me, kind, id)
+    end, function(kind, id) return unlocks.IsEntitled(me, kind, id) end)
+end
+
 function store.LiveFacts()
     local me = LocalPlayer()
     local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
@@ -52,12 +64,85 @@ function store.LiveFacts()
             pending = pending }
     end
     local lib_ = progression --[[@as PW.ProgressionLib]]
+    local unlocks = PW.Unlocks
     return {
         currency = lib_.GetCurrency(me),
-        owned = function(key) return lib_.IsOwned(me, key) end,
-        unlocked = function(kind, id) return lib_.IsUnlocked(me, kind, id) end,
+        owned = function(key) return liveOwned(lib_, me, key) end,
+        unlocked = function(kind, id)
+            if unlocks == nil then return lib_.IsUnlocked(me, kind, id) end
+            return (unlocks.IsUnlocked(me, kind, id))
+        end,
+        requirement = unlocks ~= nil and function(kind, id) return unlocks.Requirement(me, kind, id) end or nil,
+        isNew = store.IsUnlockNew,
         pending = pending
     }
+end
+
+---@return table<string, PW.UnlockGrantMeta>
+local function localGrants()
+    local unlocks = PW.Unlocks
+    return unlocks ~= nil and unlocks._LocalFile().grants or {}
+end
+
+function store.IsUnlockNew(key)
+    return store._IsUnlockNew(localGrants(), lib.SeenSet(), key)
+end
+
+function store.HasUnseenGrants()
+    return store._HasUnseenGrants(localGrants(), lib.SeenSet())
+end
+
+---@class PW.UnlockCardBinding
+---@field key? string
+---@field focus? fun()
+
+---@type table<PWCard, PW.UnlockCardBinding>
+local bindings = setmetatable({}, { __mode = "k" })
+
+---@param card PWCard
+---@param binding PW.UnlockCardBinding
+local function markFocused(card, binding)
+    local key, view = binding.key, card.view
+    if key == nil or view == nil or not store._FocusUnlockCard(localGrants(), lib.SeenSet(), key, view.card) then
+        return
+    end
+    view.new = false
+    lib.SaveSeen()
+    hook.Run("PW_UI_UnlockSeen", LocalPlayer())
+end
+
+function store.BindUnlockCard(card, key, focus)
+    ---@cast card PWCard
+    local binding = bindings[card]
+    if binding ~= nil then
+        binding.key, binding.focus = key, focus
+        return
+    end
+    binding = { key = key, focus = focus }
+    bindings[card] = binding
+    local base, click = card.PWOnFocus, card.DoClick
+    card.PWOnFocus = function(self)
+        base(self)
+        markFocused(self, binding)
+        if binding.focus ~= nil then binding.focus() end
+    end
+    card.DoClick = function(self)
+        markFocused(self, binding)
+        if click ~= nil then click(self) end
+    end
+end
+
+function store.WatchUnlockView(view, refresh)
+    local function changed(_, ply)
+        if ply == LocalPlayer() then refresh() end
+    end
+    hook.Add("PW_UnlockGranted", view, changed)
+    hook.Add("PW_UnlockRevoked", view, changed)
+end
+
+function store.UnlockPhrase(text)
+    if text ~= nil and text:sub(1, 1) == "#" then return language.GetPhrase(text:sub(2)) end
+    return text
 end
 
 function store.OpenBundle(key)

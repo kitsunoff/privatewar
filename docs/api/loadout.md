@@ -285,13 +285,12 @@ reason is the check's). The final check on the server is `_Validate` (slot rules
 A class that becomes unavailable because the match settings changed (for example a playlist lowers the budget) is kept
 and shown `N/A`; the player gets the default loadout for that match. The state is sent again one frame after every
 `PW_PhaseChange` to each player who uploaded, because the settings snapshot is taken on entering `PREMATCH` and dropped
-in `LOBBY`. Unlock checks (T-4.9, `progression.md`): the server builds the `PW.LoadoutContext` of each player with two extra
-fields, `isUnlocked(kind, id) -> boolean` (an item whose slot kind is not unlocked is removed) and
-`lockedOptions(weaponId, build) -> table<string, boolean>` (attachments and camos of a weapon build the player has not
-unlocked are dropped), and since T-4.8 `attachmentLimit(weaponId)`, see "Gunsmith (T-4.8)". The first two are absent (nothing is locked) when the progression module is missing. Repair marks every
-removal with the reason `locked`, shown like the other "Removed by the server" reasons. A class is re-checked on every
-`RefreshClasses`, so a new unlock or a level-up is applied the next time the classes are refreshed, not instantly. Not done
-yet: partial upload (only the full list is sent). The class editor is implemented; see the paths above.
+in `LOBBY`. The server validates human class upload, selection, phase changes and refresh through the
+[unlock authority](progression.md#unlock-authority-and-entitlements). A locked entity in a slot or locked option
+in a build is removed with `locked`, shown like the other "Removed by the server" reasons. Unlock uploads,
+level changes, grants, revocations and purchases refresh classes. Without the progression module no progression
+lock is applied. Bot loadout paths do not call the authority. Not done yet: partial upload (only the full list
+is sent). The class editor is implemented; see the paths above.
 
 ## Gunsmith (T-4.8)
 
@@ -313,12 +312,13 @@ an option removed by one is not seen by the next:
 | Order | Reason | Source | Meaning |
 | --- | --- | --- | --- |
 | 1 | `not available` | `ctx.adapterOptions(weaponId, build)` | The adapter does not offer the option in that build slot (unknown, gone from the catalogue, or a weapon without a gunsmith: the HL2 fallback offers nothing) |
-| 2 | `locked` | `ctx.lockedOptions`, one option at a time | The curated `Unlock` of the option is not reached. The count limit is not judged here |
+| 2 | `locked` | `ctx.lockedOptions`, one option at a time | The authority checks curated attachment unlocks, listed camos (including weapon levels) and entitled options. The count limit is not judged here |
 | 3 | `conflict: <code>` | `ctx.adapterValidate(weaponId, build)` (`ADAPTER:Validate`) | The adapter's static check rejects the build slot; `<code>` is its reason code (just `conflict` when it gave none) |
-| 4 | `over the limit` | `ctx.attachmentLimit(weaponId)` | More uncurated, non-cosmetic options than the progression limit, trimmed in build slot order |
+| 4 | `over the limit` | `ctx.attachmentLimit(weaponId)` | More uncurated, non-cosmetic, non-entitled options than the progression limit, trimmed in build slot order |
 
 A missing context field skips its check. A `false` (cleared) option is never touched. An option is "counted" toward the
-limit unless its attachment entry has an `Unlock` or `Cosmetic = true`, it is a camo, or the adapter reports it cosmetic.
+limit unless its attachment entry has an explicit `Unlock` or `Cosmetic = true`, it is a camo, the adapter reports it
+cosmetic, or it is entitled (granted or purchased with economy active).
 
 ### Two limits
 
@@ -330,7 +330,7 @@ The attachment count a build meets is `min(progression, match cap)`, but the two
   for example `gunfighter`) **marks the class N/A** (`Pick X` rules in `sh_budget.lua`); nothing is trimmed.
 
 This changes the behaviour before T-4.8: `lockedOptions` used to cut the count by the match cap and ignored `gunfighter`.
-Now it judges the curated `Unlock` only, and the count belongs to the two limits above.
+Now the one-option lock check does not enforce the count, which belongs to the two limits above.
 
 ### `PW.LoadoutContext` fields
 
@@ -338,7 +338,11 @@ Now it judges the curated `Unlock` only, and the count belongs to the two limits
 | --- | --- |
 | `adapterOptions(weaponId, build) -> table<buildSlot, table<optionId, true>>` | The options the weapon's adapter offers per build slot (`GetSlots` with the build, then `GetOptions` per slot). Absent: check 1 is skipped. Server: `PW.Loadout._AdapterOptions` |
 | `adapterValidate(weaponId, build) -> table<buildSlot, code>` | The rejected build slots of `ADAPTER:Validate` with their codes (a copy of the build is passed). Absent: check 3 is skipped. Server: `PW.Loadout._AdapterValidate` |
+| `isUnlocked(kind, id) -> boolean` | Whether the human can use an entity in a class, from `PW.Unlocks.IsUnlocked` |
+| `lockedOptions(weaponId, build) -> table<string, boolean>` | Locked attachment and camo ids in a build, from the progression unlock checks |
 | `attachmentLimit(weaponId) -> integer?` | The progression count limit; `nil` means none. Set in `sv_classes.lua` `contextFor` only when the progression module exists |
+| `entitledOption(weaponId, option) -> boolean` | Whether the option is entitled and exempt from the progression count; does not bypass adapter checks or the match cap |
+| `requirement(kind, id) -> PW.UnlockRequirement` | Unlock decision and lock presentation for UI consumers |
 
 `PW.Loadout._GunsmithContext(ctx)` adds the first two to a live context. The context is built per player on every
 `ClassState`.

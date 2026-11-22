@@ -26,14 +26,13 @@ human-acceptance evidence; planned status is retained.
 - [Automatic Search and Destroy support for `de_` maps](planned/snd-de-autodetect.md)
 - [MW Base integration and Deck performance profile (T-3.8)](planned/mwbase-integration.md)
 - [TFA Base integration with attachments (T-3.7)](planned/tfa-integration.md)
-- [Weekly challenges](planned/weekly-challenges.md) (depends on programmatic unlocks)
 - [Calling cards: equip a card, show the victim's card to the killer](planned/calling-card-kill-banner.md)
 
 ## In progress
 
-- [After-match rotation by default for playlists](in-progress/aftermatch-rotation-default.md)
-- [Programmatic unlocks and entitlements](in-progress/unlock-entitlements.md)
 - [Stim equipment: heal, speed and armor stims](in-progress/stim-equipment.md)
+- [Weekly challenges](in-progress/weekly-challenges.md): pure rotation and filters only; remaining work depends on
+  programmatic unlocks.
 - [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
 
 ## Blocked
@@ -42,7 +41,12 @@ human-acceptance evidence; planned status is retained.
 
 ## Done
 
-No migrated records; historical completion evidence remains in TASKS.md.
+- [After-match rotation by default for playlists](done/aftermatch-rotation-default.md): local overnight integration;
+  human checkpoint pending.
+- [Programmatic unlocks and entitlements](done/unlock-entitlements.md): local overnight integration;
+  human checkpoint pending.
+
+Historical completion evidence for unmigrated work remains in TASKS.md.
 
 ## Remaining queue and history
 

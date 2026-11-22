@@ -1,7 +1,7 @@
 # Progression API
 
-Module `progression` (T-4.9, `design/06-progression.md` d.1, d.2, d.4). Two layers for the MVP: the player level (XP from
-score events) and the weapon level (XP of the weapon of an event), plus `progression.unlockall`. Persistence and the 10 s
+Module `progression` (T-4.9, `design/06-progression.md` d.1, d.2, d.4, d.8). Player XP comes from score events;
+weapon XP comes from the weapon of an event. `PW.Unlocks` decides unlocks by level and other sources. Persistence and the 10 s
 deltas are T-4.10 (section "Storage and deltas (T-4.10)"), the wallet (currency, purchases) is T-4.12 (section "Wallet (T-4.12)", sold by `economy.md`). Files: `lua/privatewar/modules/progression/` (`shared.lua`, `sh_curves.lua`,
 `sh_unlocks.lua`, `sh_wallet.lua`, `sv_wallet.lua`, `sh_storage.lua`, `sv_storage.lua`, `cl_init.lua`, `init.lua`), HUD `lua/privatewar/hud/progression.lua`, types `lua/privatewar/types/progression.lua`.
 
@@ -10,7 +10,7 @@ deltas are T-4.10 (section "Storage and deltas (T-4.10)"), the wallet (currency,
 | Function | Contract |
 | --- | --- |
 | `PW.Progression.GetState(ply) -> PW.ProgressionState` | Server. A copy of the session state `{ xp = <total player XP>, weapons = { [weaponClass] = <total XP> } }`. A player without a state gets an empty one |
-| `PW.Progression.SetState(ply, state)` | Server. Replaces the state (the shape T-4.10 stores). Bad values (non-numbers, negatives, NaN, infinity) become 0, XP is floored, weapons with 0 XP are dropped; republishes the NW2 values. Sends no notification |
+| `PW.Progression.SetState(ply, state)` | Server. Replaces progression state while preserving session grants and claims. Bad values (non-numbers, negatives, NaN, infinity) become 0, XP is floored, weapons with 0 XP are dropped; republishes the NW2 values. Sends no notification |
 | `PW.Progression.AddXP(ply, amount, weaponClass?)` | Server. Adds `floor(amount * progression.xpscale)` XP to the player and, with a class, the same amount to the weapon; a scaled amount of 0 or less does nothing. Sends the notifications below |
 | `PW.Progression.GetLevel(ply) -> integer` | Shared. Server: computed from the XP. Client: the NW2 value `pw_level` (default 1) |
 | `PW.Progression.GetProgress(ply) -> into, need` | Client reads the NW2 values: XP into the current level and XP for the next one (`need` is 0 at the cap; defaults 0 and 1000) |
@@ -21,28 +21,147 @@ The XP keeps counting past the level cap; the bar stays full. A reload of the mo
 Only humans earn: the listener of `PW_ScoreEvent` ignores bots. The weapon class comes from the `weapon` argument of the
 event (an invalid entity gives no weapon XP).
 
+## Unlock authority and entitlements
+
+`PW.Unlocks` lives in the progression module, not in a separate module or registry kind. An unlock is a decision; an
+entitlement is a stored grant or purchase. Level conditions are computed, never stored as ownership, so curve changes
+apply retroactively. The server is authoritative; shared queries on a client are for the local player.
+
+### References and curation
+
+Items use `PW.UnlockItem` (`{ kind, id, weapon? }`, the bundle item shape) or, where noted below, a key string.
+Entity kinds are registry kinds except `bundles` and `classes`; examples are `weapons`, `perks`, `equipment`,
+`streaks`, `wildcards`, `models` and `cards`. For `attachments` and `camos`, the item table requires `weapon` and its
+`id` is the option id. Queries taking `kind, id` use `<weapon>:<option>` as the option id argument.
+Canonical keys are `<kind>:<id>`, `attachments:<weapon>:<option>` and `camos:<weapon>:<option>`.
+Keys match `^%l[%l_]*:[%w_%-%.:]+$` and are at most `PW.Progression.MaxKeyLength` (96) bytes.
+`KeyOf` and `ParseKey` accept `camo` as an alias; stored and transmitted grant keys are canonical.
+For live `Grant` and `Describe` resolution, use `camos` for entries in the weapon's `Camos`, and `attachments`
+for all other offered or curated options, even when the adapter marks them cosmetic. The wrong namespace
+does not resolve. Upload validation still retains well-formed keys independently of installed content.
+
+`PW.UnlockField` is an integer, `false`, or a table `{ level?, hint?, reward? }`, with an integer or `false` for
+`level`. Weapon options use the same forms in `Attachments[option].Unlock` and `Camos[id].Unlock`, with weapon levels.
+Omitted `Unlock` is open unless the price-only rule applies. Numeric levels are floored; nonpositive levels,
+a table with no level and unsupported types normalize to 0 (open). An invalid level on a registry definition logs
+once per entity with `pw_debug` enabled. `false` and `{ level = false }` give no level
+path; higher-priority sources still apply. `hint` is nonempty text or `#phrase` (at most 128 bytes), only used
+while locked. `reward` is a valid source id for `ListRewards`, not an unlock condition. Soft registration
+fills only `nil`, preserves explicit `false` and merges nested tables per key. Preset classes must not reference
+`Unlock = false` items: players without the entitlement can lose access to the preset.
+
+### Decision order
+
+The first applicable rule wins:
+
+| Order | Condition | Result | `PW.UnlockReason` |
+| --- | --- | --- | --- |
+| 1 | Malformed id, unknown kind or entity (or unknown weapon for an option) | Locked | `unknown` |
+| 2 | Option has `Hidden = true` | Locked, never offered | `hidden` |
+| 3 | `PW_UnlockOverride` answers a boolean | The returned boolean | `override` |
+| 4 | `progression.unlockall` | Open | `unlockall` |
+| 5 | Granted key | Open | `grant` |
+| 6 | Purchased key, only while economy is active | Open | `purchase` |
+| 7 | `Unlock = false` or `{ level = false }` | Locked | `grant_only` |
+| 8 | Entity has `Price >= 1`, no declared `Unlock`, economy active | Locked | `price` |
+| 9 | Compare the required level against the player level (entities) or weapon level (options) | Open if met, locked otherwise; level 0 is open | `level` / `weapon_level`, or `default` at 0 |
+
+An uncurated attachment queried on its own is open by default. The level-based count is a property of a build.
+Bot loadouts and operator choices do not call the authority, and bots cannot receive grants.
+
+### Public API
+
+All functions below are on `PW.Unlocks`. Shared queries use the human player's view; non-human or invalid players
+retain the progression view's fallback. Only the server mutates grants and claims.
+
+| Function | Contract |
+| --- | --- |
+| `IsUnlocked(ply, kind, id) -> boolean, PW.UnlockReason` | Shared. Decision and first applicable reason |
+| `Requirement(ply, kind, id) -> PW.UnlockRequirement` | Shared. Decision and lock presentation |
+| `LockText(req) -> string?, string?` | Shared, pure. Short badge and sentence, or `nil, nil` when unlocked or hidden |
+| `IsEntitled(ply, kind, id) -> boolean` | Shared. Granted, or purchased while economy is active, independent of the decision |
+| `ListEntitled(ply) -> table<string, PW.UnlockGrantMeta>` | Shared. Stored entitlements by key. Purchases have `source = "purchase"`, `at = 0`. Uploaded grants on the server have `source = "grant"`, `at = 0`; grants made in the current session retain their metadata |
+| `ListUnlocked(ply, kind) -> string[]` | Shared. Sorted unlocked ids of enabled definitions; options use `<weapon>:<option>` and are enumerated from curation |
+| `HasClaim(ply, grant) -> boolean` | Shared. Whether the grant id has been claimed (uploaded or recorded in the session on the server; local file on the client). On the server, wait for `IsReady` before checking |
+| `IsReady(ply) -> boolean` | Server. True only for a human whose unlock upload was accepted |
+| `Grant(ply, items, opts) -> integer, string?` | Server. Takes an array of `PW.UnlockItem` or key strings and `PW.UnlockGrantOptions`; returns newly added key count and refusal, if any |
+| `Revoke(ply, items, opts) -> integer, string?` | Server. Same inputs; returns removed grant count and refusal, if any. Never removes purchases or claims |
+| `KeyOf(item) -> string?` | Shared, pure. Normalizes a `PW.UnlockItem` or key string; `nil` when malformed |
+| `ParseKey(key) -> string?, string?, string?, string?` | Shared, pure. `kind, id` and, for options, `weapon, option`; `nil` when malformed |
+| `Describe(item) -> PW.UnlockItemView` | Shared. `{ key, kind, id, weapon?, name, valid }` for a `PW.UnlockItem` or key string; `valid` means it resolves on this host. Name comes from the definition, camo entry or option id |
+| `ListRewards(source) -> PW.UnlockItem[]` | Shared. Enabled entities, curated attachments and camos with matching `Unlock.reward`, sorted by key; excludes hidden options |
+
+`PW.UnlockGrantOptions` requires a `source` matching `^%l[%l_]*$` (at most 16 bytes; for example `challenge`,
+`event` or `admin`). Its optional `grant` id must match `^[%w_%-%.:]+$` (at most 64 bytes); `Grant` uses it
+for idempotency; `Revoke` uses only `source`. An empty array with a grant id records a claim without adding items
+(`0, nil` on first claim; `0, "claimed"` on repeat). Existing keys keep their metadata. A new grant must resolve on
+the host; upload and revocation can retain or remove well-formed keys for absent content.
+
+`Grant` refusals: `bot`, `badplayer`, `notready`, `badsource`, `badgrant`, `badkey`, `unknown`, `toomany`,
+`full`, `claimed`. `Revoke` refusals: `bot`, `badplayer`, `notready`, `badsource`, `badkey`.
+Before the accepted upload, both return `0, "notready"` for a valid human without mutating, flushing,
+refreshing or notifying. A successful grant flushes the pending delta at once. A grant or revoke that changes
+keys refreshes classes and notifies; a claim-only grant does not send an item notification.
+
+To award items, XP or currency together, defer the **entire** reward until `IsReady`. Then check the claim,
+queue XP with `PW.Progression.AddXP` and currency with `PW.Progression.AddCurrency`, and call `Grant` last.
+With a successful grant the items, claim and balances travel in one delta; the client persists the claim first.
+For a balance-only reward use an empty item array and a grant id. Grants and claims are forgeable by design, like
+progression; there is no new host setting.
+
+```lua
+-- Server: after PW.Unlocks.IsReady(ply) and the claim check.
+local added, refusal = PW.Unlocks.Grant(ply, {
+    { kind = "camos", weapon = "arc9_eft_ak74", id = "gold" },
+    { kind = "models", id = "reaper_operator" }
+}, { source = "challenge", grant = "weekly:2026-W47:headshots_50" })
+```
+
+### Requirements and hooks
+
+`PW.UnlockRequirement` has `unlocked`, `reason`, optional `level` or `weaponLevel` for the corresponding level reason,
+`price` when the item can be bought now, `hint` (question answer, otherwise the spec hint), and `lockText` and `text`.
+The view-free static fallback uses the definition for pure UI inputs without a live requirement function.
+
+| Locked reason | `lockText` | `text` |
+| --- | --- | --- |
+| `level` | `LV <n>` | `Unlocks at level <n>` |
+| `weapon_level` | `LV <n>` | `Unlocks at weapon level <n>` |
+| `price`, or `grant_only` with `price` | `<n> CR` | `Buy it in the STORE for <n> CR` |
+| `grant_only` without `price` | `REWARD` | The hint (a `#phrase` resolved by the UI), or `Earned as a reward` |
+| `override` | `LOCKED` | `Locked on this server` |
+| `unknown` | `LOCKED` | `Not available` |
+| `hidden`, or any unlocked result | `nil` | `nil` |
+
+| Hook | Dispatch | Arguments | Contract |
+| --- | --- | --- | --- |
+| `PW_UnlockOverride` | Shared question (`PW.Ask`) | `ply, kind, id` | `true` opens, `false` locks, `nil` continues. Called after the unknown and Hidden checks. Providers must agree across realms |
+| `PW_UnlockHint` | Shared question (`PW.Ask`) | `kind, id` | Optional hint for locked requirements; nonempty text or `#phrase`, at most 128 bytes |
+| `PW_UnlockGranted` | Server and client notification (`PW.Notify`) | `ply, keys, source, grant?` | Newly added keys only. Client groups by source and grant id |
+| `PW_UnlockRevoked` | Server and client notification (`PW.Notify`) | `ply, keys, source` | Removed keys only. Both realms report the revoking operation's source, not the original grant's. Client groups by revoking source |
+
+Client notifications run after applying the delta for the local player. Server commands `pw_unlock_grant <player> <key>`,
+`pw_unlock_revoke <player> <key>` and `pw_unlock_list <player>` use `pw_unlocks_admin` (default `superadmin`).
+The target is a user id or exact name; command grants and revocations use source `admin`.
+
 ## Unlock checks
 
 | Function | Contract |
 | --- | --- |
-| `PW.Progression.IsUnlocked(ply, kind, id) -> boolean` | Server. `kind` is a registry kind (`weapons`, perks, equipment, streaks, wildcards: any kind with a registry), `"attachments"` or `"camos"`. For the last two `id` is `"<weapon>:<option>"`. An unknown entity or a malformed id is not unlocked |
-| `PW.Progression.LockedOptions(ply, weaponId, build) -> table<string, boolean>` | Server. The option ids of `build` (`slot -> option\|false`) that are locked: curated options by their `Unlock`, the others by the count limit (below) |
-| `PW.Progression.AttachmentLimit(ply, weaponId) -> integer` | Server. How many uncurated, non-cosmetic attachments the weapon may hold: the weapon level capped by `loadout.maxattachments` (the cap itself with `unlockall`) |
+| `PW.Progression.IsUnlocked(ply, kind, id) -> boolean` | Shared compatibility wrapper. Returns only the first result of `PW.Unlocks.IsUnlocked` |
+| `PW.Progression.LockedOptions(ply, weaponId, build) -> table<string, boolean>` | Shared wrapper for `PW.Unlocks.LockedOptions`. Set of locked option ids in `build` (`slot -> option\|false`) |
+| `PW.Progression.AttachmentLimit(ply, weaponId) -> integer` | Shared wrapper for `PW.Unlocks.AttachmentLimit`. Weapon level capped by `loadout.maxattachments` (the cap itself with `unlockall`) |
 
 Rules (`sh_unlocks.lua`):
 
-1. An entity is unlocked when the player level reaches its `Unlock` (an integer or `{ level = N }`). An entity without
-   `Unlock` is open from the start (no kind has a hidden default level), so a pack works without markup.
-2. A curated attachment (`Attachments[option].Unlock`) or camo (`Camos[id].Unlock`) is unlocked by the weapon level.
-   `Hidden` never unlocks, not even with `unlockall`.
-3. An attachment without a curated `Unlock` is unlocked by count: the weapon level is the number of such attachments a
-   build may hold (level 1 allows 1), capped by `loadout.maxattachments`; options are counted in slot-name order and the
-   ones past the limit are locked. Cosmetic options (a `Cosmetic` flag, or listed in `Camos`) are not counted.
-4. `progression.unlockall` opens rules 1 to 3 (the count limit becomes the cap). `Hidden` stays hidden.
+1. Evaluate hidden options, attachments with explicit `Unlock`, listed camos and entitled options through the
+   authority. The server enforces camo levels and honours grants and active purchases on options. Hidden never opens.
+2. Otherwise uncurated attachments unlock by count. The weapon level is the number allowed (level 1 allows 1), capped
+   by `loadout.maxattachments`; count in slot-name order. Entitled and cosmetic options are not counted.
+3. With `unlockall`, the count limit becomes the cap. The server applies build legality, progression and the separate
+   match cap through `PW.LoadoutContext` ([loadout API](loadout.md)).
 
-The server decides (the loadout module uses these checks through `PW.LoadoutContext`: `isUnlocked`, `lockedOptions`; see
-`loadout.md`). Since T-4.10 the same functions also answer on a client for the local player, from the levels the server
-sent (see below).
+Wrappers look up `PW.Unlocks` at call time. Consumers keep their no-progression fallback: no progression lock.
 
 ## Automatic unlock levels (T-11.7)
 
@@ -56,8 +175,8 @@ It fills the unlock fields the rules above read, with a `soft` registration, so 
 field and option by option:
 
 - `Unlock` of a weapon: a player level in `1..progression.maxlevel`;
-- `Attachments[option].Unlock`: a weapon level in `1..progression.maxweaponlevel` (rule 2 then applies instead of the
-  count rule 3).
+- `Attachments[option].Unlock`: a weapon level in `1..progression.maxweaponlevel` (the authority then applies instead
+  of the count rule). Only `nil` is filled; explicit `false` and table forms are preserved.
 
 ### When and what
 
@@ -65,7 +184,7 @@ field and option by option:
    `PW_RegisterWeapons`: the order of its listeners is undefined, and only after the phase are the catalogue fills and
    every hand curation in the registry.
 2. Candidates: the entries of the weapons registry with a `Category` and a `Kind` other than `melee`, `throwable` and
-   `other`. A weapon with a `Price` gets nothing (it stays shop-only, rule 5). Cosmetic slots and options get nothing
+   `other`. A weapon with a `Price` gets nothing (an undeclared `Unlock` keeps the price-only rule). Cosmetic slots and options get nothing
    (unchanged rule). Only the slots of `GetSlots(class, nil)` are covered; options of nested slots opened by a build
    stay under the count rule.
 3. Setting `progression.autounlock` (server, bool, default on). Off: nothing is registered, attachments unlock by count
@@ -137,7 +256,7 @@ No return value (`PW.Notify`).
 Source: `design/06-progression.md` d.5. The player's progression lives on the client; the server stores nothing between
 sessions. Code: `sh_storage.lua` (pure: checks, delta apply, file shape, wire encoding), `sv_storage.lua`, `cl_init.lua`.
 
-### File
+### Files
 
 `data/privatewar/progression.json` on the client (`PW.Progression.FilePath = "privatewar/progression.json"`):
 
@@ -154,17 +273,59 @@ sessions. Code: `sh_storage.lua` (pure: checks, delta apply, file shape, wire en
   0 or are dropped, so a hand-edited file never causes an error.
 - The file is written after every applied delta.
 
+Grants and claims are kept separately in `data/privatewar/unlocks.json`
+(`PW.Unlocks.FilePath = "privatewar/unlocks.json"`, `PW.Unlocks.FileVersion = 1`):
+
+```json
+{ "v": 1,
+  "grants": { "camos:arc9_eft_ak74:gold": { "source": "challenge", "at": 1763700000, "grant": "weekly:2026-W47:3" } },
+  "claims": { "weekly:2026-W47:3": 1763700000 },
+  "batch": { "session": 123, "seq": 7 } }
+```
+
+- `grants` maps keys to `PW.UnlockGrantMeta` (`source`, Unix time `at` with 0 for unknown, optional `grant` id).
+  `claims` maps grant ids to Unix claim times. Times are unsigned 32-bit integers. Source, grant id and key
+  validation use the patterns and byte limits in [Unlock authority and entitlements](#unlock-authority-and-entitlements).
+- Missing, empty, non-JSON or wrong-shaped files read as empty. Bad entries are dropped. Over `MaxGrants` (384), keep
+  the first valid keys in key order. Over `MaxClaims` (256), keep the newest claims, ties by ascending id.
+  `PW.Unlocks.MaxSourceLength` is 16, `MaxGrantIdLength` 64, `MaxHintLength` 128 and `MaxGrantPerCall` 32.
+- `unlocks.json` has its own batch check. An applied unlock delta keeps existing grant metadata, removes revoked
+  keys, adds and prunes claims, and writes once before the progression file is written. If a crash occurs
+  between writes, the claim is already persisted: the reward's XP or currency can be lost, not paid twice.
+- No `progression.json` migration or version bump: v1 starts without purchases; v2 retains its purchases. A player
+  without `unlocks.json` starts with no grants or claims. The first applied unlock delta creates the file.
+  Older servers neither use nor discard the separate file.
+
 ### Net messages
 
 The wallet fields (currency, owned keys, the delta's `earned` and `spent`) are added to the upload and the delta by T-4.12, see
-"Wallet (T-4.12)"; the rows below show the T-4.10 fields. All four use explicit `net.Write*` (no `net.WriteTable`).
+"Wallet (T-4.12)"; the existing progression rows below show the T-4.10 fields. All use explicit `net.Write*`
+(no `net.WriteTable`).
 
 | Message | Direction | When | Fields |
 | --- | --- | --- | --- |
 | `pw_progression_upload` | client to server | `InitPostEntity`, once | `xp` UInt(32), `count` UInt(16), `count` x (`class` string, `xp` UInt(32)); the top 256 weapons by XP |
+| `pw_unlocks_upload` | client to server | `InitPostEntity`, after `pw_progression_upload`; accepted once per connection | `version` UInt(8) (1), grant count UInt(16) then key strings, claim count UInt(16) then grant id strings. No grant metadata |
 | `pw_progression_delta` | server to the owner | every 10 s, on every phase change (never empty) | `session` UInt(32), `seq` UInt(32), `xp` UInt(32), `count` UInt(16), `count` x (`class` string, `xp` UInt(32)) |
 | `pw_progression_levels` | server to the owner | after the upload, on every level change (player or weapon), on entering `PREMATCH` (one frame after, when the settings snapshot is taken) | `level` UInt(16), `unlockAll` bool, `maxAttachments` UInt(8), `count` UInt(16), `count` x (`class` string, `level` UInt(16)); only weapons above level 1 |
 | `pw_progression_summary` | server to the owner | at `POSTMATCH`, after the last flush | `xp` UInt(32), `levelBefore` UInt(16), `levelAfter` UInt(16), `count` UInt(16), `count` x (`class` string, `before` UInt(16), `after` UInt(16)), `medals` UInt(8), `medals` x (`id` string, `count` UInt(16)) |
+
+`pw_progression_delta` appends the following fields after the wallet's `owned` list, in order. They count toward
+the nonempty check (a claim alone can flush); counts are capped on both sides and the full delta stays below 64 KB.
+
+| List | Count | Entry |
+| --- | --- | --- |
+| `granted` | UInt(8), `MaxDeltaGrants` (32) | `key` string, `source` string, `grant` string (empty when absent), `at` UInt(32) |
+| `revoked` | UInt(8), `MaxDeltaRevokes` (32) | `key` string, revoking `source` string |
+| `claims` | UInt(8), `MaxDeltaClaims` (8) | grant id string, `at` UInt(32) |
+
+The unlock upload uses `PW.Net.Receive`, `who = "any"`, `rate = 0.5`, owner the progression module,
+`maxLen = PW.Unlocks.UploadMaxBytes` (`1 + 2 + 384 * (96 + 1) + 2 + 256 * (64 + 1)` = 53,893 bytes).
+The receiver rejects invalid versions and out-of-bounds counts without reading past the bound, validates each key
+and id, collapses duplicates and retains valid keys for content not installed on this host. An accepted upload
+installs the validated sets as the initial state, marks `IsReady` true and refreshes classes. There is no union
+with early grants or claims: operations before readiness are refused. New keys at capacity return `full`, without
+evicting uploaded keys.
 
 ### Server rules
 
@@ -187,8 +348,8 @@ On a client the checks answer for the local player from the last `pw_progression
 NW2 level, no weapon levels, `progression.unlockall` from the setting, 5 attachments):
 
 - `PW.Progression.IsUnlocked(ply, kind, id)`, `LockedOptions(ply, weaponId, build)`, `AttachmentLimit(ply, weaponId)` and
-  `GetWeaponLevel(ply, weaponClass)` have the same contracts as on the server; with `unlockall` `IsUnlocked` is true
-  (except `Hidden`).
+  `GetWeaponLevel(ply, weaponClass)` have the same contracts as on the server. `PW.Unlocks` also reads local grants
+  and active purchases and asks the shared policy hooks locally.
 - `PW.Progression.GetLocalFile() -> PW.ProgressionFile?` is the loaded file (nil before the first load).
 
 ### Match summary
@@ -215,7 +376,7 @@ Server scope, ids `progression.<name>`:
 
 | Name | Type | Default | Range | Meaning |
 | --- | --- | --- | --- | --- |
-| `unlockall` | bool | false | | Everything unlocked, XP still counts |
+| `unlockall` | bool | false | | Opens every recognized, non-hidden item unless overridden; XP still counts |
 | `maxlevel` | int | 55 | 1 to 1000 | Player level cap |
 | `xpbase` | float | 1000 | 1 to 1000000 | Player curve base |
 | `xpexp` | float | 1.2 | 0 to 4 | Player curve exponent |
@@ -274,6 +435,6 @@ rotates; progression only keeps the numbers safe.
 | `PW.Progression.IsOwned(ply, key) -> boolean` | Shared (a client answers for the local player) |
 | `PW.Progression.Flush(ply)` | Server. Sends the pending delta now |
 
-Unlock rule 5 (`IsUnlocked`): while the economy module is active, an owned item is unlocked (a Hidden camo or attachment
-stays hidden), and an entity with a `Price` and no `Unlock` is for sale only (locked until bought, open with
-`unlockall`). With the economy module disabled prices are ignored and rule 1 stands.
+Wallet ownership is purchases only. While economy is active, purchases and the price-only rule participate in the
+[unlock decision](#decision-order); disabling economy ignores both, but grants and the remaining sources still apply.
+Higher-priority rules, including Hidden and overrides, still apply to purchased items.

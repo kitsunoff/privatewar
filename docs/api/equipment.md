@@ -26,7 +26,7 @@ One file per item in `lua/privatewar/equipment/` with an `EQUIPMENT` table. Fold
 | `Name` | string | yes | Display name (the HUD upper-cases it) |
 | `Count` | number | yes | Uses per life, refilled on spawn; rounded down, negative counts as 0 |
 | `OnUse` | `function(self, owner, use?) -> boolean?` | yes | Runs on the item's instance (`PW.Call`) when the slot is used: the release of the item's grenade SWEP, or `PW.Equipment.Use`. `use` is `PW.EquipmentUse` (below). Returning `false` refuses the use: the count is kept and the cooldown does not start |
-| `Weapon` | string | no | The grenade SWEP class the item gives; the count is that SWEP's ammo. Without it the item has no weapon and is used only through `PW.Equipment.Use` |
+| `Weapon` | string | no | The grenade SWEP class the item gives; the count is that SWEP's ammo. A weapon-less item instead calls `OnUse` directly through the slot request or `PW.Equipment.Use` |
 | `Cook` | boolean | no | Whether holding attack cooks the grenade (its fuse runs in hand) |
 | `Category` | string | no | The slot filter value: `"lethal"` or `"tactical"`; the built-in slots accept only their own category |
 | `Cost` | number | no | Pick X cost (`loadout.md`), default 1 |
@@ -45,8 +45,12 @@ and use `self:Hook` and `self:Timer`, which end with the life. Other fields are 
 | --- | --- | --- | --- | --- |
 | `frag` ("Frag") | `lethal` | 1 | `weapon_pw_frag`, ammo `pw_frag` | Cooks. `PW.Throw` with fuse 3 s less the time cooked; at the end `util.BlastDamage` of 150 damage, radius 350 (linear falloff), stock explosion effect, scorch decal and screen shake. The thrower is the attacker and the grenade SWEP the inflictor, so kills count for the thrower and weapon XP goes to `weapon_pw_frag`; the grenade still goes off when the thrower died meanwhile. Dying while cooking drops it live at the body with the remaining fuse (3 s less the time cooked, at least `DeathMinFuse`) |
 | `flash` ("Flash") | `tactical` | 1 | `weapon_pw_flash`, ammo `pw_flash` | Does not cook: the fuse starts on release. `PW.Throw` with fuse 1.5 s, tinted pale blue; at the end a bang and a flare, then `PW.Throwables.FlashAt` blinds the players it reaches. No damage |
+| `stim_heal` ("Heal Stim") | `tactical` | 1 | None | Restore up to 60 health over 1.5 s by default |
+| `stim_speed` ("Speed Stim") | `tactical` | 2 | None | Multiply walk and run speed by 1.2 for 6 s by default; no stacking on the same item |
+| `stim_armor` ("Armor Stim") | `tactical` | 1 | None | Add 50 armor over 1 s, up to 150 by default |
 
-Both use the stock HL2 grenade models, animations and effects; nothing is vendored.
+The grenades use stock HL2 models, animations and effects. The [stims](stims.md) use stock sound and an
+optional integration for animation; nothing is vendored.
 
 ## Grenade SWEPs
 
@@ -85,6 +89,8 @@ The slots `lethal` and `tactical` (kind `equipment`, filter `{ slot }`) are decl
 | `Item(ply, slot)` | The item id in the slot, `nil` when empty |
 | `Use(ply, slot, use?)` | Server. In `LIVE`, for a living player with uses left and the cooldown passed, uses the slot; equips the player first when they have no state yet. For an item with a grenade SWEP: selects the SWEP (giving it when missing), calls `OnUse` with `use` and the SWEP, and returns to the previous weapon after `BotHold`. For an item without one: calls `OnUse` directly. On success the count drops, the cooldown starts and the count is published. Returns whether the item was used. **Bots use this function directly** (`bot_behaviors/throw_equipment.lua`) |
 | `_Release(ply, wep, use?)` | Server. The grenade SWEP's release: uses the SWEP's slot (only when the slot's item names this SWEP class) with `use` and the SWEP; then the store's `afterThrow` (after the last grenade: switch back after `SwitchDelay`). Returns whether a grenade was thrown |
+| `_ClientUse(ply, slot)` | Server. Resolve a usable entry; reject missing entries and any item with a grenade SWEP. Return whether spending the weapon-less use succeeded |
+| `_KeyAction(itemId, weaponClass, count)` | Shared, pure. Return nil for no item or no charge, `"select"` for a grenade SWEP or `"use"` for a weapon-less item |
 | `_GiveWeapons(ply)` | Server. Gives every equipped slot's grenade SWEP (when missing) and sets its ammo to the count. On the first give of a life the count is the answer of `PW_EquipmentCount` |
 | `_ReturnTo(ply)` | Server. Selects the weapon held before the grenade (remembered on `PlayerSwitchWeapon`, then `GetPreviousWeapon`), else the first non-grenade weapon; returns the class |
 | `_Equip`, `_Clear`, `_OnSpawn`, `_NewStore`, `_UsableEntry`, `_Spend`, `_BotThrow`, `_AfterThrow`, `_Remember`, `_Inflictor` | Server internals for tests: equip the resolved loadout with full counts, end the instances and empty the slots, the spawn hook body (equips in `LIVE` only), a store over injectable engine calls (`lookup`, `resolve`, `publish`, `clock`, `phase`, `alive`, `afterThrow`), the entry a player may use now, one use of an entry, the bot path, the default `afterThrow`, the `PlayerSwitchWeapon` body, the inflictor of a grenade's damage |
@@ -132,14 +138,17 @@ Tests: `equipment_count_sources.lua`; the existing grenade inventory/cooking cas
 
 ## Keys
 
-No net message: the use message `pw_equipment_use` of T-4.5 is gone, so the release of the grenade SWEP is the only way
-a player throws.
+`pw_equipment_use` handles weapon-less equipment only. The client sends exactly two bits, the one-based index in
+`PW.Equipment.Slots`. `PW.Net.Receive` uses the equipment module as owner, phase `LIVE`, `who = "any"`,
+rate 4 and `maxLen = 1`. Invalid bit lengths or unknown slot indices are ignored. The server checks the current
+life, charge and cooldown before spending, and never throws a grenade through this message.
 
 Keys (client): the default physical keys are the client ConVars `pw_key_lethal` (default `g`) and `pw_key_tactical`
 (default `4`), saved with the player's settings; a key name is anything `input.GetKeyCode` takes. The console commands
 `pw_lethal` and `pw_tactical` do the same for players who bind keys themselves (`bind x pw_tactical`); the gamepad
 d-pad down and left run them (`ui.md`, "Gamepad buttons in a match"). A press in `LIVE` selects the slot's grenade SWEP
-(`input.SelectWeapon`) when the player holds it with ammo; it never throws. The weapon wheel and the bumpers
+(`input.SelectWeapon`) when the player holds it with ammo; it never throws. A weapon-less item with charges sends
+the slot request instead, without switching weapons. The weapon wheel and the bumpers
 (`invnext`, `invprev`) reach the grenades too. While the player holds an item in a slot during `LIVE`, the engine bind
 of that key is swallowed (`PlayerBindPress`), so the tactical key `4` does not also switch to weapon slot 4. `F` stays
 the flashlight.

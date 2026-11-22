@@ -20,8 +20,9 @@ are dynamic (`core.md`, "Declaring": `options` may be a function):
 
 ## The list (`PW.Operators.List`, pure)
 
-1. The enabled economy `models` entries, sorted by name: open when `PW.Progression.IsUnlocked(ply, "models", id)` holds
-   (bought, level reached, or free: no `Price`), else locked with their price or level.
+1. The enabled economy `models` entries, sorted by name: open when `PW.Unlocks.IsUnlocked(ply, "models", id)` holds,
+   else locked with the authority's requirement. Models use [`PW.UnlockField`](progression.md#references-and-curation)
+   (integer, `false`, or `{ level?, hint?, reward? }`).
 2. Every stock model, sorted by name. A stock model whose path (lowercase, forward slashes) belongs to an enabled economy
    entry is dropped: the economy entry governs that model (the samples reuse stock paths, for example `swat.mdl`).
 
@@ -46,7 +47,7 @@ Before storing a well-formed choice, `_OnRequest` checks that its entry exists a
 is always a valid sentinel. An unknown or locked choice is rejected and logged, leaving both the previous accepted
 choice and the current model unchanged. `CheckChoice` is only the syntax check, not the ownership validator.
 
-The list and ownership are checked anew on every request and spawn. A model bought later can be selected by sending a
+The list and unlock decision are checked anew on every request and spawn. A model unlocked later can be selected by sending a
 new request; an accepted model that later becomes locked or unavailable resolves to the safe default at spawn.
 A player with no accepted choice uses `auto`. Outside `LIVE` an alive player gets an accepted new choice at once;
 during `LIVE` from the next spawn.
@@ -76,13 +77,15 @@ the saved human operator or the bot's existing session choice. The Infection can
 | `PW.Operators.CheckChoice(choice) -> boolean` | Shared, pure syntax check; the server also validates existence and unlocks before storing |
 | `PW.Operators.BotPick(entries, roll) -> entry?` | Shared, pure |
 | `PW.Operators.Colour(facts) -> { r, g, b }` | Shared, pure, in 0..1 |
-| `PW.Operators.Cards(entries, choice, auto) -> cards, selected` | Shared, pure: the picker cards (`Auto` first; locked cards with `lockText` `"<price> CR"` or `"LV <n>"`) |
+| `PW.Operators.Cards(entries, choice, auto) -> cards, selected` | Shared, pure: the picker cards (`Auto` first; locked cards use `PW.Unlocks.LockText` for the requirement, including `"<price> CR"`, `"LV <n>"` or `"REWARD"`) |
 | `PW.Operators.LiveInput(unlocked?)` | Shared: the stock models and the enabled economy entries |
 | `PW.Operators.LocalList()`, `LocalChoice()`, `LocalModel()` | Client: the local list, the setting, the resolved model path |
 | `PW.Operators.Choose(choice) -> boolean` | Client: writes the setting (false for a locked or unknown choice) |
 | `PW.Operators.OpenPicker()` | Client: switches the open menu to LOADOUT and pushes `loadout_operator`; console command `pw_operator` |
 
 Internal: `_NewStore`, `_ListFor`, `_OnRequest`, `_OnSetModel` and the state `PW._Operators`.
+The economy entries in the pure list input can carry a `PW.UnlockRequirement`; without a live requirement
+the presentation falls back to the definition. The bot picker continues to ignore locks.
 
 ## UI
 

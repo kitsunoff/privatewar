@@ -253,3 +253,14 @@ for _, name in ipairs({
 }) do
     include("privatewar/modules/ui_kit/cl_" .. name .. ".lua")
 end
+
+---@param ply Player
+local function refreshLoadoutBadge(ply)
+    if ply ~= LocalPlayer() then return end
+    local root = lib.CurrentRoot() --[[@as PWRoot?]]
+    if root ~= nil then root:RefreshLoadoutBadge() end
+end
+
+for _, event in ipairs({ "PW_UnlockGranted", "PW_UnlockRevoked", "PW_UI_UnlockSeen" }) do
+    hook.Add(event, "PW_UI_LoadoutUnlockBadge", refreshLoadoutBadge)
+end

@@ -135,7 +135,7 @@ Inherited from `04-weapons.md`:
     function EQUIPMENT:OnUse(owner) PW.Throw(owner, "pw_frag", { cook = 4 }) end
     ```
 
-    - A slot may declare an action key. On spawn the item becomes an instance (`00-core.md` decision 11); pressing the slot key calls `OnUse` on it. Bots call the same server-side, without keys.
+    - A slot may declare an action key. On spawn the item becomes an instance (`00-core.md` decision 11). For weapon-less items only, the slot key requests a server-side `OnUse` on that instance; bots call the same use path without keys. Grenade keys only select the weapon, as in the revision below.
     - The item does whatever it wants: throw a projectile, give a SWEP, deploy something, toggle a shield.
     - ~~Quick throw is a helper of a `throwables` module (`PW.Throw`); items may use it or not; the loadout module knows nothing about throwing.~~ Superseded for grenades by the revision below (2026-11-07). `PW.Throw` stays as a helper that the grenade SWEPs and bots may use for the projectile itself.
     - The same "slot + key + `OnUse`" pattern covers field upgrades: just another slot.
@@ -150,6 +150,13 @@ Inherited from `04-weapons.md`:
     - Decided (confirmed by the user on 2026-11-07; the local manual checklist (not published) section 7, items 64 and 66): the slot keys G and 4 (gamepad d-pad down and left) switch to the grenade and do not throw at once; holding attack cooks it, capped at about 3 s; when the grenade count is empty the player returns to the previous weapon.
     - Grenade details, decided on 2026-11-07 (item 66): only an item with `Cook = true` cooks (the frag); the flash's fuse starts on release. The cook cap equals the frag fuse (3 s); reaching it drops the grenade at the feet with the minimum fuse. Switching weapons while cooking cancels the cook: nothing is thrown and no grenade is spent. After the last grenade the player returns to the previous weapon after 0.5 s. Weapon XP of a grenade kill goes to the grenade SWEP; when the thrower is dead at detonation, no weapon gets it. Grenades sit in GMod weapon slot 4. The only way to throw is releasing attack with the grenade in hand; bots go through `PW.Equipment.Use`. A perk or wildcard changes the count through `PW_EquipmentCount`, once per life.
     - Death while cooking (user change of item 66.3, 2026-11-07): the live grenade drops at the body, CoD-style, and goes off when its remaining fuse ends (the fuse less the time cooked, at least 0.1 s). The thrower stays the attacker, so kills count for them as with a normal throw.
+
+    **Revision 2026-11-22 (user-approved): tactical stims.**
+
+    - Heal, Speed and Armor Stim are built-in weapon-less alternatives to Flash. Each costs one Pick X point and unlocks at level 1. Speed has two charges per life; the others have one. Flash remains in the default loadout and presets.
+    - Each item owns its `OnUse` and instance timers. The server starts the effect after a 0.4 s injection delay with no weapon lock. Default effects: 60 health over 1.5 s up to max health; ×1.20 walk/run for 6 s; 50 armor over 1 s up to 150. Full health/armor and a repeat use while the same item's effect is pending or running keep the charge.
+    - Temporary speed composes through player overrides without recomputing `PW.Stat`. Equipment lifecycle cleanup ends pending injections and active effects; health or armor already granted is kept.
+    - Core stims have stock sound and view punch. The optional Arctic integration uses installed first-person animation only; it never applies Arctic gameplay effects or determines server timing.
 
 ### Classes
 

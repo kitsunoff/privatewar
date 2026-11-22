@@ -1,14 +1,14 @@
 # Unlocks beyond levels: current system and an entitlement design
 
 Status: research and proposal, 2026-11-21. Not a decision. `design/06-progression.md` stays authoritative until the
-user approves the revisions listed in [the change record](../changes/in-progress/unlock-entitlements.md). Line numbers
+user approves the revisions listed in [the change record](../changes/done/unlock-entitlements.md). Line numbers
 refer to branch `docs/plan-mwbase-stims-unlocks-challenges` at `cf7c4ed`; an implementer must re-check them.
 
 ## 1. Question
 
 The user wants unlocks controlled programmatically, not only by player or weapon level: weapons, perks, equipment,
 streaks, wildcards, attachments, camos, operators (`models`) and calling cards must be openable by any source, starting
-with weekly challenge rewards (`changes/planned/weekly-challenges.md`, note 32, planned in parallel). This note
+with weekly challenge rewards (`changes/in-progress/weekly-challenges.md`, note 32, planned in parallel). This note
 inventories every place where "is X unlocked or available" is decided today, the data flow, storage and trust model,
 networking and tests, then proposes a generic design.
 

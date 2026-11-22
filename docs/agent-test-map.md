@@ -1,7 +1,7 @@
 # Agent mandatory test map
 
 Use with [TASKS.md](../TASKS.md) "Mandatory test cases" and the [workflow](agent-workflow.md).
-These are **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
+The exact-case tables map **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
 write additional task-specific cases first. Paths in the tables are relative to
 `addons/privatewar/lua/tests/privatewar/`. Clauses are copied verbatim from the task list; some clauses need
 multiple cases. The static checker verifies each clause is still in TASKS.md and each exact name still exists.
@@ -97,6 +97,23 @@ their existing engine assertions too. Read `role_policy.lua`, `player_overrides.
 The lobby preview also has a model case in `ui_hub.lua`. Preserve the existing vote, phase machine and
 scheduled-playlist safeguards.
 
+## Tactical stims (T-11.20)
+
+The [mandatory inventory](../TASKS.md#t-1120-tactical-stims) lists each exact test name under its suite.
+
+| Regression area | Suite | Required coverage |
+| --- | --- | --- |
+| Temporary movement | `player_overrides_move_sources.lua` | Sorted multiplication, profile/stat composition, baseline recovery, spawn reset, no health mutation |
+| Shared rules | `stims.lua` | Ticks, caps, item overrides, effect lines, tuning bounds |
+| Item lifecycle | `stims_items.lua` | Refusals, delays, expiry, instance cleanup, inheritance and owner-only message |
+| Equipment input | `stims_equipment.lua` | Live-phase weapon-less use only, reject grenade/index, charge/cooldown, spawn, Stockpile, sounds and categories |
+| Presentation | `hud_stims.lua` | Active-only lines, cached text, placement clear of streaks |
+| Bots | `stims_bots.lua` | Heal-only policy and a native bot's successful heal |
+| Optional animation | `integration_stims.lua` | Capability selection, no-dependency fallback and explicit optional session skip |
+
+Core grenade tests remain mandatory. `equipment.lua` now checks actual receiver registration, in addition to
+`stims_equipment.lua` invoking that receiver and asserting that a grenade cannot be spent through it.
+
 ## Weapon adapters
 
 | Task | Mandatory clause | Suite | Exact existing case name |
@@ -168,6 +185,27 @@ Also retain these existing extension regressions in `wildcards.lua` (not additio
 Keep `loadout.lua`, `loadout_budget.lua`, `loadout_classes.lua`, `gunsmith.lua` and `perks.lua` when changing slot
 rules; these exercise wrong kind/filter, budget 0, cosmetics, bans, cap, repair/N/A and group composition. A new
 slot needs native giving plus UI/wire tests because effective-slot acceptance alone does not prove the slot is consumed.
+
+## Unlock entitlements
+
+The [mandatory inventory in TASKS.md](../TASKS.md#unlock-entitlements-mandatory-regression-inventory) lists 47 exact
+new case names. This table maps coverage areas to suites; it is not an assertion of runtime or checkpoint results.
+Preserve the whole inherited suites on these seams.
+
+| Coverage area | Suite |
+| --- | --- |
+| Specification, source precedence, keys, requirements, option counting and compatibility | `unlocks.lua` |
+| Transactions, readiness, persistence, wire, admin and server consumers | `unlocks_storage.lua` |
+| Editor, gunsmith, operators, store, next unlocks, badge and popup models | `unlocks_ui.lua` |
+| Explicit false and table curation survive stat-based levels | `autounlock.lua` |
+| Existing progression, storage and economy unlock regressions | `progression.lua`, `progression_storage.lua`, `economy.lua` |
+| Existing class repair, build validation and bot isolation | `loadout_classes.lua`, `gunsmith.lua`, `bots_loadouts.lua`, `bots_arc9_generated_native.lua` |
+| Existing frontend and operator regressions | `ui_classes_gunsmith.lua`, `ui_store_progress.lua`, `operators_names.lua` |
+| Existing soft registry merge and curation | `core_registry.lua`, `autounlock.lua` |
+
+Retain T-5.13's zero-call assertion for bot paths and the corresponding native bot regression; stub both
+`PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked` when changing consumer targets. The T-4.8 gunsmith stub must
+continue to open all options it previously opened. See the change record for gate and human-checkpoint evidence.
 
 ## Guidance evaluations
 

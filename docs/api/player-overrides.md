@@ -31,7 +31,11 @@ Tests: `player_overrides.lua`, `infection_presentation.lua`; no runtime/model av
 The cached `PW.Stat(ply, "move_speed", 1)` composes with the role's walk/run multipliers,
 relative to the same ordinary baseline. `PW_PlayerStatsChanged(ply)` refreshes this owner
 after perk recompute/removal; it never applies spawn health again or multiplies current speeds.
-With neither role nor movement modifier, release restores the ordinary baseline.
+`PW.PlayerOverrides.MoveSource(ply, id, mult?)` sets or removes an owner-local temporary walk/run multiplier
+and calls `Refresh`. Sources are weak-keyed by player and dropped on `PlayerSpawn`, disconnect and match end.
+`_SpeedFactor(sources)` multiplies the finite positive values in sorted id order; missing or empty sources give 1.
+Ordinary baseline, role modifier, cached stat and temporary factor multiply together. With no role and both
+movement multipliers at 1, release restores the ordinary baseline. Refreshing a source cannot reapply spawn health.
 Jump, crouch, slide and special ADS movement are not independently modified.
 
 Spawn ordering is synchronous: the owner's `PlayerSpawn` engine hook releases any prior-life

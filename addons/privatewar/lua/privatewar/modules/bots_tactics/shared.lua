@@ -98,7 +98,7 @@ local origin = Vector(0, 0, 0)
 
 ---@type PW.BotCombatFacts
 local emptyFacts = { at = 0, pos = origin, health = 100, maxHealth = 100, clip = -1, capacity = 0, reserve = 0,
-    reloading = false, lethal = 0, profile = lib.ProfileFor() }
+    reloading = false, lethal = 0, tactical = 0, tacticalItem = nil, profile = lib.ProfileFor() }
 
 function lib.FactsOf(ctx)
     local board = ctx.board
@@ -108,6 +108,11 @@ end
 function lib.HealthFrac(f)
     if f.maxHealth <= 0 then return 1 end
     return math.Clamp(f.health / f.maxHealth, 0, 1)
+end
+
+function lib._StimWanted(facts, visible)
+    return not visible and facts.tacticalItem == "stim_heal" and (facts.tactical or 0) > 0
+        and lib.HealthFrac(facts) <= 0.5
 end
 
 function lib.AmmoLow(f, share)

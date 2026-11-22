@@ -126,15 +126,22 @@ function lib._Context(store, ply)
     local catalogue = store.catalogue()
     local lookup = lib._LookupOf(catalogue)
     local pstore = pstoreOf(store)
+    local progression = wallet()
     return {
         catalogue = catalogue, offered = onSale(store, catalogue),
-        owned = function(key) return wallet()._GetOwned(pstore, ply)[key] == true end,
-        unlocked = function(kind, id)
-            local view = wallet()._ViewOf(pstore, ply, lookup)
-            view.owned = function() return false end
-            return wallet()._IsUnlocked(view, kind, id)
+        owned = function(key)
+            local state = progression._StateOf(pstore, ply)
+            return (state.owned ~= nil and state.owned[key] == true)
+                or (state.grants ~= nil and state.grants[key] ~= nil)
         end,
-        currency = wallet()._StateOf(pstore, ply).currency or 0
+        unlocked = function(kind, id)
+            local view = progression._ViewOf(pstore, ply, lookup)
+            view.granted = nil
+            -- Keep the shop active for the price-only rule, but let the ownership check handle all entitlements.
+            view.owned = function() return false end
+            return ((PW.Unlocks --[[@as PW.UnlocksLib]])._Decide(view, kind, id))
+        end,
+        currency = progression._StateOf(pstore, ply).currency or 0
     }
 end
 
@@ -149,6 +156,7 @@ function lib._Buy(store, ply, key)
     wallet()._SpendCurrency(pstore, ply, quote.price)
     wallet()._GrantOwned(pstore, ply, quote.grants)
     wallet()._Flush(pstore, ply)
+    pstore.refresh(ply)
     store.notify("PW_EconomyPurchase", ply, quote.key, quote.price)
     store.sendResult(ply, { ok = true, key = quote.key, reason = "",
         currency = wallet()._StateOf(pstore, ply).currency or 0 })

@@ -356,6 +356,77 @@ Runner notes: select the gamemode and map (`--gamemode privatewar --map gm_const
 - **T-4.11 Medals**: each MVP detector fires exactly when it should (double/triple kill windows, revenge, first blood, 5-streak, saviour) and not otherwise.
 - **T-4.12 Economy**: currency from events; purchase deducts and unlocks; insufficient funds refused; rotation is identical for the same date and different for another date.
 
+#### Unlock entitlements: mandatory regression inventory
+
+Retain every inherited assertion, including T-4.7–T-4.10, T-4.12, T-5.13 and T-11.7, the full affected regression
+suites, and the UI, operator and soft-registration cases in the [suite map](docs/agent-test-map.md#unlock-entitlements).
+Where callers move to the new authority, update stub targets without weakening assertions: the gunsmith stub must
+still open the tested options, and bot loadout tests must still assert zero calls, stubbing both
+`PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked`.
+
+`unlocks.lua` (shared logic):
+
+1. "Spec: nil, integer, { level = N }, false, { level = false } and hint normalise; anything else is open"
+2. "Decide: any source opens; the reason names the first source that did"
+3. "Decide: Hidden beats every source, including unlockall, grants and the override hook"
+4. "Decide: Unlock = false opens only through a grant or a purchase, never by level"
+5. "Decide: unlockall opens grant-only items and every level gate"
+6. "Decide: grants count with the economy module disabled; purchases do not"
+7. "Decide: a priced entity without Unlock stays for sale only; a grant opens it"
+8. "Hook: PW_UnlockOverride true opens and false locks after Hidden; nil keeps the rules"
+9. "Requirement: level, weapon level, price, reward hint and the PW_UnlockHint answer, with their lock texts"
+10. "LockedOptions: a curated camo above the weapon level is locked on the server; an entitled one is open"
+11. "LockedOptions: an entitled uncurated attachment does not count toward the weapon level limit"
+12. "Compatibility: PW.Progression.IsUnlocked, LockedOptions and AttachmentLimit answer like PW.Unlocks"
+13. "Keys: KeyOf and ParseKey accept the bundle item shape, the camo alias and attachments; malformed items give nil"
+14. "Describe: names of entities, camos and options; an unknown item is marked invalid"
+15. "ListUnlocked: the enabled ids of a kind that are unlocked, sorted"
+16. "ListRewards: entities, attachments and camos with a matching reward source, sorted by key; reward alone opens nothing"
+
+`unlocks_storage.lua` (persistence, wire and server consumers; shared bot for the engine smoke):
+
+1. "Grant: adds new keys once; a repeated grant id adds nothing and answers claimed"
+2. "Grant: refuses bots, bad sources, bad grant ids, malformed and unknown items, too many items and a full set"
+3. "Revoke: removes grants only, never purchases; revoking twice removes nothing more"
+4. "Grant and revoke: the delta carries them and the client file applies them once per batch id"
+5. "Grant: classes are refreshed at once and PW_UnlockGranted fires with the new keys, source and grant id"
+6. "Upload: keys and claims are validated, bounded and accepted once; Grant waits for readiness"
+7. "Upload: keys of content not installed on this host are kept"
+8. "Migration: a v2 progression.json with owned keys and no unlocks.json lists purchases as entitlements; nothing is lost and progression.json stays at version 2"
+9. "Migration: a v1 progression.json still loads with no entitlements"
+10. "Malformed: a missing, empty, non-JSON or wrong-shaped unlocks.json reads as empty; bad entries are dropped"
+11. "Claims: past MaxClaims the oldest are pruned by time, ties by id"
+12. "Wire: the unlocks upload and the delta extension survive encode and decode; forged counts are bounded"
+13. "Net: pw_unlocks_upload is registered with an owner, a rate and the size bound; a second upload is ignored"
+14. "Server rejects a locked loadout choice: a grant-only item in an uploaded class is repaired away until granted"
+15. "Server rejects a locked operator: a grant-only model choice is refused until granted"
+16. "Bots unaffected: bot pools and bot operators never call PW.Unlocks.IsUnlocked; Grant refuses bots"
+17. "Admin commands: the privilege is checked; grant, revoke and list work on a shared player"
+18. "Economy: a granted item counts as owned in a quote; a purchase refreshes the classes"
+19. "Claim only: an empty grant with a grant id records the claim once; HasClaim answers on both realms"
+20. "Batching: XP and currency queued before a Grant travel in its delta; the client writes unlocks.json before progression.json"
+21. "Revoke: both realms notify the revoking source once"
+22. "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved"
+23. "Grant rejects an option with a mismatched entitlement kind"
+
+`unlocks_ui.lua` (pure UI models):
+
+1. "Editor: a locked item shows the requirement lock text and reason (level, price, reward)"
+2. "Gunsmith: a granted curated option above the weapon level is open; a locked camo shows its weapon level"
+3. "Operator picker: a grant-only model shows its reward text; a granted model is selectable"
+4. "Store: a granted item is OWNED and its texts no longer mention the level"
+5. "Next unlocks: grant-only items are left out; table and integer levels both count"
+6. "NEW badge: a granted, unseen key is new; marking it seen clears it; purchases are not new"
+7. "Toast: a granted delta queues one unlock popup per grant group with the item name and source text"
+
+`autounlock.lua` (additional T-11.7 regression):
+
+1. "Merge: Unlock = false and table forms are never overwritten by the stat-based levels"
+
+See the [unlock change record](changes/done/unlock-entitlements.md) for current gate evidence. The human checkpoint
+covers grant, revoke and repair, reconnect and cross-host persistence, purchase, `unlockall` and Hidden, bot behaviour,
+and mouse/controller presentation. This inventory is not evidence of a pass.
+
 ### Phase 5 — bots
 
 - **T-5.1 Manager**: quota arithmetic (humans join/leave, `maxplayers` cap); a human joining replaces a bot of the smaller team; reconciliation after a simulated map change (extra kicked, missing created, `NULL` from `CreateNextBot` handled); refusal in Singleplayer.
@@ -449,6 +520,85 @@ Phase 11 — playtest follow-ups (added 2026-11-07; pure unless marked; the case
   `streak_deployment.lua`, `streak_directional_scan.lua`, `streak_ammo_cache.lua`, `streak_medical_station.lua`,
   `streak_ground_sensor.lua`, `bots_support_devices.lua`. Final 16-file owned case inventory is in Phase 11;
   pure predicates never substitute for native placement, cleanup, combat or client markers/feedback.
+
+### T-11.20 Tactical stims
+
+Retain T-4.5/T-11.4 grenade release, ammo and cooldown regressions, and T-4.4 cached stat rules. The old
+absence-of-`pw_equipment_use` assertion is superseded only for weapon-less equipment: assert validated
+registration and server refusal of a grenade request without spending a charge or starting its cooldown.
+
+`player_overrides_move_sources.lua`:
+
+- `SpeedFactor: empty or nil sources give 1`
+- `SpeedFactor: multiplies valid sources in sorted id order`
+- `SpeedFactor: ignores non-number, nonfinite, zero and negative values`
+- `MoveSource composes with role multiplier and move_speed stat relative to the ordinary baseline`
+- `MoveSource removal restores the previous product without compounding`
+- `Removing the last source without profile or stat releases to the ordinary baseline`
+- `MoveSource refresh never heals or reapplies spawn health`
+- `PlayerSpawn drops move sources of the previous life`
+
+`stims.lua`:
+
+- `Ticks: 60 over 1.5 s at 0.25 s gives six ticks of 10`
+- `Ticks: remainder is spread so the sum equals the amount`
+- `Ticks: zero duration gives one immediate tick`
+- `Step: clamps to the cap`
+- `Step: never lowers a value above the cap`
+- `Param: item field wins, nil falls back to the setting, Base-inherited field is used`
+- `EffectLines: speed seconds rounded up to one decimal, then healing, then armor`
+- `Settings: defaults and bounds match the record`
+
+`stims_items.lua`:
+
+- `stim_heal: refused at or above max health, charge kept`
+- `stim_heal: heals after the use time in ticks and stops at max health`
+- `stim_heal: refused while its heal is pending or running`
+- `stim_armor: refused at or above stims.armor_max, charge kept`
+- `stim_armor: adds armor in ticks up to the cap`
+- `stim_speed: sets the move source after the use time and marks the end time`
+- `stim_speed: expiry removes the move source and clears the mark`
+- `stim_speed: refused while active, charge kept`
+- `stim_speed: OnUnequip removes the move source (death, match end, disable)`
+- `Instance removal stops pending heal and armor ticks`
+- `Missing player_overrides module refuses the speed stim`
+- `A Base variant inherits OnUse and uses its own Mult and Time`
+- `Played sends pw_stim_used to the owner only with the item index`
+
+`stims_equipment.lua`:
+
+- `KeyAction: select for grenade items, use for weapon-less items, nil when empty`
+- `ClientUse: weapon-less item spends one use and runs OnUse`
+- `ClientUse: refuses grenade items`
+- `pw_equipment_use from a bot sender with a valid index uses the tactical slot`
+- `pw_equipment_use outside LIVE or with an unknown index does nothing`
+- `Refusal returns false and keeps the count and the cooldown`
+- `Speed stim has two uses and refuses the second while active`
+- `Counts refill on spawn`
+- `Stockpile adds one use to a stim in the tactical slot`
+- `Item sounds exist in the mounted game content`
+- `Loadout accepts each stim in the tactical slot and rejects it in the lethal slot`
+
+`hud_stims.lua`:
+
+- `Stims HUD lines are cached until the effect state changes`
+- `Stims HUD draws nothing without active effects`
+- `Stims HUD stays left of the streak column and above the equipment rows`
+
+`stims_bots.lua`:
+
+- `StimWanted: hurt bot with a heal stim and no visible enemy wants it`
+- `StimWanted: healthy, enemy visible, empty or speed stim does not`
+- `Bot heal stim smoke: a hurt shared bot uses the stim and its health rises`
+
+`integration_stims.lua`:
+
+- `PickBackend prefers GCAL, falls back to VManip, nil when the animation is missing`
+- `AnimFor returns the table entry or nil`
+- `ShouldSwap only when the ConVar exists and is not 0`
+- `Missing Arctic addon: integration does nothing and core stims still heal and boost`
+- `With Arctic installed: vial replacement is off during the session and restored on shutdown` (skip explicitly
+  only if the optional addon is absent)
 
 ## Agents and lanes
 
@@ -833,6 +983,7 @@ Source: the first playtest of the game loop on 2026-11-07 ("it plays"), decision
 | T-11.14 Infection, separate optional addon. Branch `feat/addon-infection`; owns role transition and bot invalidation outside commander | `modes` / role lifecycle / mode HUD | shared round/role API freeze | Pure + input smoke + human checkpoint | user-approved `02` d.8 | implemented with corrective observer fixture, MatchEnd bot reset and personal round-win postmatch presentation (`a3741f7` owner handoff); historical owner full 1526/0/0 and scoped 99/0/0; review accepted/integrated at `3e2c1c9`, independent static PASS/full 1765/0/0; merged PR #3 (`8551ef7`); postmatch visuals reviewed. Authorized first-hit/retreat follow-up integrated; final coordinator static PASS/full 1822/0/0 (snapshot below); PR/merge and human/P2P pending |
 | T-11.17 All twelve additional perks: Stockpile, Soft Landing, Flash Guard, Fleet Foot, Quick Draw, Sightline, Recoil Control, Scavenger, Quiet Steps, Ghost, Retaliation, Continuity | `loadout` / shared weapon, reveal and bot consumers; owned paths below | generic role policy; core disable/constructor cleanup; shared reserve/provenance/reveal API; serialized integration gates | GLuaTest first, thin/native wrappers, supported-adapter UI and human checkpoint | user-frozen `05-loadout.md` d.16; `04` d.6, `07` d.2 | all twelve implemented, original `8288c78` plus additive corrections through `b685795`; review accepted/integrated at `3e2c1c9`, independent static PASS/full 1765/0/0; merged PR #3 (`8551ef7`). Historical owner scope 100/0/0 = 72 own + 22 core + 6 legacy overrides; historical full 1568/10/0 mode failures superseded by combined green; human/P2P pending; original four unchanged |
 | T-11.18 Support streaks K1 Directional Scan, K2 Ammunition Cache, K3 Medical Station, K4 Ground Sensor | `loadout` / `bots`; owned paths below | transactional streak activation; generic role policy; shared reserve API from T-11.17; reveal policy; serialized gates | GLuaTest first, native placement/cleanup/input smoke, client markers and human checkpoint | user-approved K1–K4 2026-11-08; support-owner frozen contract | all four implemented through `3e2c1c9`, review accepted/integrated; owner selected 101/0/0 (96 own + 5 legacy UI), owner full 1765/0/0; independent coordinator static PASS/full 1765/0/0; merged PR #3 (`8551ef7`); native counterplay and 720p support UI reviewed; human/P2P pending |
+| T-11.20 Tactical stims: heal, speed and armor | `loadout`, `bots`, `ui` and player overrides | T-4.5, T-11.4 | GLuaTest first, native heal bot and visual HUD smoke, optional animation check | `05-loadout.md` d.11, `07-bots.md` d.13, `09-hud.md` d.2; `docs/api/stims.md` | see the change queue and mandatory cases above; human checkpoint pending |
 
 **Historical accepted overnight gate (merged PR #3 at `8551ef7`):** coordinator independently accepted scope, mandatory assertions and screenshots
 on exact runtime tree `3e2c1c9`, fast-forwarded to `integration/overnight-fast`. Independent `make check` PASS

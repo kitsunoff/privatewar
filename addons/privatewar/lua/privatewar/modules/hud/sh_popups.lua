@@ -100,6 +100,59 @@ function lib._MedalCurrent(state, now)
     return nil
 end
 
+function lib._ScorePopupPhase(phase)
+    return phase == "LIVE" or phase == "POSTMATCH"
+end
+
+local unlockSources = {
+    challenge = "Challenge reward", event = "Event reward", admin = "Granted by the host"
+}
+
+function lib._QueueUnlock(state, keys, source, phase)
+    local unlocks = PW.Unlocks
+    if unlocks == nil or #keys == 0 or (phase ~= "PREMATCH" and not lib._ScorePopupPhase(phase)) then
+        return false
+    end
+    local label = #keys == 1 and unlocks.Describe(keys[1]).name or (#keys .. " items")
+    state.count = state.count + 1
+    state.list[state.count] = {
+        kind = "unlock", id = "unlock", name = "UNLOCKED", points = 0, label = label,
+        sourceText = unlockSources[source] or "Reward"
+    }
+    return true
+end
+
+---@param state PW.MedalState
+---@return integer?
+local function firstUnlock(state)
+    for index = 1, state.count do
+        if state.list[index].kind == "unlock" then return index end
+    end
+    return nil
+end
+
+function lib._PopupForPhase(state, now, phase)
+    if lib._ScorePopupPhase(phase) then return lib._MedalCurrent(state, now) end
+    if phase ~= "PREMATCH" then return nil end
+    while true do
+        local index = firstUnlock(state)
+        if index == nil then return nil end
+        local popup = state.list[index]
+        if popup.startedAt ~= nil and now - popup.startedAt >= lib.MedalDuration then
+            table.remove(state.list, index)
+            state.count = state.count - 1
+        else
+            -- Keep this grant on screen if LIVE begins before it finishes. Older medals keep their order.
+            if index > 1 then
+                table.remove(state.list, index)
+                table.insert(state.list, 1, popup)
+            end
+            popup.startedAt = popup.startedAt or now
+            return popup
+        end
+    end
+end
+
 ---@param level integer
 ---@return string
 local function levelLabel(level)

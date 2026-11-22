@@ -1,12 +1,23 @@
 # Weekly challenges
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-21
+
+The independent rotation and filter work started on 2026-11-22 on `feat/weekly-challenges` from
+`f5199de`. Remaining implementation and integration wait for the unlock authority. Gates and human acceptance are pending.
+
+Early scope evidence (2026-11-22, `19b1f71`): steps 1–4 are committed, with `nix develop --command make check`
+and pre-commit passing. Full Deck RED was 2144 passed, 23 failed, 0 skipped. After steps 1–3, all 14 of their new
+cases passed and the 10 step-4 cases failed as expected, including the dot-separator regression. Full Deck GREEN
+at `19b1f71` was 2168 passed, 0 failed, 0 skipped. This does not cover the remaining steps or approve integration.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
+
+Instance ID clarification (approved 2026-11-22): a dot is only a component separator. Template IDs must not contain
+dots, and dotted parameter values are not selectable. The assembled format and 40-byte limit are unchanged.
 
 Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md) (CoD challenge design,
 generic quest architecture, the full event inventory and the gaps).
@@ -15,7 +26,7 @@ This record is tracking, not authorization. It does not authorize implementation
 Deck access, pushes or publication. Every number marked "proposed default" is unapproved. Existing decisions in
 `design/` and frozen contracts in `docs/api/` stay in force until the user approves the changes listed in section 2.
 
-Depends on [unlock entitlements](../in-progress/unlock-entitlements.md) (planned in parallel; see
+Depends on [unlock entitlements](../done/unlock-entitlements.md) (planned in parallel; see
 [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md)). Item rewards and the
 reward idempotency ledger are delivered only through that system (`PW.Unlocks.Grant` with a claim id). XP and currency
 rewards go through the existing `PW.Progression.AddXP` and `PW.Progression.AddCurrency`. Implementation of this record
@@ -167,6 +178,7 @@ CHALLENGE.Rewards     = nil                     -- table<PW.ChallengeTier, PW.Ch
 
 Rules (validation in `sh_template.lua`):
 
+- [ ] Reject template ids that contain a dot; dots are reserved for the separators in the assembled instance id.
 - [ ] Exactly one of `Objectives` or the shorthand `Event`. 1 to 4 objectives. Each objective has a known event type
   (built-in or registered, 6.3) and a target ≥ 1 for every tier the template allows (a number target applies to every
   tier). `Within.count` ≥ 2, `Within.seconds` > 0. Unknown filter keys are rejected (typo protection) unless the
@@ -463,7 +475,8 @@ their availability already resolved; `opts = { count, bonusNeeded, seed, bonusPo
 5. [ ] Parameters: for each param key in sorted order, the candidate values (static list, function result or built-in
    source) are filtered by availability and sorted; one is picked with `next()`. A template whose param has no
    candidate value is not selectable. Instance id: `<template>.<value1>.<value2>` (keys in sorted order). A value that
-   would make the instance id longer than 40 bytes or break the id pattern of 3.6 is not a candidate.
+   contains a dot, would make the instance id longer than 40 bytes, or would break the id pattern of 3.6 is not a
+   candidate. The same rule applies to values from static lists, functions and built-in sources.
 6. [ ] Targets and rewards resolved per tier; bonus item picked last from the sorted bonus pool.
 7. [ ] Determinism guarantee: the same `index`, `seed`, `count`, template definitions and resolved availability give
    the same week on every host and every run. Hosts with different installed content or settings may differ; progress
@@ -742,6 +755,7 @@ Pure unless marked "in-game". Case names are exact; file names are proposed.
 - [ ] `Rotation: tier mix for 1, 3, 5 and 8 challenges`
 - [ ] `Rotation: weights bias selection and a zero-candidate tier falls back to an easier tier`
 - [ ] `Rotation: parameters bind deterministically and unavailable values are never chosen`
+- [ ] `Rotation: dots are reserved for instance id separators`
 - [ ] `Rotation: a different host seed changes the set`
 
 `challenges_filters.lua`:
@@ -911,7 +925,7 @@ The automated cases never replace the human checkpoint (section 14).
 ## Evidence and links
 
 - Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md).
-- Dependency: [unlock entitlements](../in-progress/unlock-entitlements.md) and
+- Dependency: [unlock entitlements](../done/unlock-entitlements.md) and
   [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md).
 - Related: [scheduled events](../in-progress/scheduled-events.md) (UTC handling, playlist availability), store rotation
   `addons/privatewar/lua/privatewar/modules/economy/sh_rotation.lua`, `design/06-progression.md` d.0, d.1, d.3, d.5, d.6.

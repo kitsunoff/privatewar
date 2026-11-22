@@ -21,7 +21,12 @@
 ---@field Refresh fun(ply: Player): boolean, string?
 ---Restore baseline maximum and speeds; living current HP clamps down only, dead players never revive.
 ---@field Release fun(ply: Player): boolean
+---Server: replace or remove one temporary movement multiplier, then refresh without healing.
+---@field MoveSource fun(ply: Player, id: string, mult?: number)
+---Pure: multiply finite positive movement sources in sorted id order.
+---@field _SpeedFactor fun(sources?: table<string, any>): number
 
 ---@class PW
 ---@field PlayerOverrides? PW.PlayerOverridesLib nil when the generic module is absent
 ---@field _PlayerOverrideBaselines table<Player, PW.PlayerOverrideBaseline>? internal, retained across reload
+---@field _PlayerOverrideMoveSources table<Player, table<string, number>>? internal, retained across reload
