@@ -26,6 +26,9 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
      - Domination point status (A, B, C with owner colour), drawn by the mode's own element;
      - radar: a circle in a corner; teammates always, enemies only while a UAV is active, jammed by Counter-UAV (MVP streaks, `05-loadout.md` decision 10);
      - phase messages: "Match starts in 10", "Victory" / "Defeat" in `POSTMATCH`.
+     - user-approved 2026-11-22: during `LIVE`, show the local player's active stim effects above the bottom-right equipment lines.
+       Show speed time remaining to one decimal and active `HEALING` / `ARMOR` labels. Pending injections are not active
+       effects; the equipment line continues to show the slot hint and remaining charges.
 
 - **Revision 2026-11-07 (user decisions after the first playtest; decision 2 stays valid for everything not mentioned here):**
 

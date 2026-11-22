@@ -47,6 +47,8 @@
 ---@field hurtAt? number CurTime() of the last damage from an enemy
 ---@field attacker? Entity who did that damage
 ---@field lethal integer lethal equipment left (0 without the equipment module)
+---@field tactical? integer tactical equipment left, always populated by Refresh (zero without equipment)
+---@field tacticalItem? string tactical item id, nil for an empty or unavailable slot
 ---@field cover? PW.BotCover the last cover found against the current threat
 ---@field profile PW.BotProfile
 ---@field speed? number horizontal speed, units per second (T-11.6)
@@ -90,6 +92,7 @@
 
 ---The tactics helpers of the survival and combat behaviours (T-5.10).
 ---@class PW.BotTacticsLib
+---@field _StimWanted fun(facts: PW.BotCombatFacts, visible: boolean): boolean
 ---Gameplay values (units, seconds, shares).
 ---@field Config table<string, number>
 ---Default personality numbers.

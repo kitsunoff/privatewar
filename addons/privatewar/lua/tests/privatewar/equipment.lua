@@ -345,10 +345,16 @@ local wiringCases = {
         end
     },
     {
-        name = "Wiring: no use message any more (the slot key selects the grenade SWEP); pw_blind is registered",
+        name = "Wiring: only weapon-less equipment may use the slot request; pw_blind is registered",
         func = function()
             expect(rawget(lib(), "NetName")).to.beNil()
-            expect(must(PW._Net).defs.pw_equipment_use).to.beNil()
+            local request = must(must(PW._Net).defs.pw_equipment_use)
+            expect(IsValid(request.owner)).to.beTrue()
+            expect(request.owner).to.equal(PW.Modules.GetStored("equipment"))
+            expect(request.who).to.equal("any")
+            expect(request.phases).to.deepEqual({ LIVE = true })
+            expect(request.rate).to.equal(4)
+            expect(request.maxLen).to.equal(1)
             expect(util.NetworkStringToID("pw_blind")).toNot.equal(0)
         end
     }
