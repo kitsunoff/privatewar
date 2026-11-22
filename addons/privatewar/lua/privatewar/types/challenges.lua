@@ -242,6 +242,43 @@
 ---@field items PW.ChallengeFileItems
 ---@field bonus? boolean
 
+---@alias PW.ChallengeFileWeeks table<string, PW.ChallengeFileWeek>
+
+---@class PW.ChallengeBatch
+---@field session integer
+---@field seq integer
+
+---@class PW.ChallengeFile
+---@field v integer
+---@field weeks PW.ChallengeFileWeeks
+---@field batch? PW.ChallengeBatch
+
+---@class PW.ChallengeDelta : PW.ChallengeBatch
+---@field label string
+---@field index integer
+---@field items PW.ChallengeFileItems
+---@field bonus boolean
+
+---@class PW.ChallengeWireState
+---@field week PW.ChallengeWeek
+---@field items PW.ChallengeFileItems
+---@field bonus boolean
+
+---@alias PW.ChallengeWireWriter fun(value: integer, width: integer)
+---@alias PW.ChallengeWireReader fun(width: integer): integer
+
+---@class PW.ChallengeWriteWire
+---@overload fun(message: "upload", payload: PW.ChallengeFileWeeks, write: PW.ChallengeWireWriter)
+---@overload fun(message: "state", payload: PW.ChallengeWireState, write: PW.ChallengeWireWriter)
+---@overload fun(message: "progress", payload: PW.ChallengeFileItems, write: PW.ChallengeWireWriter)
+---@overload fun(message: "delta", payload: PW.ChallengeDelta, write: PW.ChallengeWireWriter)
+
+---@class PW.ChallengeReadWire
+---@overload fun(message: "upload", bits: integer, read: PW.ChallengeWireReader): PW.ChallengeFileWeeks?
+---@overload fun(message: "state", bits: integer, read: PW.ChallengeWireReader): PW.ChallengeWireState?
+---@overload fun(message: "progress", bits: integer, read: PW.ChallengeWireReader): PW.ChallengeFileItems?
+---@overload fun(message: "delta", bits: integer, read: PW.ChallengeWireReader): PW.ChallengeDelta?
+
 ---@alias PW.ChallengePlanFn fun(week: PW.ChallengeWeek, templates: table<string, PW.ChallengeTemplate>,
 ---    rounds: boolean): PW.ChallengeProgressPlan
 ---@alias PW.ChallengeAdvanceFn fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState,
@@ -250,6 +287,8 @@
 ---    boundary: PW.ChallengeProgressBoundary)
 ---@alias PW.ChallengeProgressReadFn fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState,
 ---    id: string): PW.ChallengeProgress?
+---@alias PW.ChallengeUploadFn fun(weeks: PW.ChallengeFileWeeks, active: PW.ChallengeWeek,
+---    modes: table<string, PW.ChallengeCombine>): PW.ChallengeFileWeek
 
 ---@class PW.ChallengesLib
 ---Monday-based week index for a UTC Unix timestamp.
@@ -272,6 +311,24 @@
 ---@field _ResetProgress PW.ChallengeResetFn
 ---@field _ReadProgress PW.ChallengeProgressReadFn
 ---@field _SaveProgress fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState): PW.ChallengeFileWeek
+---@field _Migrate fun(raw: any): PW.ChallengeFile
+---@field _FileFromJson fun(json: string?): PW.ChallengeFile, boolean
+---@field _FileToJson fun(file: PW.ChallengeFile, currentIndex: integer, readOnly?: boolean): string?
+---@field _ApplyDelta fun(current: PW.ChallengeFile, delta: PW.ChallengeDelta): PW.ChallengeFile, boolean
+---@field _UploadWeek PW.ChallengeUploadFn
+---@field _ReadWire PW.ChallengeReadWire
+---@field _WriteWire PW.ChallengeWriteWire
+---@field FileVersion integer
+---@field FilePath string
+---@field UploadMaxBytes integer
+---@field _MaxWeeks integer
+---@field _MaxItems integer
+---@field _MaxObjectives integer
+---@field _MaxCount integer
+---@field _MaxUInt32 integer
+---@field _ValidWeekLabel fun(label: any): boolean
+---@field _ValidInstanceId fun(id: any): boolean
+---@field _BoundCounter fun(value: any): integer
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib
