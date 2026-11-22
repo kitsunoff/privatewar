@@ -1,12 +1,20 @@
 # Calling cards: equip a card, show the victim's card to the killer
 
-Status: `in-progress`
+Status: `done`
 
 Recorded: 2026-11-22
 
-Implementation started on 2026-11-22 on `feat/calling-card-kill-banner` from `76ed4c8`.
-The unlock authority is available locally. Implementation resumed after agreeing on the settings representation
-in section 4.1. Gameplay verification and the human checkpoint are pending.
+Implemented on `feat/calling-card-kill-banner` from `76ed4c8` and merged locally into
+`integration/overnight-2026-11-22` at `0710176` on 2026-11-22. Not merged into `main`.
+
+- Test-first runs covered choice and wire, server validation, HUD, and picker. All 18 mandatory names and
+  28 card tests were verified. On `f308644` and again on `0710176`, `make check` passed and the full Deck
+  `make test` passed 2276, 0 failed, 1 skipped (requires the optional Arctic addon).
+- Package verification compared all ten 512×128 release PNGs byte-for-byte and rejected unrelated and nested
+  PNGs. The source artwork is not packaged.
+- Deck smoke confirmed Recruit in the picker, the reason on a reward-locked card, and the victim's card and
+  name above the XP strip after an actual enemy kill. The gradient edge was corrected and rechecked.
+  Profile data and settings checked by the probe were unchanged. The human checkpoint below remains pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
@@ -135,7 +143,8 @@ Related: card unlocks must stay valid under [programmatic unlocks](../done/unloc
   with weekly challenges); the four level cards need no other change.
 - [ ] Each weekly challenge template grants its card through `Rewards.items` (`{ kind = "cards", id = ... }`) when the
   challenge is completed: `headshots` (C2), `longshots` (C8), `captures` (C10), `streak_kills` (C15), `life_kills`
-  (C20), `wins` (C17) in `changes/in-progress/weekly-challenges.md` section 7. Which tier grants it is open question 7.
+  (C20), `wins` (C17) in `changes/in-progress/weekly-challenges.md` section 7, at any existing tier. Delivery of
+  these rewards is owned by the weekly change and is not part of this feature's verification.
 - [ ] The three existing samples (`bomb`, `gold_medal`, `lightning`, store and bundle items) stay; their 16-pixel icons
   are drawn **centred** on a rarity plate, never stretched (pure layout case in section 7).
 
@@ -209,10 +218,8 @@ User answers (2026-11-22):
 4. Team kills: **no banner**.
 5. Bots: **random card per bot**.
 
-Still open:
-
 6. Show the victim's level next to the name? **No for now** (bots have no real level).
-7. Which challenge completion grants its card: **any tier** of that challenge in any week, or only the hard tier?
+7. Which challenge completion grants its card: **any existing tier**, implemented separately with weekly challenges.
 
 ## 10. Gates
 

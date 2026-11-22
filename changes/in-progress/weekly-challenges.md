@@ -657,7 +657,7 @@ defaults of 3.5 unless stated. Every template uses only events that exist or tha
 - [ ] Existing tiers of C2, C8, C10, C15, C20 and C17 also grant `cards:challenge_headshots`,
   `cards:challenge_longshots`, `cards:challenge_captures`, `cards:challenge_streak_kills`,
   `cards:challenge_life_kills` and `cards:challenge_wins`, respectively. This adds no new tiers.
-  The [calling-card definitions](calling-card-kill-banner.md) are needed for integration of the rewards, not for
+  The [calling-card definitions](../done/calling-card-kill-banner.md) are needed for integration of the rewards, not for
   the earlier progress, storage or event steps.
 - [ ] Display names for params: categories from a fixed table in the module (`ar` → "assault rifle", `smg` → "SMG",
   `shotgun` → "shotgun", `pistol` → "pistol", `special` → "special"; unknown → the id); weapons and modes from their

@@ -29,7 +29,6 @@ human-acceptance evidence; planned status is retained.
 
 ## In progress
 
-- [Calling cards: equip a card, show the victim's card to the killer](in-progress/calling-card-kill-banner.md)
 - [Weekly challenges](in-progress/weekly-challenges.md): pure rotation and filters verified; implementation
   continues on top of the local unlock authority.
 - [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
@@ -46,6 +45,8 @@ human-acceptance evidence; planned status is retained.
   human checkpoint pending.
 - [Stim equipment: heal, speed and armor stims](done/stim-equipment.md): local overnight integration;
   optional installed-Arctic case skipped, human checkpoint pending.
+- [Calling cards: equip a card, show the victim's card to the killer](done/calling-card-kill-banner.md):
+  local integration with Deck smoke; human checkpoint pending.
 
 Historical completion evidence for unmigrated work remains in TASKS.md.
 
