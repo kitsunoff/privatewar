@@ -34,9 +34,84 @@ local function planted()
     return state, list
 end
 
+---@param userId integer
+---@param steamId string
+---@return Player
+local function scoringActor(userId, steamId)
+    return { IsValid = function() return true end, IsPlayer = function() return true end,
+        IsBot = function() return false end, UserID = function() return userId end,
+        SteamID64 = function() return steamId end } --[[@as Player]]
+end
+
 return {
     groupName = "PW Search and Destroy",
     cases = {
+        { name = "SND: a completed plant or defuse awards its score event to the actor once", func = function()
+            local sndLib = lib()
+            local plantSteamId = "76561198000000001"
+            local planter = scoringActor(1, plantSteamId)
+            local defuser = scoringActor(2, "76561198000000002")
+            local replacement = scoringActor(99, plantSteamId)
+            local samples = actors()
+            samples[1].id, samples[2].id = sndLib.Identity(planter), sndLib.Identity(defuser)
+            local state = sndLib.NewRound(layout(), samples, 0, 1, samples[1].id)
+            local snd = setmetatable({ _SND = state }, { __index = must(PW.Modes.Get("snd")) })
+                --[[@as PW.RoundBase]]
+            local now = 0
+            stub(_G, "CurTime").with(function() return now end)
+            stub(player, "GetAll").returns({ replacement, planter, defuser })
+            stub(sndLib, "Actors").returns(samples)
+            stub(sndLib, "Invalidate").with(function() end)
+            stub(sndLib, "Physical").with(function() end)
+            stub(sndLib, "Publish").with(function() end)
+            ---@type { actor: Player, id: string }[]
+            local awards = {}
+            stub(must(PW.Score), "Award").with(function(actor, id)
+                awards[#awards + 1] = { actor = actor, id = id }
+                return true, 100, 100
+            end)
+
+            expect(snd:RoundWinner(false)).to.beNil()
+            now = 4.9
+            expect(snd:RoundWinner(false)).to.beNil()
+            expect(#awards).to.equal(0)
+            now = 5
+            expect(snd:RoundWinner(false)).to.beNil()
+            expect(state.phase).to.equal("planted")
+            expect(#awards).to.equal(1)
+            expect(awards[1].id).to.equal("snd_plant")
+            expect(rawequal(awards[1].actor, planter)).to.beTrue()
+
+            samples[2].pos, samples[2].use = state.pos, true
+            now = 6
+            expect(snd:RoundWinner(false)).to.beNil()
+            now = 13.4
+            expect(snd:RoundWinner(false)).to.beNil()
+            expect(#awards).to.equal(1)
+            now = 13.5
+            expect(snd:RoundWinner(false)).to.equal(2)
+            expect(#awards).to.equal(2)
+            expect(awards[2].id).to.equal("snd_defuse")
+            expect(rawequal(awards[2].actor, defuser)).to.beTrue()
+            now = 14
+            expect(snd:RoundWinner(false)).to.equal(2)
+            expect(#awards).to.equal(2)
+        end },
+        { name = "SND: plant and defuse are registered as 100-point score and XP events, not medals", func = function()
+            local score = must(PW.Score)
+            local events = must(must(PW.Registries).score_events)
+            for _, id in ipairs({ "snd_plant", "snd_defuse" }) do
+                local entity = events.Get(id)
+                expect(entity ~= nil).to.beTrue()
+                assert(entity ~= nil)
+                expect(entity:IsValid()).to.beTrue()
+                local event = entity --[[@as PW.ScoreEvent]]
+                local points, xp = score._Resolve(event, nil)
+                expect(points).to.equal(100)
+                expect(xp).to.equal(100)
+                expect(event.Medal == true).to.beFalse()
+            end
+        end },
         { name = "SND: one bomb survives competing pickups and carrier death disconnect", func = function()
             local s, a = round()
             expect(lib().Death(s, "attacker", 1, Vector(40, 0, 0), 1)).to.beTrue()
