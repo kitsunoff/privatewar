@@ -1,7 +1,7 @@
 # Agent mandatory test map
 
 Use with [TASKS.md](../TASKS.md) "Mandatory test cases" and the [workflow](agent-workflow.md).
-These are **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
+The exact-case tables map **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
 write additional task-specific cases first. Paths in the tables are relative to
 `addons/privatewar/lua/tests/privatewar/`. Clauses are copied verbatim from the task list; some clauses need
 multiple cases. The static checker verifies each clause is still in TASKS.md and each exact name still exists.
@@ -148,6 +148,27 @@ Also retain these existing extension regressions in `wildcards.lua` (not additio
 Keep `loadout.lua`, `loadout_budget.lua`, `loadout_classes.lua`, `gunsmith.lua` and `perks.lua` when changing slot
 rules; these exercise wrong kind/filter, budget 0, cosmetics, bans, cap, repair/N/A and group composition. A new
 slot needs native giving plus UI/wire tests because effective-slot acceptance alone does not prove the slot is consumed.
+
+## Unlock entitlements
+
+The [mandatory inventory in TASKS.md](../TASKS.md#unlock-entitlements-mandatory-regression-inventory) lists 47 exact
+new case names. This table maps coverage areas to suites; it is not an assertion of runtime or checkpoint results.
+Preserve the whole inherited suites on these seams.
+
+| Coverage area | Suite |
+| --- | --- |
+| Specification, source precedence, keys, requirements, option counting and compatibility | `unlocks.lua` |
+| Transactions, readiness, persistence, wire, admin and server consumers | `unlocks_storage.lua` |
+| Editor, gunsmith, operators, store, next unlocks, badge and popup models | `unlocks_ui.lua` |
+| Explicit false and table curation survive stat-based levels | `autounlock.lua` |
+| Existing progression, storage and economy unlock regressions | `progression.lua`, `progression_storage.lua`, `economy.lua` |
+| Existing class repair, build validation and bot isolation | `loadout_classes.lua`, `gunsmith.lua`, `bots_loadouts.lua`, `bots_arc9_generated_native.lua` |
+| Existing frontend and operator regressions | `ui_classes_gunsmith.lua`, `ui_store_progress.lua`, `operators_names.lua` |
+| Existing soft registry merge and curation | `core_registry.lua`, `autounlock.lua` |
+
+Retain T-5.13's zero-call assertion for bot paths and the corresponding native bot regression; stub both
+`PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked` when changing consumer targets. The T-4.8 gunsmith stub must
+continue to open all options it previously opened. The normal merge gates and human checkpoint remain pending.
 
 ## Guidance evaluations
 

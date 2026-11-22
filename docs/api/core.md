@@ -105,7 +105,7 @@ fields and other sources fill the rest. Id = the SWEP class. Accessor `PW.Weapon
 | --- | --- | --- |
 | `Category` | `string?` | Weapon category, for example `"ar"` or `"smg"` |
 | `Name` | `string?` | Display name |
-| `Unlock` | `integer?` | Unlock level, read by progression (`design/06-progression.md`); empty means its default |
+| `Unlock` | `PW.UnlockField?` | [Player-level or entitlement curation](progression.md#references-and-curation); omitted uses the default unlock rules |
 
 ## Weapon registration phase
 
