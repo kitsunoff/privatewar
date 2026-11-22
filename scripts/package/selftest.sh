@@ -36,9 +36,18 @@ check "third-party notices shipped" present data_static/privatewar/THIRD_PARTY_N
 licence_is_gpl() { grep --quiet 'GNU GENERAL PUBLIC LICENSE' "$gm/data_static/privatewar/LICENSE.txt"; }
 check "licence is the GPL text" licence_is_gpl
 
+root="$(cd "$here/../.." && pwd)"
+card_shipped() {
+    local path="materials/privatewar/cards/$1.png"
+    cmp "$root/addons/privatewar/$path" "$gm/$path" >/dev/null 2>&1
+}
+for card in default level_20 level_40 level_55 challenge_headshots challenge_longshots challenge_captures \
+    challenge_streak_kills challenge_life_kills challenge_wins; do
+    check "calling card $card shipped unchanged" card_shipped "$card"
+done
+
 # Every integration addon (addons/<name>/ except the gamemode and the dev addon) is staged as its own addon with its
 # Lua, addon.json and licence files only; the dev addon is never staged.
-root="$(cd "$here/../.." && pwd)"
 check "dev addon not staged" test ! -e "$tmp/dist/privatewar-dev"
 for dir in "$root"/addons/*/; do
     [[ -d "$dir" ]] || continue
@@ -76,6 +85,10 @@ check "rejects missing notices" rejects 'rm "$copy/data_static/privatewar/THIRD_
 check "rejects licence in the addon root" rejects 'touch "$copy/LICENSE.txt"'
 check "rejects other data_static files" rejects 'touch "$copy/data_static/privatewar/notes.txt"'
 check "rejects unrelated png" rejects 'touch "$copy/gamemodes/privatewar/other.png"'
+check "rejects unrelated material png" rejects 'mkdir --parents "$copy/materials/privatewar" &&
+    touch "$copy/materials/privatewar/other.png"'
+check "rejects nested card png" rejects 'mkdir --parents "$copy/materials/privatewar/cards/source" &&
+    touch "$copy/materials/privatewar/cards/source/default.png"'
 check "rejects missing menu logo" rejects 'rm "$copy/gamemodes/privatewar/logo.png"'
 check "rejects missing menu icon" rejects 'rm "$copy/gamemodes/privatewar/icon24.png"'
 
