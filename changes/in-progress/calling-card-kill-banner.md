@@ -5,8 +5,8 @@ Status: `in-progress`
 Recorded: 2026-11-22
 
 Implementation started on 2026-11-22 on `feat/calling-card-kill-banner` from `76ed4c8`.
-The unlock authority is available locally. The implementation, gameplay verification and human checkpoint
-are pending.
+The unlock authority is available locally. Implementation resumed after agreeing on the settings representation
+in section 4.1. Gameplay verification and the human checkpoint are pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
@@ -54,14 +54,16 @@ Related: card unlocks must stay valid under [programmatic unlocks](../done/unloc
 ### 4.1 Selection (mirrors operators, `design/06-progression.md` d.7)
 
 - [ ] New module `P/modules/calling_cards/` (`shared.lua`, `init.lua`, `cl_init.lua`), library `PW.CallingCards`.
-- [ ] Client setting `calling_cards.selected` (scope `client`, string, default `""`), shown in SETTINGS > Personal and
+- [ ] Client setting `calling_cards.selected` (scope `client`, dynamic enum, default `default` for Recruit), shown in
+  SETTINGS > Personal and
   edited by a picker screen LOADOUT > CALLING CARD (`P/screens/loadout_card.lua`, modelled on
   `P/screens/loadout_operator.lua`): grid of cards, locked ones shown locked with the requirement text, preview of the
   banner at the bottom.
 - [ ] The client sends `pw_card_choice` (string, at most 32 bytes) on join and on change through `PW.Net.Receive`
-  (`who = "any"`, `rate = 2`, `maxLen = 34`, owner the module).
+  (`who = "any"`, `rate = 2`, `maxLen = 34`, owner the module). The empty string remains a wire-only reset to Recruit;
+  it is not a settings enum option. The settings core does not change.
 - [ ] Server validation, pure `PW.CallingCards._Resolve(id, facts) -> string`: returns `id` when the card is registered,
-  enabled and unlocked for the player (`PW.Progression.IsUnlocked(ply, "cards", id)`, later `PW.Unlocks.IsUnlocked`),
+  enabled and unlocked for the player (`PW.Unlocks.IsUnlocked(ply, "cards", id)`),
   else the default card id. Malformed input keeps the previous choice. Re-checked at every spawn (an unlock can be
   lost when the host changes settings).
 - [ ] The resolved id is published as the NW2 string `pw_card` on the player (written only on change).
