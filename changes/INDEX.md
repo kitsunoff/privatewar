@@ -30,7 +30,6 @@ human-acceptance evidence; planned status is retained.
 
 ## In progress
 
-- [Programmatic unlocks and entitlements](in-progress/unlock-entitlements.md)
 - [Stim equipment: heal, speed and armor stims](in-progress/stim-equipment.md)
 - [Weekly challenges](in-progress/weekly-challenges.md): pure rotation and filters only; remaining work depends on
   programmatic unlocks.
@@ -43,6 +42,8 @@ human-acceptance evidence; planned status is retained.
 ## Done
 
 - [After-match rotation by default for playlists](done/aftermatch-rotation-default.md): local overnight integration;
+  human checkpoint pending.
+- [Programmatic unlocks and entitlements](done/unlock-entitlements.md): local overnight integration;
   human checkpoint pending.
 
 Historical completion evidence for unmigrated work remains in TASKS.md.

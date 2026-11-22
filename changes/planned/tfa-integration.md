@@ -287,7 +287,7 @@ same tick; TFA's `Initialize` (with `InitAttachments`) has already run inside `G
 - [ ] Curated levels: a declarative `lua/privatewar/weapons/<tfa class>.lua` or a `PW_RegisterWeapons` listener with
   `Attachments = { [option id] = { Unlock = n, Cost = c, Hidden = true } }`, registered `soft`, wins option by option
   over the automatic level. No TFA-specific curation file ships in this change (§10 question 3).
-- [ ] Compatibility with the entitlement refactor (`changes/in-progress/unlock-entitlements.md`): it keeps the
+- [ ] Compatibility with the entitlement refactor (`changes/done/unlock-entitlements.md`): it keeps the
   `Attachments[option].Unlock` field (accepting `{ level = n }` and `false` too) and soft registration; TFA option ids
   become keys `attachments:<class>:<option id>`, pattern `^%l[%l_]*:[%w_%-%.:]+$`. TFA ids are lower-case file names
   or batch ids; an id outside `[%w_%-%.:]` cannot be keyed: count such ids at `PW_WeaponsLoaded` and log them once

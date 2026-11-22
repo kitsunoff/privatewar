@@ -423,9 +423,9 @@ still open the tested options, and bot loadout tests must still assert zero call
 
 1. "Merge: Unlock = false and table forms are never overwritten by the stat-based levels"
 
-Acceptance and merge gates (`make check`, `make test`) and the human GMod checkpoint are pending; the inventory is
-not evidence of a pass. The human checkpoint covers grant, revoke and repair, reconnect and cross-host persistence,
-purchase, `unlockall` and Hidden, bot behaviour, and mouse/controller presentation.
+See the [unlock change record](changes/done/unlock-entitlements.md) for current gate evidence. The human checkpoint
+covers grant, revoke and repair, reconnect and cross-host persistence, purchase, `unlockall` and Hidden, bot behaviour,
+and mouse/controller presentation. This inventory is not evidence of a pass.
 
 ### Phase 5 — bots
 

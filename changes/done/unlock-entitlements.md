@@ -1,11 +1,25 @@
 # Programmatic unlocks and entitlements
 
-Status: `in-progress`
+Status: `done`
 
 Recorded: 2026-11-21
 
-Implementation started 2026-11-22 on `feat/unlock-entitlements` from `226330a`. Scope is the approved
-unlock authority, grants and claims, persistence, validation, and presentation. Gates and human acceptance are pending.
+Implemented on `feat/unlock-entitlements` from `226330a` and merged locally into
+`integration/overnight-2026-11-22` at `ee66ed4` on 2026-11-22. Not merged into `main`.
+
+Verification on 2026-11-22:
+
+- All 47 mandatory test names and inherited assertions were reviewed. Test-first focused runs were used for
+  the implementation steps. The option-kind regression ran 50 passed, 1 failed, 0 skipped before its fix and
+  51 passed, 0 failed, 0 skipped after it.
+- The first full run was 2175 passed, 5 failed, 0 skipped: the standalone clickable-hint fixture exposed
+  misplaced client event registration. After moving registration to module initialization, the five unchanged
+  cases passed. At `2d89273`, `make check` and the full Deck run passed (2181 passed, 0 failed, 0 skipped).
+- Coordinator task gates on `fc02af2`: `nix develop --command make check` passed, and
+  `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test` passed 2181, 0 failed, 0 skipped.
+- Steam Deck screenshots verified the operator and LOADOUT `NEW` marks clearing on focus without writing
+  player files or changing the saved operator choice. The live grant toast, controller, peer-to-peer and
+  version-skew checks remain part of the unchecked human checkpoint below.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design

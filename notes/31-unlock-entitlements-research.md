@@ -1,7 +1,7 @@
 # Unlocks beyond levels: current system and an entitlement design
 
 Status: research and proposal, 2026-11-21. Not a decision. `design/06-progression.md` stays authoritative until the
-user approves the revisions listed in [the change record](../changes/in-progress/unlock-entitlements.md). Line numbers
+user approves the revisions listed in [the change record](../changes/done/unlock-entitlements.md). Line numbers
 refer to branch `docs/plan-mwbase-stims-unlocks-challenges` at `cf7c4ed`; an implementer must re-check them.
 
 ## 1. Question

@@ -188,7 +188,7 @@ Preserve the whole inherited suites on these seams.
 
 Retain T-5.13's zero-call assertion for bot paths and the corresponding native bot regression; stub both
 `PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked` when changing consumer targets. The T-4.8 gunsmith stub must
-continue to open all options it previously opened. The normal merge gates and human checkpoint remain pending.
+continue to open all options it previously opened. See the change record for gate and human-checkpoint evidence.
 
 ## Guidance evaluations
 
