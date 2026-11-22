@@ -31,6 +31,8 @@ human-acceptance evidence; planned status is retained.
 - [Programmatic unlocks and entitlements](planned/unlock-entitlements.md)
 - [Weekly challenges](planned/weekly-challenges.md) (depends on programmatic unlocks)
 - [Calling cards: equip a card, show the victim's card to the killer](planned/calling-card-kill-banner.md)
+- [Progression rebalance: pacing, attachment spread and long tail](planned/progression-rebalance.md) (questions for
+  the maintainer open)
 
 ## In progress
 
