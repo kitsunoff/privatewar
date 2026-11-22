@@ -39,11 +39,12 @@ end
 ---@param pos Vector
 ---@param damage number
 ---@param radius number
-local function bomb(owner, pos, damage, radius)
+---@param streakId string
+local function bomb(owner, pos, damage, radius, streakId)
     local attacker = IsValid(owner) and owner or game.GetWorld()
     local streaks = PW.Streaks
     if streaks ~= nil and streaks.StreakDamage ~= nil then
-        streaks.StreakDamage(util.BlastDamage, game.GetWorld(), attacker, pos, radius, damage)
+        streaks.StreakDamage(streakId, util.BlastDamage, game.GetWorld(), attacker, pos, radius, damage)
     end
     local data = EffectData()
     data:SetOrigin(pos)
@@ -62,7 +63,7 @@ function STREAK:OnEquip(owner)
         self:Timer(self.Interval, self.Count, function()
             local point = points[next]
             next = next + 1
-            if point ~= nil then bomb(owner, groundOf(point), self.Damage, self.Radius) end
+            if point ~= nil then bomb(owner, groundOf(point), self.Damage, self.Radius, self.ClassName) end
         end)
     end)
 end

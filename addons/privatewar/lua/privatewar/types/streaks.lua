@@ -5,7 +5,11 @@
 ---@class PW.StreaksLib
 ---@field SnapshotDeath fun(ply: Player): boolean
 ---@field IsDamage fun(): boolean true only within the authoritative StreakDamage callback
+---@field DamageStreakId? fun(): string? server: current tagged streak, nil outside damage or without a source id
 ---@alias PW.CanRevealQuestion fun(viewer: integer|Player, target: Player, sourceOwner?: Player): boolean?
+---@class PW.StreakDamageFn
+---@overload fun(fn: (fun(...: any)), ...: any)
+---@overload fun(streakId: string, fn: (fun(...: any)), ...: any)
 -- Types of killstreaks and the deliberate reveal (T-4.6; 05-loadout.md d.9, d.10). Source:
 -- lua/privatewar/kinds/streaks.lua (the kind), lua/privatewar/modules/streaks/ (shared.lua: slots, earning rules,
 -- inventory, wire; sh_reveal.lua: reveal and airstrike rules; init.lua: per-player state, earning hooks,
@@ -48,6 +52,7 @@
 ---@class PW.StreaksStore
 ---@field players table<any, PW.StreakPlayer> weak-keyed
 ---@field depth integer > 0 while a streak deals damage (StreakDamage)
+---@field damageId? string innermost tagged source during a streak damage callback
 ---@field lookup fun(id: string): PW.Streak? the streak definition; default the streaks registry (valid only)
 ---@field resolve fun(ply: any): PW.Loadout the player's loadout; default PW.Loadout.Resolve
 ---@field publish fun(ply: any, key: string, value: any) mirrors a value to the client (NW2)
@@ -164,7 +169,7 @@
 ---Server. Puts a streak into the inventory (tests, dev commands); false for an unknown streak.
 ---@field Give? fun(ply: Player, id: string): boolean
 ---Server. Runs fn(...) as streak damage: kills and points scored meanwhile are streak kills (no chaining).
----@field StreakDamage? fun(fn: (fun(...: any)), ...: any)
+---@field StreakDamage? PW.StreakDamageFn
 ---Server. Starts a Counter-UAV of `owner` for `duration` seconds and notifies the hostile players.
 ---@field Jam? fun(owner: Player, duration: number)
 ---@field RetireRevealSource? fun(sourceToken: table?) retire only this source's human and bot radar contribution
