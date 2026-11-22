@@ -114,6 +114,19 @@ The [mandatory inventory](../TASKS.md#t-1120-tactical-stims) lists each exact te
 Core grenade tests remain mandatory. `equipment.lua` now checks actual receiver registration, in addition to
 `stims_equipment.lua` invoking that receiver and asserting that a grenade cannot be spent through it.
 
+## Calling cards
+
+| Regression area | Suite | Required coverage |
+| --- | --- | --- |
+| Choice and server publication | `calling_cards.lua` | Dynamic enum and Recruit default, malformed and unavailable choices, spawn revalidation, NW2 updates, bot stability |
+| Kill ownership and wire | `calling_cards.lua` | Human enemy killer only in `LIVE`, 32-byte name and ID boundaries, explicit round trip, short and trailing payloads, choice rate and length |
+| HUD | `hud_kill_card.lua` | Timing, replacement, XP-strip clearance on Deck and desktop, missing material, centred icons, gradient and hide setting |
+| Picker and assets | `calling_cards_picker.lua` | Unlocked write, locked focus and requirement, preview without write, LOADOUT/Back routing and stock definition map |
+| Package | `scripts/package/selftest.sh` | Ten release PNGs copied unchanged, unrelated and nested material PNGs rejected |
+
+The change record owns the exact mandatory inventory and the separate human checkpoint. Keep the native
+kill/score and settings tests unchanged when extending either card selection or the HUD.
+
 ## Weapon adapters
 
 | Task | Mandatory clause | Suite | Exact existing case name |
