@@ -4,6 +4,8 @@ local labelBytes, maxActive, keyBytes = 8, 12, 64
 local itemBits = (lib._MaxInstanceId + 1) * 8 + 3 + lib._MaxObjectives * 20 + 1
 local weekBits = (labelBytes + 1) * 8 + 32 + 5 + lib._MaxItems * itemBits
 lib.UploadMaxBytes = math.ceil((3 + lib._MaxWeeks * weekBits) / 8)
+lib._MaxStateBits = 2048 * 8
+lib._MaxWireFields = 7 -- UInt(3) for both state parameters and reward items.
 
 ---@alias PW.ChallengeWireMessage "upload"|"state"|"progress"|"delta"
 ---@alias PW.ChallengeWirePayload PW.ChallengeFileWeeks|PW.ChallengeWireState|PW.ChallengeFileItems|PW.ChallengeDelta
@@ -11,6 +13,34 @@ lib.UploadMaxBytes = math.ceil((3 + lib._MaxWeeks * weekBits) / 8)
 ---@type PW.ChallengeTier[]
 local tiers = { "easy", "medium", "hard" }
 local tierIds = { easy = 0, medium = 1, hard = 2 }
+
+function lib._ValidWireUInt(value, width)
+    return type(value) == "number" and value >= 0 and value < 2 ^ width and value % 1 == 0
+end
+
+function lib._ValidWireKey(value)
+    return type(value) == "string" and #value > 0 and #value <= keyBytes and not value:find("\0", 1, true)
+end
+
+function lib._ValidWireRewardItem(value)
+    if type(value) ~= "table" then return false end
+    ---@cast value table<string, any>
+    return lib._ValidWireKey(value.kind) and lib._ValidWireKey(value.id)
+        and (value.weapon == nil or lib._ValidWireKey(value.weapon))
+end
+
+function lib._ValidWireReward(reward)
+    if reward.xp ~= nil and not lib._ValidWireUInt(reward.xp, 24) then return false end
+    if reward.currency ~= nil and not lib._ValidWireUInt(reward.currency, 20) then return false end
+    local items = reward.items
+    if items == nil then return true end
+    local count = lib._ArrayLength(items)
+    if count == nil or count > lib._MaxWireFields then return false end
+    for _, item in ipairs(items) do
+        if not lib._ValidWireRewardItem(item) then return false end
+    end
+    return true
+end
 
 ---@param value number
 ---@param width integer
@@ -147,19 +177,22 @@ local function readUpload(read)
 end
 
 ---@param write PW.ChallengeWireWriter
+---@param item PW.ChallengeRewardItem
+local function writeRewardItem(write, item)
+    writeString(write, item.kind, keyBytes)
+    writeString(write, item.id, keyBytes)
+    writeString(write, item.weapon or "", keyBytes)
+end
+
+---@param write PW.ChallengeWireWriter
 ---@param reward PW.ChallengeReward
 local function writeReward(write, reward)
     write(clamp(reward.xp or 0, 24), 24)
     write(clamp(reward.currency or 0, 20), 20)
     local items = reward.items or {}
-    local count = math.min(7, #items)
-    write(count, 3)
-    for i = 1, count do
-        local item = items[i]
-        writeString(write, item.kind, keyBytes)
-        writeString(write, item.id, keyBytes)
-        writeString(write, item.weapon or "", keyBytes)
-    end
+    assert(#items <= lib._MaxWireFields, "Too many challenge reward items")
+    write(#items, 3)
+    for _, item in ipairs(items) do writeRewardItem(write, item) end
 end
 
 ---@param read PW.ChallengeWireReader
@@ -183,14 +216,14 @@ local function writeInstance(write, instance, item)
     writeString(write, instance.template, lib._MaxInstanceId)
     write(tierIds[instance.tier], 2)
     local params = sortedKeys(instance.params)
-    local count = math.min(#params, 7)
-    write(count, 3)
-    for i = 1, count do
-        local key = params[i]
+    assert(#params <= lib._MaxWireFields, "Too many challenge parameters")
+    write(#params, 3)
+    for _, key in ipairs(params) do
         writeString(write, key, keyBytes)
         writeString(write, instance.params[key], lib._MaxInstanceId)
     end
-    local n = math.min(#instance.targets, lib._MaxObjectives)
+    local n = #instance.targets
+    assert(n <= lib._MaxObjectives, "Too many challenge objectives")
     write(n, 3)
     for slot = 1, n do
         write(clamp(instance.targets[slot], 20), 20)
@@ -237,12 +270,46 @@ local function writeState(write, state)
     write(clamp(week.index, 32), 32)
     write(clamp(week.startsAt, 32), 32)
     write(clamp(week.endsAt, 32), 32)
-    write(math.min(week.bonus.needed, maxActive), 4)
+    write(week.bonus.needed, 4)
     write(state.bonus and 1 or 0, 1)
     writeReward(write, week.bonus.reward)
-    local count = math.min(#week.items, maxActive)
+    local count = #week.items
+    assert(count <= maxActive, "Too many active challenges")
     write(count, 4)
     for i = 1, count do writeInstance(write, week.items[i], state.items[week.items[i].id]) end
+end
+
+---@return PW.ChallengeWireWriter, fun(): integer
+local function countingWriter()
+    local bits = 0
+    return function(_, width) bits = bits + width end, function() return bits end
+end
+
+function lib._StateBits(state)
+    local write, size = countingWriter()
+    writeState(write, state)
+    return size()
+end
+
+function lib._InstanceBits(instance)
+    local write, size = countingWriter()
+    writeInstance(write, instance)
+    return size()
+end
+
+---An empty state still encodes the bonus reward headers and the fixed-width week fields.
+local fixedStateBits = lib._StateBits({ week = { index = 0, label = "1970-W02", startsAt = 0, endsAt = 0, seed = 0,
+    items = {}, bonus = { needed = 0, reward = {} } }, items = {}, bonus = false })
+
+function lib._StateShareBits(count, bonusPool)
+    if count <= 0 then return 0 end
+    local largest = 0
+    for _, item in ipairs(bonusPool) do
+        local write, size = countingWriter()
+        writeRewardItem(write, item)
+        largest = math.max(largest, size())
+    end
+    return math.floor((lib._MaxStateBits - fixedStateBits - largest) / count)
 end
 
 ---@param read PW.ChallengeWireReader
@@ -309,6 +376,7 @@ end
 ---@return PW.ChallengeWirePayload?
 local function readBounded(message, bits, read)
     if bits < 0 or (message == "upload" and bits > lib.UploadMaxBytes * 8) then return nil end
+    if message == "state" and bits > lib._MaxStateBits then return nil end
     ---@param width integer
     ---@return integer
     local function take(width)

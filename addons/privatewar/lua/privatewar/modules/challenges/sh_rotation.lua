@@ -153,19 +153,6 @@ local function prepare(candidate)
     return { template = template, domains = domains }
 end
 
----@param pool PW.ChallengeCandidate[]
----@return PW.ChallengeReadyCandidate[]
-local function preparePool(pool)
-    ---@type PW.ChallengeReadyCandidate[]
-    local available = {}
-    for _, candidate in ipairs(pool) do
-        local ready = prepare(candidate)
-        if ready ~= nil then available[#available + 1] = ready end
-    end
-    table.sort(available, function(a, b) return a.template.id < b.template.id end)
-    return available
-end
-
 ---@param choices PW.ChallengeReadyCandidate[]
 ---@param draw PW.ChallengeDraw
 ---@return PW.ChallengeReadyCandidate?
@@ -264,12 +251,17 @@ end
 ---@param tier PW.ChallengeTier
 ---@param defaults? table<PW.ChallengeTier, PW.ChallengeReward>
 ---@return PW.ChallengeReward
-local function rewardFor(template, tier, defaults)
+local function resolveReward(template, tier, defaults)
     local reward = template.definition.Rewards
     if reward ~= nil and (rawget(reward, "easy") or rawget(reward, "medium") or rawget(reward, "hard")) then
         reward = rawget(reward, tier)
     end
-    local resolved = (reward or (defaults and defaults[tier]) or defaultRewards[tier]) --[[@as PW.ChallengeReward]]
+    return (reward or (defaults and defaults[tier]) or defaultRewards[tier]) --[[@as PW.ChallengeReward]]
+end
+
+---@param resolved PW.ChallengeReward
+---@return PW.ChallengeReward
+local function copyReward(resolved)
     ---@type PW.ChallengeReward
     local result = {
         xp = resolved.xp, currency = resolved.currency, duplicateCurrency = resolved.duplicateCurrency or 250
@@ -281,6 +273,16 @@ local function rewardFor(template, tier, defaults)
     return result
 end
 
+---@param template PW.ChallengeTemplate
+---@param tier PW.ChallengeTier
+---@return integer[]
+local function targetsFor(template, tier)
+    ---@type integer[]
+    local targets = {}
+    for index, objective in ipairs(template.objectives) do targets[index] = objective.targets[tier] end
+    return targets
+end
+
 ---@param candidate PW.ChallengeReadyCandidate
 ---@param tier PW.ChallengeTier
 ---@param opts PW.ChallengeSelectOptions
@@ -289,13 +291,71 @@ end
 local function instance(candidate, tier, opts, draw)
     local template = candidate.template
     local id, params = bind(candidate, draw)
-    ---@type integer[]
-    local targets = {}
-    for index, objective in ipairs(template.objectives) do targets[index] = objective.targets[tier] end
     return {
-        id = id, template = template.id, tier = tier, params = params, targets = targets,
-        reward = rewardFor(template, tier, opts.tierDefaults)
+        id = id, template = template.id, tier = tier, params = params, targets = targetsFor(template, tier),
+        reward = copyReward(resolveReward(template, tier, opts.tierDefaults))
     }
+end
+
+---Both wire copies of bound values share the assembled ID's total byte budget.
+---Synthetic strings let the real codec count that upper bound without spending a random draw.
+---@param ready PW.ChallengeReadyCandidate
+---@return string, PW.ChallengeParams
+local function largestBinding(ready)
+    local id = ready.template.id
+    ---@type PW.ChallengeParams
+    local params = {}
+    for _, domain in ipairs(ready.domains) do
+        local limit = lib._MaxInstanceId - #id - 1 - domain.reserve
+        local longest = 0
+        for _, value in ipairs(domain.values) do longest = math.max(longest, #value) end
+        local value = string.rep("x", math.min(limit, longest))
+        params[domain.key], id = value, id .. "." .. value
+    end
+    return id, params
+end
+
+---@param ready PW.ChallengeReadyCandidate
+---@param opts PW.ChallengeSelectOptions
+---@param share integer
+---@return boolean
+local function fitsShare(ready, opts, share)
+    local template = ready.template
+    local id, params = largestBinding(ready)
+    for _, tier in ipairs(template.tiers) do
+        local reward = resolveReward(template, tier, opts.tierDefaults)
+        if not lib._ValidWireReward(reward) then return false end
+        local bits = lib._InstanceBits({ id = id, template = template.id, tier = tier, params = params,
+            targets = targetsFor(template, tier), reward = reward })
+        if bits > share then return false end
+    end
+    return true
+end
+
+---@param pool PW.ChallengeCandidate[]
+---@param opts PW.ChallengeSelectOptions
+---@param share integer
+---@return PW.ChallengeReadyCandidate[]
+local function preparePool(pool, opts, share)
+    ---@type PW.ChallengeReadyCandidate[]
+    local available = {}
+    for _, candidate in ipairs(pool) do
+        local ready = prepare(candidate)
+        if ready ~= nil and fitsShare(ready, opts, share) then available[#available + 1] = ready end
+    end
+    table.sort(available, function(a, b) return a.template.id < b.template.id end)
+    return available
+end
+
+---@param pool? PW.ChallengeRewardItem[]
+---@return PW.ChallengeRewardItem[]
+local function admitBonus(pool)
+    ---@type PW.ChallengeRewardItem[]
+    local admitted = {}
+    for _, item in ipairs(pool or {}) do
+        if lib._ValidWireRewardItem(item) then admitted[#admitted + 1] = item end
+    end
+    return admitted
 end
 
 ---@param item PW.ChallengeRewardItem
@@ -333,7 +393,8 @@ function lib._Select(index, pool, opts)
     local hard = count >= 3 and math.max(1, math.floor(count / 4)) or 0
     local rest = count - hard
     local slots = { math.ceil(rest / 2), math.floor(rest / 2), hard }
-    local available = preparePool(pool)
+    local bonusPool = admitBonus(opts.bonusPool)
+    local available = preparePool(pool, opts, lib._StateShareBits(count, bonusPool))
     ---@type table<string, boolean>
     local chosen = {}
     ---@type table<string, boolean>
@@ -357,6 +418,6 @@ function lib._Select(index, pool, opts)
     local needed = math.min(#items, math.max(0, opts.bonusNeeded or 4))
     return {
         index = index, label = lib.WeekLabel(index), startsAt = startsAt, endsAt = endsAt, seed = seed, items = items,
-        bonus = { needed = needed, reward = bonusReward(opts.bonusPool, draw) }
+        bonus = { needed = needed, reward = bonusReward(bonusPool, draw) }
     }
 end

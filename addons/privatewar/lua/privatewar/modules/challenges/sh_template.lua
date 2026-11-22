@@ -68,8 +68,10 @@ local function validParams(raw)
     if raw == nil then return true end
     if type(raw) ~= "table" then return false end
     ---@cast raw table<any, any>
+    local count = 0
     for key, rule in pairs(raw) do
-        if type(key) ~= "string" or key == "" or type(rule) ~= "table" then return false end
+        count = count + 1
+        if count > lib._MaxWireFields or not lib._ValidWireKey(key) or type(rule) ~= "table" then return false end
         ---@cast rule table<string, any>
         if rule.source ~= nil and not sources[rule.source] then return false end
         local values = rule.values
@@ -106,35 +108,15 @@ local function validRequirements(raw)
     return true
 end
 
----@param value any
----@return boolean
-local function validItems(value)
-    local size = lib._ArrayLength(value)
-    if size == nil then return false end
-    ---@cast value table<integer, any>
-    for index = 1, size do
-        local item = value[index]
-        if type(item) ~= "table" then return false end
-        ---@cast item table<string, any>
-        if type(item.kind) ~= "string" or type(item.id) ~= "string"
-            or (item.weapon ~= nil and type(item.weapon) ~= "string") then return false end
-    end
-    return true
-end
-
 ---@param raw any
 ---@return boolean
 local function validReward(raw)
     if type(raw) ~= "table" then return false end
     ---@cast raw table<any, any>
     for key, value in pairs(raw) do
-        if key == "items" then
-            if not validItems(value) then return false end
-        elseif not rewardAmounts[key] or not integerAtLeast(value, 0) then
-            return false
-        end
+        if key ~= "items" and (not rewardAmounts[key] or not integerAtLeast(value, 0)) then return false end
     end
-    return true
+    return lib._ValidWireReward(raw --[[@as PW.ChallengeReward]])
 end
 
 ---@param raw any
@@ -181,7 +163,7 @@ local function targetsOf(raw, tiers)
             ---@cast raw table<PW.ChallengeTier, any>
             value = raw[tier]
         end
-        if not integerAtLeast(value, 1) then return nil end
+        if not integerAtLeast(value, 1) or not lib._ValidWireUInt(value, 20) then return nil end
         targets[tier] = value
     end
     return targets
@@ -223,7 +205,7 @@ local function compileObjective(raw, tiers, params, custom)
     local events = eventsOf(raw.Event, custom)
     if events == nil then return nil, "expected one or more known Event types" end
     local targets = targetsOf(raw.Target, tiers)
-    if targets == nil then return nil, "Target must be a positive integer for every allowed tier" end
+    if targets == nil then return nil, "Target must fit a positive 20-bit integer for every allowed tier" end
     local scope, count = raw.Scope, raw.Count
     if scope ~= nil and not scopes[scope] then return nil, "unknown Scope" end
     if count ~= nil and count ~= 1 and count ~= "value" then return nil, "Count must be 1 or value" end

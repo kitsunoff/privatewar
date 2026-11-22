@@ -70,6 +70,29 @@ local function itemSignature(week)
     return table.concat(ids, ",")
 end
 
+---@param week PW.ChallengeWeek
+---@return integer
+local function stateBits(week)
+    local lib = PW.Challenges
+    assert(lib ~= nil)
+    local bits = 0
+    lib._WriteWire("state", { week = week, items = {}, bonus = false }, function(_, width)
+        bits = bits + width
+    end)
+    return bits
+end
+
+---For an 11-byte id and one objective, the two reward rows yield 161 or 162 bytes.
+---@param id string
+---@param rewardLength integer
+---@return PW.ChallengeCandidate
+local function edgeCandidate(id, rewardLength)
+    return candidate(id, { Weight = 1000000000, Rewards = { items = {
+        { kind = "cards", id = string.rep("a", rewardLength) },
+        { kind = "cards", id = string.rep("b", 55) }
+    } } })
+end
+
 local consecutiveWeeks = {
     name = "Rotation: a different week gives a different set (over 20 consecutive weeks at least 15 distinct sets)",
     func = function()
@@ -318,6 +341,94 @@ return {
                 expect(itemSignature(a) == itemSignature(b)).to.beFalse()
                 local zero = selectWeek(2967, candidates, { count = 5, seed = 768633910 })
                 expect(zero and zero.seed).to.equal(1)
+            end
+        },
+        {
+            name = "Rotation: fitting twelve candidates preserve the legacy picks and bonus draw",
+            func = function()
+                local candidates = pool()
+                ---@type PW.ChallengeSelectOptions
+                local opts = { count = 12, seed = 47, bonusPool = {
+                    { kind = "cards", id = "omega" }, { kind = "cards", id = "alpha" }
+                } }
+                local week = selectWeek(2967, candidates, opts)
+                expect(week and #week.items).to.equal(12)
+                assert(week ~= nil)
+                expect(week.seed).to.equal(1378849784)
+                expect(signature(week)).to.equal("easy:test_1,easy:test_11,easy:test_20,easy:test_4,easy:test_9,"
+                    .. "medium:test_10,medium:test_13,medium:test_18,medium:test_7,"
+                    .. "hard:test_21,hard:test_5,hard:test_8")
+                local reward = week.bonus.reward.items
+                expect(reward and reward[1].id).to.equal("omega")
+                expect(stateBits(week) <= 2048 * 8).to.beTrue()
+                local reversed = selectWeek(2967, table.Reverse(candidates), opts)
+                expect(signature(reversed)).to.equal(signature(week))
+            end
+        },
+        {
+            name = "Rotation: twelve slots reserve the largest bonus before rejecting over-share candidates",
+            func = function()
+                local admitted = pool()
+                admitted[#admitted + 1] = edgeCandidate("budget_fits", 54)
+                local mixed = pool()
+                mixed[#mixed + 1] = edgeCandidate("budget_fits", 54)
+                mixed[#mixed + 1] = edgeCandidate("budget_edge", 55)
+                ---@type PW.ChallengeRewardItem
+                local small = { kind = "cards", id = "x" }
+                ---@type PW.ChallengeRewardItem
+                local large = { kind = "camos", id = string.rep("g", 40), weapon = string.rep("w", 40) }
+                ---@type PW.ChallengeSelectOptions
+                local opts = { count = 12, seed = 47, bonusPool = { small } }
+                expect(signature(selectWeek(2967, mixed, opts)):find(":budget_edge", 1, true) ~= nil).to.beTrue()
+                opts.bonusPool = { small, large }
+                local smallDraws = 0
+                for index = 2967, 2971 do
+                    local week = selectWeek(index, mixed, opts)
+                    local baseline = selectWeek(index, admitted, opts)
+                    expect(week and #week.items).to.equal(12)
+                    assert(week ~= nil and baseline ~= nil)
+                    expect(signature(week)).to.equal(signature(baseline))
+                    expect(signature(week):find(":budget_fits", 1, true) ~= nil).to.beTrue()
+                    expect(week.bonus.reward.items).to.deepEqual(baseline.bonus.reward.items)
+                    expect(stateBits(week) <= 2048 * 8).to.beTrue()
+                    local reward = week.bonus.reward.items
+                    if reward ~= nil and reward[1].id == small.id then smallDraws = smallDraws + 1 end
+                end
+                expect(smallDraws > 0).to.beTrue()
+            end
+        },
+        {
+            name = "Rotation: candidate admission budgets the longest available parameter binding",
+            func = function()
+                local fields = { Weight = 1000000000, Params = { category = { source = "categories" } },
+                    Rewards = { items = { { kind = "cards", id = string.rep("a", 44) },
+                        { kind = "cards", id = string.rep("b", 44) } } } }
+                local short = pool()
+                short[#short + 1] = candidate("budget_opts", fields, { category = { "a" } })
+                local mixed = pool()
+                mixed[#mixed + 1] = candidate("budget_opts", fields, { category = { "a", "long_value" } })
+                ---@type PW.ChallengeSelectOptions
+                local opts = { count = 12, seed = 47, bonusPool = {
+                    { kind = "camos", id = string.rep("g", 40), weapon = string.rep("w", 40) }
+                } }
+                expect(signature(selectWeek(2967, short, opts)):find(":budget_opts.a", 1, true) ~= nil).to.beTrue()
+                expect(signature(selectWeek(2967, mixed, opts))).to.equal(signature(selectWeek(2967, pool(), opts)))
+            end
+        },
+        {
+            name = "Rotation: invalid bonus strings do not reserve space or consume a bonus draw",
+            func = function()
+                local candidates = pool()
+                candidates[#candidates + 1] = edgeCandidate("budget_edge", 55)
+                local baseline = selectWeek(2967, candidates, { count = 12, seed = 47 })
+                local week = selectWeek(2967, candidates, { count = 12, seed = 47, bonusPool = {
+                    { kind = "cards", id = string.rep("z", 65) }, { kind = "cards", id = "bad\0id" }
+                } })
+                expect(week and #week.items).to.equal(12)
+                assert(week ~= nil and baseline ~= nil)
+                expect(signature(week)).to.equal(signature(baseline))
+                expect(week.bonus.reward.items).to.beNil()
+                expect(stateBits(week)).to.equal(stateBits(baseline))
             end
         },
         {

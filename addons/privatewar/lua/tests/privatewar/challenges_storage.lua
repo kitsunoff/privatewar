@@ -58,6 +58,22 @@ local function buffer(bitLimit)
     }
 end
 
+---Twelve instances with all four objective pairs, plus an actual bonus item.
+---@param finalRewardLength integer
+---@return PW.ChallengeWireState
+local function budgetState(finalRewardLength)
+    local week = sampleWeek()
+    week.items = {}
+    week.bonus.reward.items = { { kind = "cards", id = "weekly_bonus" } }
+    for slot = 1, 12 do
+        local id = string.format("size_%02d", slot) .. string.rep("x", 33)
+        local length = slot == 12 and finalRewardLength or 50
+        week.items[slot] = { id = id, template = id, tier = "easy", params = {}, targets = { 1, 2, 3, 4 },
+            reward = { items = { { kind = "cards", id = string.rep("g", length) } } } }
+    end
+    return { week = week, items = {}, bonus = false }
+end
+
 return {
     groupName = "PW challenges storage and wire",
     cases = {
@@ -260,6 +276,52 @@ return {
                 expect(decodedDelta.seq).to.equal(3)
                 expect(decodedDelta.label).to.equal(label)
                 expect(decodedDelta.bonus).to.beTrue()
+            end
+        },
+        {
+            name = "Wire: all seven accepted parameters and reward items survive the state round trip",
+            func = function()
+                local lib = challenges()
+                local week = sampleWeek()
+                local instance = week.items[1]
+                instance.id, instance.template = "limits" .. string.rep(".v", 7), "limits"
+                instance.params = {}
+                ---@type PW.ChallengeRewardItem[]
+                local rewards = {}
+                for i = 1, 7 do
+                    instance.params["p" .. i] = "v"
+                    rewards[i] = { kind = "cards", id = "g" .. i }
+                end
+                instance.reward.items = rewards
+                local packet = buffer()
+                lib._WriteWire("state", { week = week, items = {}, bonus = false }, packet.write)
+                local decoded = lib._ReadWire("state", packet.size(), packet.read)
+                expect(decoded ~= nil).to.beTrue()
+                assert(decoded ~= nil)
+                expect(decoded.week.items[1].id).to.equal(instance.id)
+                expect(decoded.week.items[1].params).to.deepEqual(instance.params)
+                expect(decoded.week.items[1].reward.items).to.deepEqual(rewards)
+                expect(packet.size() < 2048 * 8).to.beTrue()
+            end
+        },
+        {
+            name = "Wire: complete state size includes the bonus at the 2048 and 2049 byte boundary",
+            func = function()
+                local lib = challenges()
+                local exact, packet = budgetState(46), buffer()
+                lib._WriteWire("state", exact, packet.write)
+                expect(packet.size()).to.equal(2048 * 8)
+                local bits = rawget(lib, "_StateBits") --[[@as (fun(state: PW.ChallengeWireState): integer)?]]
+                expect(type(bits)).to.equal("function")
+                assert(bits ~= nil)
+                expect(bits(exact)).to.equal(packet.size())
+                expect(bits(budgetState(47))).to.equal(2049 * 8)
+
+                exact.week.bonus.reward.items = {}
+                local noBonus = buffer()
+                lib._WriteWire("state", exact, noBonus.write)
+                expect(noBonus.size()).to.equal(2028 * 8)
+                expect(bits(exact)).to.equal(noBonus.size())
             end
         },
         {

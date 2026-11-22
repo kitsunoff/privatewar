@@ -227,6 +227,43 @@ return {
         },
         invalidTemplates,
         {
+            name = "Templates: reward arrays and strings must fit the wire without truncation",
+            func = function()
+                ---@type PW.ChallengeRewardItem[]
+                local items = {}
+                for i = 1, 7 do items[i] = { kind = "cards", id = "g" .. i } end
+                local definition = { Event = "kill", Target = 1, Rewards = { items = items } }
+                expect(compile(definition) ~= nil).to.beTrue()
+                items[8] = { kind = "cards", id = "extra" }
+                expect(compile(definition)).to.beNil()
+                items[8] = nil
+                items[7] = { kind = "cards", id = string.rep("x", 65) }
+                expect(compile(definition)).to.beNil()
+                items[7] = { kind = string.rep("x", 65), id = "card" }
+                expect(compile(definition)).to.beNil()
+                items[7] = { kind = "camos", id = "gold", weapon = string.rep("x", 65) }
+                expect(compile(definition)).to.beNil()
+                items[7] = { kind = "cards", id = "bad\0id" }
+                expect(compile(definition)).to.beNil()
+            end
+        },
+        {
+            name = "Templates: parameter key counts and strings must fit the wire without truncation",
+            func = function()
+                ---@type table<string, PW.ChallengeParam>
+                local params = {}
+                for i = 1, 7 do params["p" .. i] = { values = { "v" } } end
+                local definition = { Event = "kill", Target = 1, Params = params }
+                expect(compile(definition) ~= nil).to.beTrue()
+                params.extra = { values = { "v" } }
+                expect(compile(definition)).to.beNil()
+                definition.Params = { [string.rep("k", 65)] = { values = { "v" } } }
+                expect(compile(definition)).to.beNil()
+                definition.Params = { ["bad\0key"] = { values = { "v" } } }
+                expect(compile(definition)).to.beNil()
+            end
+        },
+        {
             name = "Templates: param placeholders are substituted in filters and text",
             func = function()
                 local filters = { category = "{param.category}", weapon = { "{param.weapon}", "training" } }

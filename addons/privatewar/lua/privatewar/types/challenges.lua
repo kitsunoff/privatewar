@@ -318,6 +318,16 @@
 ---@field _UploadWeek PW.ChallengeUploadFn
 ---@field _ReadWire PW.ChallengeReadWire
 ---@field _WriteWire PW.ChallengeWriteWire
+---@field _MaxStateBits integer
+---@field _MaxWireFields integer
+---@field _ValidWireUInt fun(value: any, width: integer): boolean
+---@field _ValidWireKey fun(value: any): boolean
+---@field _ValidWireRewardItem fun(value: any): boolean
+---@field _ValidWireReward fun(reward: PW.ChallengeReward): boolean
+---Exact payload length, including any bonus item, for admission before starting a state message.
+---@field _StateBits fun(state: PW.ChallengeWireState): integer
+---@field _InstanceBits fun(instance: PW.ChallengeInstance): integer
+---@field _StateShareBits fun(count: integer, bonusPool: PW.ChallengeRewardItem[]): integer
 ---@field FileVersion integer
 ---@field FilePath string
 ---@field UploadMaxBytes integer
