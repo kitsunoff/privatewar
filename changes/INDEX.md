@@ -30,7 +30,6 @@ human-acceptance evidence; planned status is retained.
 
 ## In progress
 
-- [Stim equipment: heal, speed and armor stims](in-progress/stim-equipment.md)
 - [Weekly challenges](in-progress/weekly-challenges.md): pure rotation and filters only; remaining work depends on
   programmatic unlocks.
 - [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
@@ -45,6 +44,8 @@ human-acceptance evidence; planned status is retained.
   human checkpoint pending.
 - [Programmatic unlocks and entitlements](done/unlock-entitlements.md): local overnight integration;
   human checkpoint pending.
+- [Stim equipment: heal, speed and armor stims](done/stim-equipment.md): local overnight integration;
+  optional installed-Arctic case skipped, human checkpoint pending.
 
 Historical completion evidence for unmigrated work remains in TASKS.md.
 
