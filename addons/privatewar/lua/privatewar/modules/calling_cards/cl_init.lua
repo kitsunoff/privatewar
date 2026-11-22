@@ -16,7 +16,7 @@ local bannerVar = nil --[[@as ConVar?]]
 ---@type table<string, { definition: PW.CallingCard, plate: PW.CardPlate }>
 local materials = {}
 
-local gradient = Material("vgui/gradient-r") -- opaque on the left, transparent on the right
+local gradient = Material("vgui/gradient-l") -- opaque on the left, transparent on the right
 local text, muted, shade, shadow = Color(232, 237, 233), Color(138, 149, 141), Color(11, 15, 12), Color(0, 0, 0)
 ---@type table<string, Color>
 local rarities = {
