@@ -20,7 +20,7 @@ Menus: main menu, lobby screen, loadout, gunsmith, end of match; screen router a
    ├── CLASSES         class list → class editor (slots, Pick X budget)
    │                   └── GUNSMITH  weapon + attachment slots + stats + camo
    ├── STORE           Featured | Weekly | Catalogue → bundle details
-   ├── PROGRESS        player level, weapon levels, unlocks
+   ├── PROGRESS        player level, weapon levels, unlocks → WEEKLY CHALLENGES
    └── SETTINGS        client settings (HUD scale, keys, audio) | host settings [host]
 
    IN MATCH

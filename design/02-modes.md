@@ -119,10 +119,13 @@ Inherited from `01-extensibility.md`:
       to both teams. Defenders can see the dropped physical bomb by ordinary sight, never hidden bot coordinates.
       Actor death cancels an unfinished interaction; a completed plant survives carrier death. Exact deadline
       equality loses to the deadline.
+      A completed plant or defuse awards the actor `snd_plant` or `snd_defuse` respectively (100 match
+      score and XP by default); S&D still decides the outcome by rounds.
    - **Hardpoint:** two teams, one rotating authored zone, first authored map `gm_construct`; 60 s per zone,
      1 point per second, score limit 250, match limit 10 minutes, tied scores draw. Only exclusive living
      occupancy scores; empty and contested zones score zero regardless of unequal counts. No additional
-     personal rewards. Bots pursue the active zone, without pre-rotation.
+     personal score or XP for occupancy. Eligible occupants of the scoring, uncontested zone receive
+     challenge-only `objective_time` for the seconds sampled. Bots pursue the active zone, without pre-rotation.
    - **Infection:** a separate optional addon, not mandatory built-in content; default 3 rounds, configurable
       including 1. Reseed initial infected each round, preferring no repeat where possible. User-approved
       playtest revision (2026-11-08): the first valid native-fist hit by a living infected immediately converts
@@ -150,7 +153,7 @@ Inherited from `01-extensibility.md`:
 
    Shared lifecycle/role APIs remain generic: two-phase round preparation, synchronous team transition,
    post-base spawn notification and optional terminal result transform. These interface approvals do not
-   change existing ordinary modes or grant new XP/money events.
+   change existing ordinary modes or grant new XP/money events beyond the S&D awards above.
 
 9. **Playlist-local availability (user-approved, 2026-11-11; not yet implemented).**
    - Optional `PLAYLIST:IsActive(nowUTC)` returns a boolean and optionally the next UTC Unix timestamp of change.

@@ -29,6 +29,7 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
      - user-approved 2026-11-22: during `LIVE`, show the local player's active stim effects above the bottom-right equipment lines.
        Show speed time remaining to one decimal and active `HEALING` / `ARMOR` labels. Pending injections are not active
        effects; the equipment line continues to show the slot hint and remaining charges.
+     - weekly challenge toasts: top-right progress milestones and completions during `LIVE` and `POSTMATCH`.
 
 - **Revision 2026-11-07 (user decisions after the first playtest; decision 2 stays valid for everything not mentioned here):**
 
