@@ -104,3 +104,50 @@ function lib._Decode(reader, bits)
     if tail ~= 0 or id == nil or not lib._ValidChoice(id) then return nil end
     return { name = name, card = id, bot = reader.ReadBool() }
 end
+
+function lib._BannerAlpha(startedAt, now, fadeIn, hold, fadeOut)
+    local elapsed = now - startedAt
+    if elapsed < 0 then return 0 end
+    if elapsed < fadeIn then return elapsed / fadeIn end
+    elapsed = elapsed - fadeIn
+    if elapsed <= hold then return 1 end
+    if fadeOut <= 0 then return 0 end
+    return math.Clamp(1 - (elapsed - hold) / fadeOut, 0, 1)
+end
+
+function lib._BannerRect(scrW, scrH, scale)
+    local w, h = 400 * scale, 100 * scale
+    -- Match the XP strip's vertical scaling and minimum thickness (hud/progression.lua).
+    local sy = scrH / 1080
+    local xpTop = scrH - math.floor(10 * sy) - math.max(2, math.floor(6 * sy))
+    return (scrW - w) / 2, xpTop - 24 * scale - h, w, h
+end
+
+function lib._PushBanner(banner, packet, now)
+    banner.packet, banner.startedAt = packet, now
+end
+
+function lib._VisibleAlpha(banner, enabled, now)
+    if not enabled or banner.packet == nil or banner.startedAt == nil then return 0 end
+    return assert(lib._BannerAlpha)(banner.startedAt, now, 0.15, 2.5, 0.3)
+end
+
+function lib._PlateStyle(hasMaterial, width, height)
+    if not hasMaterial or width <= 0 or height <= 0 then return "missing" end
+    return width <= 32 and height <= 32 and "icon" or "art"
+end
+
+function lib._PaintPlate(card, draw, name, label, rect)
+    local x, y, w, h = rect.x, rect.y, rect.w, rect.h
+    if card.style ~= "art" then draw.plate(card.rarity, x, y, w, h) end
+    if card.style == "art" then
+        draw.art(card, x, y, w, h)
+    elseif card.style == "icon" then
+        local sourceW, sourceH = card.width or 16, card.height or 16
+        local fit = math.min(1, w / sourceW, h / sourceH)
+        local iconW, iconH = sourceW * fit, sourceH * fit
+        draw.art(card, x + (w - iconW) / 2, y + (h - iconH) / 2, iconW, iconH)
+    end
+    draw.gradient(x, y, w * 0.55, h, 0.85)
+    draw.text(name, label, card.style == "missing" and card.title or "", x, y, w, h)
+end
