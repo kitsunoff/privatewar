@@ -13,6 +13,10 @@ and pre-commit passing. Full Deck RED was 2144 passed, 23 failed, 0 skipped. Aft
 cases passed and the 10 step-4 cases failed as expected, including the dot-separator regression. Full Deck GREEN
 at `19b1f71` was 2168 passed, 0 failed, 0 skipped. This does not cover the remaining steps or approve integration.
 
+Design verification (2026-11-22, `4acd7f6`, not integrated): `nix develop --command make check` and pre-commit
+passed. Twenty test cases for steps 5–6 were drafted but are not in the branch: LuaLS rejected the drafts with
+`no-unknown` on two attempts. No game RED/GREEN was observed for them; neither step is implemented.
+
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
@@ -27,7 +31,7 @@ This record is tracking, not authorization. It does not authorize implementation
 Deck access, pushes or publication. Every number marked "proposed default" is unapproved. Existing decisions in
 `design/` and frozen contracts in `docs/api/` stay in force until the user approves the changes listed in section 2.
 
-Depends on [unlock entitlements](../done/unlock-entitlements.md) (planned in parallel; see
+Uses the [unlock authority](../done/unlock-entitlements.md), already verified in the local integration (see
 [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md)). Item rewards and the
 reward idempotency ledger are delivered only through that system (`PW.Unlocks.Grant` with a claim id). XP and currency
 rewards go through the existing `PW.Progression.AddXP` and `PW.Progression.AddCurrency`. Implementation of this record
@@ -47,7 +51,7 @@ them before editing. Paths are relative to `addons/privatewar/` unless they star
 
 None of these is approved. Proposed wording is for the user to accept, change or reject.
 
-- [ ] **D-WC1, `design/06-progression.md` new decision 8 "Weekly challenges"** (replaces the "After MVP: challenges"
+- [ ] **D-WC1, `design/06-progression.md` decision 9 "Weekly challenges"** (replaces the "After MVP: challenges"
   bullet of d.1 for weekly challenges; prestige and per-weapon camo challenges stay future work). Proposed wording:
   "Weekly challenges: a kind `challenges/` holds challenge templates (data plus an optional predicate). Every week
   (Monday 00:00 UTC) each host deterministically selects N templates from the enabled pool by the week number and a
@@ -650,6 +654,11 @@ defaults of 3.5 unless stated. Every template uses only events that exist or tha
   /C22 `objective`; C14/C15 `streaks`; C17/C18/C23 `matches`.
 - [ ] Tier rewards per 3.5; hard C23 and C22 add `items` only after the bonus pool exists (left empty in the first
   version).
+- [ ] Existing tiers of C2, C8, C10, C15, C20 and C17 also grant `cards:challenge_headshots`,
+  `cards:challenge_longshots`, `cards:challenge_captures`, `cards:challenge_streak_kills`,
+  `cards:challenge_life_kills` and `cards:challenge_wins`, respectively. This adds no new tiers.
+  The [calling-card definitions](calling-card-kill-banner.md) are needed for integration of the rewards, not for
+  the earlier progress, storage or event steps.
 - [ ] Display names for params: categories from a fixed table in the module (`ar` → "assault rifle", `smg` → "SMG",
   `shotgun` → "shotgun", `pistol` → "pistol", `special` → "special"; unknown → the id); weapons and modes from their
   registry `Name`.
@@ -930,4 +939,5 @@ The automated cases never replace the human checkpoint (section 14).
   [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md).
 - Related: [scheduled events](../in-progress/scheduled-events.md) (UTC handling, playlist availability), store rotation
   `addons/privatewar/lua/privatewar/modules/economy/sh_rotation.lua`, `design/06-progression.md` d.0, d.1, d.3, d.5, d.6.
-- No implementation, test result or game result is claimed by this record.
+- Verification of the early scope and design commit is recorded above. The remaining implementation and full
+  feature gates are pending.
