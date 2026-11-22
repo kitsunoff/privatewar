@@ -30,7 +30,8 @@ Gamemode addon `dist/privatewar/`:
 | `data_static/privatewar/LICENSE.txt` | `LICENSE` (GPL-3.0) |
 | `data_static/privatewar/THIRD_PARTY_NOTICES.txt` | `THIRD_PARTY_NOTICES.md` |
 
-Only `.lua` files, the gamemode manifest `.txt`, the two gamemode menu PNGs and the two licence files are copied.
+Only `.lua` files, the gamemode manifest `.txt`, the two gamemode menu PNGs, the gamemode's final calling card
+PNGs directly under `materials/privatewar/cards/` and the two licence files are copied.
 
 Integration addons: one addon per weapon base from `addons/<name>/` (every addon folder except `addons/privatewar/` and the dev addon `addons/privatewar-dev/`; each with its own `addon.json`), staged as `dist/<name>/` under the same checks. Today that is `privatewar-arc9` (type `weapon`); the self-test asserts that each one is staged with its `addon.json`, Lua and licence files and without `lua/tests`. Each integration gets the same licence files under `data_static/<name>/`.
 

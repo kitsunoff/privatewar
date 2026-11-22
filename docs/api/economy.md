@@ -32,7 +32,8 @@ All three are data, never auto-subscribed, with the per-entity enable ConVar nam
   also reference content of other modules: `operator_pack` holds the perk `adrenaline`, `elite_force` the streak `uav` and
   the equipment `frag`, so they are offered only while those entities exist. Prices: models 600 to 2000, cards 150 to 450,
   bundles 700 to 2400.
-- [Operators](operators.md) validate models through `PW.Unlocks`; calling cards do not have an equip consumer yet.
+- [Operators](operators.md) and [calling cards](calling-cards.md) validate equipped models and cards through
+  `PW.Unlocks`.
 
 ## Earning
 

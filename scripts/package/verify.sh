@@ -51,7 +51,7 @@ while IFS= read -r found; do
     fail "dotfile or dot-directory present: ${found#"$root"/}"
 done < <(find "$root" -name '.*' -not -path "$root")
 
-# Only Lua sources, gamemode manifests and menu images, the addon manifest and licence texts ship.
+# Only Lua sources, gamemode manifests and images, the addon manifest and licence texts ship.
 while IFS= read -r found; do
     rel="${found#"$root"/}"
     case "$rel" in
@@ -60,6 +60,10 @@ while IFS= read -r found; do
         gamemodes/*/*.txt) ;;
         gamemodes/privatewar/logo.png | gamemodes/privatewar/icon24.png)
             if [[ "$kind" != gamemode ]]; then fail "gamemode menu image in integration: $rel"; fi ;;
+        materials/privatewar/cards/*.png)
+            if [[ "$kind" != gamemode || ! "$rel" =~ ^materials/privatewar/cards/[a-z0-9_]+\.png$ ]]; then
+                fail "calling card image not allowed: $rel"
+            fi ;;
         data_static/"$name"/LICENSE.txt | data_static/"$name"/THIRD_PARTY_NOTICES.txt) ;;
         *) fail "file type not allowed: $rel" ;;
     esac
