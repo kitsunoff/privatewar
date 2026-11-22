@@ -55,6 +55,8 @@
 ---@field gradient fun(x: number, y: number, w: number, h: number, alpha: number)
 ---@field text fun(name: string, label: string, fallback: string, x: number, y: number, w: number, h: number)
 
+---@alias PW.CardSettingWrite fun(key: string, value: string): boolean
+
 ---Calling cards (06-progression.md d.6, 09-hud.md d.2). Underscored fields are internal.
 ---@class PW.CallingCardsLib
 ---@field Default string default card id
@@ -86,6 +88,12 @@
 ---@field _FitName? fun(name: string, width: number): string client: fit a name into the plate's text area
 ---@field _DrawPlate? fun(card: PW.CardPlate, name: string, label: string, rect: PW.UIRect, alpha: number)
 ---@field _DrawBanner? fun() client: paint the current kill banner without rebuilding its display state
+---@field _PickerCard? fun(id: string, name: string, requirement: PW.UnlockRequirement): PW.UICard
+---@field _SelectPickerCard? fun(rows: PW.UICard[], id: string, write: PW.CardSettingWrite): boolean
+---@field _PushPicker? fun(model: PW.UIRouterModel): boolean
+---@field _PickerCards? fun(): PW.UICard[] client: enabled card rows with current unlock requirements
+---@field Choose? fun(id: string): boolean client: authorizes and writes a calling-card preference
+---@field OpenPicker? fun() client: pushes the calling-card picker on the LOADOUT tab
 
 ---@class PW
 ---@field CallingCards? PW.CallingCardsLib

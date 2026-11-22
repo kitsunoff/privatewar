@@ -151,3 +151,32 @@ function lib._PaintPlate(card, draw, name, label, rect)
     draw.gradient(x, y, w * 0.55, h, 0.85)
     draw.text(name, label, card.style == "missing" and card.title or "", x, y, w, h)
 end
+
+function lib._PickerCard(id, name, requirement)
+    return {
+        id = id, title = name, locked = not requirement.unlocked,
+        lockText = not requirement.unlocked and (requirement.lockText or "LOCKED") or nil,
+        reason = not requirement.unlocked and (requirement.text or "Not available") or nil
+    }
+end
+
+function lib._SelectPickerCard(rows, id, write)
+    if id == "" or not lib._ValidChoice(id) then return false end
+    for _, row in ipairs(rows) do
+        if row.id == id then
+            if row.locked or row.disabled then return false end
+            return write("calling_cards.selected", id)
+        end
+    end
+    return false
+end
+
+function lib._PushPicker(model)
+    local ui = rawget(PW, "UI") --[[@as PW.UILib?]]
+    local router = ui ~= nil and ui.Router or nil
+    local picker = model.screens.loadout_card
+    if router == nil or picker == nil then return false end
+    if model.active ~= "loadout" and not router.SwitchTab(model, "loadout") then return false end
+    if router.Top(model) == picker then return false end
+    return router.Push(model, picker)
+end

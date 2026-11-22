@@ -153,6 +153,59 @@ end
 
 lib.LocalChoice = localChoice
 
+---@param value? string
+---@return string?
+local function phrase(value)
+    if value ~= nil and value:sub(1, 1) == "#" then return language.GetPhrase(value:sub(2)) end
+    return value
+end
+
+---@param ply Player
+---@param id string
+---@return PW.UnlockRequirement
+local function requirement(ply, id)
+    local unlocks = PW.Unlocks
+    if unlocks ~= nil and IsValid(ply) then return unlocks.Requirement(ply, "cards", id) end
+    if id == lib.Default then return { unlocked = true, reason = "default" } end
+    return { unlocked = false, reason = "unknown", lockText = "LOCKED", text = "Not available" }
+end
+
+---@return PW.UICard[]
+local function pickerCards()
+    local registry = PW.Registries.cards
+    ---@type PW.UICard[]
+    local rows = {}
+    if registry == nil then return rows end
+    local ply, rowOf = LocalPlayer(), assert(lib._PickerCard)
+    for _, entity in ipairs(registry.GetEnabledList()) do
+        local definition = entity --[[@as PW.CallingCard]]
+        local id = definition.ClassName
+        if id ~= "" and lib._ValidChoice(id) then
+            local row = rowOf(id, language.GetPhrase(definition.Name), requirement(ply, id))
+            row.reason, row.lockText = phrase(row.reason), phrase(row.lockText)
+            if id == lib.Default then table.insert(rows, 1, row) else rows[#rows + 1] = row end
+        end
+    end
+    return rows
+end
+
+lib._PickerCards = pickerCards
+
+function lib.Choose(id)
+    if not lib._Active() then return false end
+    return assert(lib._SelectPickerCard)(pickerCards(), id, function(key, value)
+        local ok = PW.Settings.Set(key, value)
+        return ok
+    end)
+end
+
+function lib.OpenPicker()
+    if not lib._Active() then return end
+    local ui = rawget(PW, "UI") --[[@as PW.UILib?]]
+    local root = ui ~= nil and ui.CurrentRoot() --[[@as PWRoot?]] or nil
+    if root ~= nil and assert(lib._PushPicker)(root.model) then root:Rebuild() end
+end
+
 local function sendChoice()
     if not lib._Active() then return end
     local id = localChoice()
