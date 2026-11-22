@@ -32,6 +32,67 @@ local function reader(bytes, bot)
     }
 end
 
+---@class PW.CardTestActor
+---@field Nick fun(): string
+---@field IsBot fun(): boolean
+---@field GetNW2String fun(self: table, key: string): string
+---@field SetNW2String fun(self: table, key: string, value: string)
+
+---@param name string
+---@param bot boolean
+---@param initial? string
+---@return Player, { value: string, writes: integer }
+local function actor(name, bot, initial)
+    local nw = { value = initial or "", writes = 0 }
+    ---@type PW.CardTestActor
+    local entity = {
+        Nick = function() return name end,
+        IsBot = function() return bot end,
+        GetNW2String = function(_, key)
+            assert(key == "pw_card", "unexpected card key")
+            return nw.value
+        end,
+        SetNW2String = function(_, key, value)
+            assert(key == "pw_card", "unexpected card key")
+            nw.value, nw.writes = value, nw.writes + 1
+        end
+    }
+    return entity --[[@as Player]], nw
+end
+
+---@class PW.CardServerFixture
+---@field locked boolean
+---@field enemy boolean
+---@field phase string
+---@field sends { channel: string, to: Player, state: PW.KillCardState }[]
+---@field rolls integer
+
+---@return PW.CallingCardsStore, PW.CardServerFixture
+local function serverFixture()
+    ---@type PW.CardServerFixture
+    local facts = { locked = false, enemy = true, phase = "LIVE", sends = {}, rolls = 0 }
+    local lib = cards()
+    local known = { IsValid = function() return true end }
+    local store = assert(lib._NewStore, "calling card server store not loaded")({
+        find = function(id) return (id == "level_20" or id == "bomb") and known --[[@as PW.CallingCard]] or nil end,
+        enabledIds = function() return { "bomb", "level_20" } end,
+        unlocked = function() return not facts.locked end,
+        phase = function() return facts.phase end,
+        isPlayer = function(entity)
+            return istable(entity) and isfunction(rawget(entity --[[@as table]], "IsBot"))
+        end,
+        isEnemy = function() return facts.enemy end,
+        rng = function()
+            facts.rolls = facts.rolls + 1
+            return facts.rolls == 1 and 0 or 0.9
+        end,
+        send = function(channel, killer, state)
+            facts.sends[#facts.sends + 1] = { channel = channel, to = killer, state = state }
+        end
+    })
+    return store, facts
+end
+
 return {
     groupName = "PW calling cards",
     cases = {
@@ -150,6 +211,140 @@ return {
                 expect(cards()._ReadChoice(reader("valid\000"), 49)).to.beNil()
                 expect(cards()._ReadChoice(reader("invalid\000"), 0)).to.beNil()
                 expect(cards()._ReadChoice(reader(string.rep("c", 33) .. "\000"), 272)).to.beNil()
+            end
+        },
+        {
+            name = "Spawn re-check falls back when the card became locked",
+            func = function()
+                local lib = cards()
+                local human, nw = actor("Human", false)
+                local store, facts = serverFixture()
+                local request, spawn = assert(lib._OnChoice), assert(lib._OnSpawn)
+                request(store, human, "level_20")
+                expect(nw.value).to.equal("level_20")
+                facts.locked = true
+                spawn(store, human)
+                expect(nw.value).to.equal("default")
+            end
+        },
+        {
+            name = "Choice publishes pw_card only on change",
+            func = function()
+                local lib = cards()
+                local ply, nw = actor("Human", false)
+                local store = serverFixture()
+                local request, spawn = assert(lib._OnChoice), assert(lib._OnSpawn)
+                request(store, ply, "level_20")
+                expect(nw.writes).to.equal(1)
+                expect(nw.value).to.equal("level_20")
+                request(store, ply, "level_20")
+                request(store, ply, "level_20\000junk")
+                spawn(store, ply)
+                expect(nw.writes).to.equal(1)
+                request(store, ply, "")
+                spawn(store, ply)
+                expect(nw.writes).to.equal(2)
+                expect(nw.value).to.equal("default")
+            end
+        },
+        {
+            name = "Bot picks once across spawns and cannot send a choice",
+            func = function()
+                local lib = cards()
+                local bot, nw = actor("Bot", true)
+                local store, facts = serverFixture()
+                local request, spawn = assert(lib._OnChoice), assert(lib._OnSpawn)
+                facts.locked = true
+                request(store, bot, "level_20")
+                expect(nw.writes).to.equal(0)
+                spawn(store, bot)
+                spawn(store, bot)
+                expect(nw.value).to.equal("bomb")
+                expect(nw.writes).to.equal(1)
+                expect(facts.rolls).to.equal(1)
+            end
+        },
+        {
+            name = "Kill sends pw_kill_card to a human attacker only, with the victim name and card",
+            func = function()
+                local lib = cards()
+                local store, facts = serverFixture()
+                local victim = actor("Bot victim", true, "level_20")
+                local killer = actor("Human killer", false, "default")
+                assert(lib._OnKill)(store, victim, killer)
+                expect(#facts.sends).to.equal(1)
+                local send = facts.sends[1]
+                expect(send.channel).to.equal("pw_kill_card")
+                expect(send.to).to.equal(killer)
+                expect(send.state.name).to.equal("Bot victim")
+                expect(send.state.card).to.equal("level_20")
+                expect(send.state.bot).to.beTrue()
+            end
+        },
+        {
+            name = "No pw_kill_card for suicide, world kill, bot attacker or outside LIVE",
+            func = function()
+                local lib = cards()
+                local store, facts = serverFixture()
+                local bot, human = actor("Bot", true), actor("Human", false)
+                local kill = assert(lib._OnKill)
+                kill(store, human, human)
+                kill(store, human, game.GetWorld())
+                kill(store, human, bot)
+                kill(store, human, {} --[[@as Entity]])
+                facts.phase = "POSTMATCH"
+                kill(store, bot, human)
+                expect(#facts.sends).to.equal(0)
+            end
+        },
+        {
+            name = "Team kills do not send a card banner",
+            func = function()
+                local store, facts = serverFixture()
+                facts.enemy = false
+                local victim, killer = actor("Victim", false), actor("Killer", false)
+                assert(cards()._OnKill)(store, victim, killer)
+                expect(#facts.sends).to.equal(0)
+            end
+        },
+        {
+            name = "pw_card_choice over maxLen or above the rate limit is dropped",
+            func = function()
+                local def = assert(PW._Net.defs.pw_card_choice, "pw_card_choice receiver is missing")
+                local wrapper = assert(PW.Net)
+                expect(def.who).to.equal("any")
+                expect(def.rate).to.equal(2)
+                expect(def.maxLen).to.equal(34)
+                local owner = assert(PW.Modules.GetStored("calling_cards"), "the registered owner is missing")
+                expect(def.owner).to.equal(owner)
+                expect(IsValid(owner)).to.beTrue()
+                local facts = { active = true, allowed = true, phase = "LIVE", len = 273 }
+                local why = wrapper._Decide(def, facts, nil, 100)
+                expect(why).to.equal("length")
+                facts.len = 8
+                local first, bucket = wrapper._Decide(def, facts, nil, 100)
+                local second, empty = wrapper._Decide(def, facts, bucket, 100)
+                local third = wrapper._Decide(def, facts, empty, 100)
+                expect(first).to.beNil()
+                expect(second).to.beNil()
+                expect(third).to.equal("rate")
+            end
+        },
+        {
+            name = "Calling cards wire the live spawn and kill hooks to their module owner",
+            func = function()
+                local module = assert(PW.Modules.Get("calling_cards"))
+                local hooks = hook.GetTable() --[[@as table<string, table<any, function>>]]
+                expect(isfunction(hooks.PlayerSpawn and hooks.PlayerSpawn[module])).to.beTrue()
+                expect(isfunction(hooks.PW_PlayerKilled and hooks.PW_PlayerKilled[module])).to.beTrue()
+                expect(util.NetworkStringToID("pw_kill_card") > 0).to.beTrue()
+                local playerTable = {
+                    IsValid = function() return true end,
+                    IsPlayer = function() return true end
+                }
+                local admission = assert(cards()._Store).io.isPlayer
+                expect(admission(playerTable --[[@as Entity]])).to.beFalse()
+                expect(admission(game.GetWorld())).to.beFalse()
             end
         }
     }

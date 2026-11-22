@@ -20,6 +20,12 @@ function lib._ValidChoice(id)
     return isstring(id) and #id <= fieldMax and (id == "" or id:match("^[a-z0-9_]+$") ~= nil)
 end
 
+function lib._CardDefinition(id)
+    local registry = PW.Registries.cards
+    if registry == nil then return nil end
+    return registry.Get(id) --[[@as PW.CallingCard?]]
+end
+
 ---Include disabled cards so host enable settings do not silently overwrite a saved preference.
 ---@return string[]
 local function settingOptions()
