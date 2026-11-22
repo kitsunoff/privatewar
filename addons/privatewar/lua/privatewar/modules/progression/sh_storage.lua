@@ -9,12 +9,14 @@
 -- above it is a duplicate. T-4.12 added v 2 (currency, owned: sh_wallet.lua); a v1 file loads with 0 currency.
 --
 -- Wire (bits): upload xp u32, count u16, count x (class string, xp u32), currency u32, owned (sh_wallet.lua); delta
--- session u32, seq u32, xp u32, count u16, count x (class, xp u32), earned u32, spent u32, owned; levels level u16,
+-- session u32, seq u32, xp u32, count u16, count x (class, xp u32), earned u32, spent u32, owned, then the
+-- entitlement extension (sh_entitlements.lua); levels level u16,
 -- unlockAll bool, maxAttachments u8, count u16, count x (class, level u16); summary xp u32, levelBefore u16,
 -- levelAfter u16, count u16, count x (class, before u16, after u16), medals u8,
 -- medals x (id string, count u16). Counts are capped at MaxWeapons (MaxMedals for medals) on both sides.
 
 local lib = PW.Progression --[[@as PW.ProgressionLib]]
+local unlocks = PW.Unlocks --[[@as PW.UnlocksLib]]
 
 lib.FileVersion = 2
 lib.FilePath = "privatewar/progression.json"
@@ -127,11 +129,12 @@ function lib._FileToJson(stored)
     }
 end
 
-function lib._ViewFromLevels(levels, lookup, owned)
+function lib._ViewFromLevels(levels, lookup, owned, granted)
     return {
         level = levels.level,
         weaponLevel = function(weaponId) return levels.weapons[weaponId] or 1 end,
-        lookup = lookup, unlockAll = levels.unlockAll, maxAttachments = levels.maxAttachments, owned = owned
+        lookup = lookup, unlockAll = levels.unlockAll, maxAttachments = levels.maxAttachments,
+        owned = owned, granted = granted
     }
 end
 
@@ -211,6 +214,7 @@ function lib._EncodeDelta(delta, writer)
     writeUInt(writer, delta.earned or 0, 32)
     writeUInt(writer, delta.spent or 0, 32)
     lib._WriteOwned(writer, delta.owned or {})
+    unlocks._EncodeDeltaPart(delta, writer)
 end
 
 function lib._DecodeDelta(reader)
@@ -219,8 +223,10 @@ function lib._DecodeDelta(reader)
     local xp = reader.uint(32)
     local weapons = readMap(reader, 32)
     local earned, spent = reader.uint(32), reader.uint(32)
+    local owned = lib._ReadOwned(reader)
+    local part = unlocks._DecodeDeltaPart(reader)
     return { session = session, seq = seq, xp = xp, weapons = weapons, earned = earned, spent = spent,
-        owned = lib._ReadOwned(reader) }
+        owned = owned, granted = part.granted, revoked = part.revoked, claims = part.claims }
 end
 
 function lib._EncodeLevels(levels, writer)

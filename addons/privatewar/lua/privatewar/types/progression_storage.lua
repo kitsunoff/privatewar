@@ -10,18 +10,18 @@
 
 ---The client file data/privatewar/progression.json. batch is the last delta applied.
 ---@class PW.ProgressionFile
----@field v integer file version (1)
+---@field v integer file version (2)
 ---@field xp number total player XP
 ---@field weapons table<string, number> total XP per weapon class
 ---@field batch PW.ProgressionBatch
 
 ---XP earned since the last delta (server).
----@class PW.ProgressionPending
+---@class PW.ProgressionPending : PW.UnlockDeltaPart
 ---@field xp number
 ---@field weapons table<string, number>
 
 ---A 10 s delta, server -> owner: the XP earned since the previous one, with its batch id.
----@class PW.ProgressionDelta
+---@class PW.ProgressionDelta : PW.UnlockDeltaPart
 ---@field session integer
 ---@field seq integer
 ---@field xp number
@@ -73,6 +73,7 @@
 ---Internal (client): the local player's file, the last levels and summary received.
 ---@class PW.ProgressionLocal
 ---@field file? PW.ProgressionFile
+---@field unlocks? PW.UnlocksFile
 ---@field levels? PW.ProgressionLevels
 ---@field summary? PW.ProgressionSummary
 
@@ -83,6 +84,7 @@
 ---@field batches table<Player, PW.ProgressionBatch> the id of the last delta sent, weak keys
 ---@field matches table<Player, PW.ProgressionMatch> this match's records, weak keys
 ---@field uploaded table<Player, boolean> players whose join upload was accepted, weak keys
+---@field unlocksUploaded table<Player, boolean> humans whose separate unlock upload was accepted
 ---@field nextFlush? number time of the next 10 s flush (nil until the first tick)
 ---@field sendDelta fun(ply: Player, delta: PW.ProgressionDelta)
 ---@field sendLevels fun(ply: Player, levels: PW.ProgressionLevels)
@@ -126,7 +128,7 @@
 ---@field _FileFromJson fun(decoded: any): PW.ProgressionFile
 ---@field _FileToJson fun(stored: PW.ProgressionFile): table
 ---@field _ViewFromLevels fun(levels: PW.ProgressionLevels, lookup: PW.LoadoutLookup,
----owned?: fun(key: string): boolean): PW.ProgressionView
+---owned?: PW.UnlockKeyCheck, granted?: PW.UnlockKeyCheck): PW.ProgressionView
 ---@field _RegistryLookup PW.LoadoutLookup
 ---@field _NetWriter fun(): PW.ProgressionWriter
 ---@field _NetReader fun(): PW.ProgressionReader

@@ -33,6 +33,8 @@ end
 ---@param unlock any
 ---@return number
 local function required(unlock)
+    local unlocks = PW.Unlocks
+    if unlocks ~= nil then return unlocks._Spec(unlock).level or 0 end
     if isnumber(unlock) then return unlock --[[@as number]] end
     if istable(unlock) and isnumber((unlock --[[@as table<string, any>]]).level) then
         return (unlock --[[@as table<string, any>]]).level
@@ -41,12 +43,20 @@ local function required(unlock)
 end
 lib._Required = required
 
-function lib.LockText(entity)
-    local level = required(entity.Unlock)
-    if level > 0 then return "LV " .. level, "Unlocks at level " .. level end
-    local price = entity.Price
-    if isnumber(price) and price > 0 then return "STORE", "Buy it in the store" end
-    return "LOCKED", "Locked"
+function lib.LockText(entity, requirement)
+    local unlocks = PW.Unlocks
+    if unlocks == nil then return "LOCKED", "Locked", nil end
+    local req = requirement or unlocks._StaticRequirement(entity, false)
+    local badge, text = unlocks.LockText(req)
+    return badge or "LOCKED", text or "Locked", req.hint ~= text and req.hint or nil
+end
+
+---@param ctx PW.LoadoutContext
+---@param kind string
+---@param id string
+---@return PW.UnlockRequirement?
+local function requirementOf(ctx, kind, id)
+    return ctx.requirement ~= nil and ctx.requirement(kind, id) or nil
 end
 
 ---@param entity table<string, any>
@@ -124,7 +134,8 @@ local function itemProblem(slot, id, ctx)
     if not groupFits(slot, entity) then return "A group " .. tostring(entity.Group or "?") .. " perk" end
     if slot.kind == "weapons" and (ctx.bannedWeapons or {})[id] then return "Banned in this match" end
     if ctx.isUnlocked ~= nil and not ctx.isUnlocked(slot.kind, id) then
-        local _, reason = lib.LockText(entity)
+        local _, reason = lib.LockText(entity, requirementOf(ctx, slot.kind, id))
+        if reason:sub(1, 1) == "#" then return reason end
         return "Locked: " .. string.lower(string.sub(reason, 1, 1)) .. string.sub(reason, 2)
     end
     return nil
@@ -179,8 +190,18 @@ local function lockOption(slot, entity, id, ctx, taken, option)
         option.locked, option.reason, option.lockText = true, "Banned in this match", "BANNED"
     elseif ctx.isUnlocked ~= nil and not ctx.isUnlocked(slot.kind, id) then
         option.locked = true
-        option.lockText, option.reason = lib.LockText(entity)
+        option.lockText, option.reason, option.hint = lib.LockText(entity, requirementOf(ctx, slot.kind, id))
     end
+end
+
+---@param option PW.LoadoutUIOption
+---@param kind string
+---@param isNew? fun(key: string): boolean
+local function markNew(option, kind, isNew)
+    local unlocks = PW.Unlocks
+    if unlocks == nil or isNew == nil then return end
+    local key = unlocks.KeyOf({ kind = kind, id = option.id })
+    option.key, option.new = key, key ~= nil and isNew(key)
 end
 
 function lib.Options(input, row, slots)
@@ -210,6 +231,7 @@ function lib.Options(input, row, slots)
                 description = isstring(entity.Description) and entity.Description or nil
             }
             lockOption(slot, entity, id, ctx, taken, option)
+            markNew(option, slot.kind, input.isNew)
             if slot.kind == "perks" then option.description = lib.PerkDescription(entity, selectedWeapons) end
             options[#options + 1] = option
         end

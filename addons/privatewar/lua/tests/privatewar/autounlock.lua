@@ -382,6 +382,26 @@ return {
             end
         },
         {
+            name = "Merge: Unlock = false and table forms are never overwritten by the stat-based levels",
+            func = function()
+                local entries, data = fixture()
+                local weaponSpec = { level = 15, hint = "Curated weapon" }
+                local optionSpec = { level = false, hint = "Curated option", reward = "challenge" }
+                entries.ar_a.Unlock = weaponSpec
+                entries.ar_d.Unlock = false
+                entries.ar_a.Attachments = { comp = { Unlock = false }, supp = { Unlock = optionSpec } }
+                local reg = registry(entries)
+                local result = must(lib().Run(reg, fakeEnv(fakeAdapter(data))).result)
+                local registered = must(reg.Get("ar_a"))
+                expect(registered.Unlock).to.deepEqual(weaponSpec)
+                expect(must(reg.Get("ar_d")).Unlock).to.beFalse()
+                local atts = must(registered.Attachments) --[[@as table<string, table<string, any>>]]
+                expect(atts.comp.Unlock).to.beFalse()
+                expect(atts.supp.Unlock).to.deepEqual(optionSpec)
+                expect(atts.flash.Unlock).to.equal(result.attachments.ar_a.flash)
+            end
+        },
+        {
             name = "Setting off: no levels, the unlock by count stays",
             func = function()
                 local entries, data = fixture()

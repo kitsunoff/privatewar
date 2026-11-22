@@ -13,10 +13,10 @@ local lib = PW.Operators --[[@as PW.OperatorsLib]]
 ---@param id string
 ---@return boolean
 local function localUnlocked(id)
-    local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
+    local unlocks = PW.Unlocks
     local me = LocalPlayer()
-    if progression == nil or progression.IsUnlocked == nil or not IsValid(me) then return true end
-    return progression.IsUnlocked(me, "models", id)
+    if unlocks == nil or not IsValid(me) then return true end
+    return (unlocks.IsUnlocked(me, "models", id))
 end
 
 ---@return string
@@ -26,7 +26,9 @@ local function ownModel()
 end
 
 function lib.LocalList()
-    return lib.List(lib.LiveInput(localUnlocked))
+    local unlocks, me = PW.Unlocks, LocalPlayer()
+    if unlocks == nil or not IsValid(me) then return lib.List(lib.LiveInput(localUnlocked)) end
+    return lib.List(lib.LiveInput(localUnlocked, function(id) return unlocks.Requirement(me, "models", id) end))
 end
 
 function lib.LocalChoice()
@@ -79,5 +81,6 @@ function module:PW_RegistriesLoaded()
 end
 
 PW.HookFor(module, "InitPostEntity", function()
-    lib.Send()
+    -- Send after both progression uploads, regardless of the order in which InitPostEntity listeners run.
+    timer.Simple(0, function() lib.Send() end)
 end)

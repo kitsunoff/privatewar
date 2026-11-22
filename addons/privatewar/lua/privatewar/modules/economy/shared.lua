@@ -109,6 +109,7 @@ function lib.GetCurrency(ply)
     return PW.Progression.GetCurrency(ply)
 end
 
+---Purchases only. Use PW.Unlocks.IsEntitled to check grants and active purchases together.
 function lib.IsOwned(ply, kind, id)
     return PW.Progression.IsOwned(ply, PW.Progression._OwnedKey(kind, id))
 end

@@ -36,7 +36,8 @@ end
 function lib._PendingOf(store, ply)
     local pending = store.pending[ply]
     if pending == nil then
-        pending = { xp = 0, weapons = {}, earned = 0, spent = 0, owned = {} }
+        pending = { xp = 0, weapons = {}, earned = 0, spent = 0, owned = {},
+            granted = {}, revoked = {}, claims = {} }
         store.pending[ply] = pending
     end
     return pending
@@ -81,6 +82,9 @@ function lib._Flush(store, ply)
     local pending = store.pending[ply]
     if pending == nil then return nil end
     store.pending[ply] = nil
+    if pending.xp == 0 and next(pending.weapons) == nil and pending.earned == 0 and pending.spent == 0
+        and next(pending.owned) == nil and next(pending.granted or {}) == nil
+        and next(pending.revoked or {}) == nil and next(pending.claims or {}) == nil then return nil end
     local batch = store.batches[ply]
     if batch == nil then
         batch = { session = math.random(1, 2 ^ 31 - 1), seq = 0 }
@@ -89,7 +93,8 @@ function lib._Flush(store, ply)
     batch.seq = batch.seq + 1
     ---@type PW.ProgressionDelta
     local delta = { session = batch.session, seq = batch.seq, xp = pending.xp, weapons = pending.weapons,
-        earned = pending.earned, spent = pending.spent, owned = pending.owned }
+        earned = pending.earned, spent = pending.spent, owned = pending.owned,
+        granted = pending.granted, revoked = pending.revoked, claims = pending.claims }
     store.sendDelta(ply, delta)
     return delta
 end

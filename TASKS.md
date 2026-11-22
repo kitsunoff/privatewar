@@ -356,6 +356,77 @@ Runner notes: select the gamemode and map (`--gamemode privatewar --map gm_const
 - **T-4.11 Medals**: each MVP detector fires exactly when it should (double/triple kill windows, revenge, first blood, 5-streak, saviour) and not otherwise.
 - **T-4.12 Economy**: currency from events; purchase deducts and unlocks; insufficient funds refused; rotation is identical for the same date and different for another date.
 
+#### Unlock entitlements: mandatory regression inventory
+
+Retain every inherited assertion, including T-4.7–T-4.10, T-4.12, T-5.13 and T-11.7, the full affected regression
+suites, and the UI, operator and soft-registration cases in the [suite map](docs/agent-test-map.md#unlock-entitlements).
+Where callers move to the new authority, update stub targets without weakening assertions: the gunsmith stub must
+still open the tested options, and bot loadout tests must still assert zero calls, stubbing both
+`PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked`.
+
+`unlocks.lua` (shared logic):
+
+1. "Spec: nil, integer, { level = N }, false, { level = false } and hint normalise; anything else is open"
+2. "Decide: any source opens; the reason names the first source that did"
+3. "Decide: Hidden beats every source, including unlockall, grants and the override hook"
+4. "Decide: Unlock = false opens only through a grant or a purchase, never by level"
+5. "Decide: unlockall opens grant-only items and every level gate"
+6. "Decide: grants count with the economy module disabled; purchases do not"
+7. "Decide: a priced entity without Unlock stays for sale only; a grant opens it"
+8. "Hook: PW_UnlockOverride true opens and false locks after Hidden; nil keeps the rules"
+9. "Requirement: level, weapon level, price, reward hint and the PW_UnlockHint answer, with their lock texts"
+10. "LockedOptions: a curated camo above the weapon level is locked on the server; an entitled one is open"
+11. "LockedOptions: an entitled uncurated attachment does not count toward the weapon level limit"
+12. "Compatibility: PW.Progression.IsUnlocked, LockedOptions and AttachmentLimit answer like PW.Unlocks"
+13. "Keys: KeyOf and ParseKey accept the bundle item shape, the camo alias and attachments; malformed items give nil"
+14. "Describe: names of entities, camos and options; an unknown item is marked invalid"
+15. "ListUnlocked: the enabled ids of a kind that are unlocked, sorted"
+16. "ListRewards: entities, attachments and camos with a matching reward source, sorted by key; reward alone opens nothing"
+
+`unlocks_storage.lua` (persistence, wire and server consumers; shared bot for the engine smoke):
+
+1. "Grant: adds new keys once; a repeated grant id adds nothing and answers claimed"
+2. "Grant: refuses bots, bad sources, bad grant ids, malformed and unknown items, too many items and a full set"
+3. "Revoke: removes grants only, never purchases; revoking twice removes nothing more"
+4. "Grant and revoke: the delta carries them and the client file applies them once per batch id"
+5. "Grant: classes are refreshed at once and PW_UnlockGranted fires with the new keys, source and grant id"
+6. "Upload: keys and claims are validated, bounded and accepted once; Grant waits for readiness"
+7. "Upload: keys of content not installed on this host are kept"
+8. "Migration: a v2 progression.json with owned keys and no unlocks.json lists purchases as entitlements; nothing is lost and progression.json stays at version 2"
+9. "Migration: a v1 progression.json still loads with no entitlements"
+10. "Malformed: a missing, empty, non-JSON or wrong-shaped unlocks.json reads as empty; bad entries are dropped"
+11. "Claims: past MaxClaims the oldest are pruned by time, ties by id"
+12. "Wire: the unlocks upload and the delta extension survive encode and decode; forged counts are bounded"
+13. "Net: pw_unlocks_upload is registered with an owner, a rate and the size bound; a second upload is ignored"
+14. "Server rejects a locked loadout choice: a grant-only item in an uploaded class is repaired away until granted"
+15. "Server rejects a locked operator: a grant-only model choice is refused until granted"
+16. "Bots unaffected: bot pools and bot operators never call PW.Unlocks.IsUnlocked; Grant refuses bots"
+17. "Admin commands: the privilege is checked; grant, revoke and list work on a shared player"
+18. "Economy: a granted item counts as owned in a quote; a purchase refreshes the classes"
+19. "Claim only: an empty grant with a grant id records the claim once; HasClaim answers on both realms"
+20. "Batching: XP and currency queued before a Grant travel in its delta; the client writes unlocks.json before progression.json"
+21. "Revoke: both realms notify the revoking source once"
+22. "Grant before upload: no items or claims applied, no delta flushed; full upload is preserved"
+23. "Grant rejects an option with a mismatched entitlement kind"
+
+`unlocks_ui.lua` (pure UI models):
+
+1. "Editor: a locked item shows the requirement lock text and reason (level, price, reward)"
+2. "Gunsmith: a granted curated option above the weapon level is open; a locked camo shows its weapon level"
+3. "Operator picker: a grant-only model shows its reward text; a granted model is selectable"
+4. "Store: a granted item is OWNED and its texts no longer mention the level"
+5. "Next unlocks: grant-only items are left out; table and integer levels both count"
+6. "NEW badge: a granted, unseen key is new; marking it seen clears it; purchases are not new"
+7. "Toast: a granted delta queues one unlock popup per grant group with the item name and source text"
+
+`autounlock.lua` (additional T-11.7 regression):
+
+1. "Merge: Unlock = false and table forms are never overwritten by the stat-based levels"
+
+Acceptance and merge gates (`make check`, `make test`) and the human GMod checkpoint are pending; the inventory is
+not evidence of a pass. The human checkpoint covers grant, revoke and repair, reconnect and cross-host persistence,
+purchase, `unlockall` and Hidden, bot behaviour, and mouse/controller presentation.
+
 ### Phase 5 — bots
 
 - **T-5.1 Manager**: quota arithmetic (humans join/leave, `maxplayers` cap); a human joining replaces a bot of the smaller team; reconciliation after a simulated map change (extra kicked, missing created, `NULL` from `CreateNextBot` handled); refusal in Singleplayer.
