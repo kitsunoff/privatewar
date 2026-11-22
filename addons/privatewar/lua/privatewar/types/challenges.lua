@@ -181,6 +181,76 @@
 ---@field items PW.ChallengeInstance[]
 ---@field bonus { needed: integer, reward: PW.ChallengeReward }
 
+---@class PW.ChallengeProgress
+---@field values integer[]
+---@field targets integer[]
+---@field done boolean
+
+---@class PW.ChallengeProgressPlan
+---@field index integer
+---@field entries table<string, PW.ChallengePlannedItem>
+---@field byType table<string, PW.ChallengeRoutes>
+---@field needed integer
+
+---@class PW.ChallengeProgressState
+---@field index integer
+---@field items table<string, PW.ChallengeItemProgress>
+---@field completed integer
+---@field bonus boolean
+
+---@class PW.ChallengePlannedObjective
+---@field id string
+---@field slot integer
+---@field target integer
+---@field scope PW.ChallengeScope
+---@field count PW.ChallengeCount
+---@field within? PW.ChallengeWindow
+---@field matches PW.ChallengePredicate
+
+---@class PW.ChallengePlannedItem
+---@field mode PW.ChallengeCombine
+---@field objectives PW.ChallengePlannedObjective[]
+
+---@class PW.ChallengeRoutes
+---@field increments PW.ChallengePlannedObjective[]
+---@field resets { objective: PW.ChallengePlannedObjective, matches: PW.ChallengePredicate }[]
+
+---@class PW.ChallengeCounter
+---@field best number
+---@field run? number
+---@field times? number[]
+
+---@class PW.ChallengeItemProgress
+---@field counters PW.ChallengeCounter[]
+---@field remaining integer
+---@field done boolean
+
+---@alias PW.ChallengeProgressBoundary "match_start"|"match_end"|"round_start"|"round_end"|"death"|"team_change"|"spawn"
+
+---@class PW.ChallengeAdvance
+---@field completed string[]
+---@field bonus boolean
+
+---@class PW.ChallengeFileItem
+---@field p integer[]
+---@field done? boolean
+
+---@alias PW.ChallengeFileItems table<string, PW.ChallengeFileItem>
+
+---@class PW.ChallengeFileWeek
+---@field index integer
+---@field items PW.ChallengeFileItems
+---@field bonus? boolean
+
+---@alias PW.ChallengePlanFn fun(week: PW.ChallengeWeek, templates: table<string, PW.ChallengeTemplate>,
+---    rounds: boolean): PW.ChallengeProgressPlan
+---@alias PW.ChallengeAdvanceFn fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState,
+---    ev: PW.ChallengeEvent): PW.ChallengeAdvance
+---@alias PW.ChallengeResetFn fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState,
+---    boundary: PW.ChallengeProgressBoundary)
+---@alias PW.ChallengeProgressReadFn fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState,
+---    id: string): PW.ChallengeProgress?
+
 ---@class PW.ChallengesLib
 ---Monday-based week index for a UTC Unix timestamp.
 ---@field WeekIndex fun(unixUtc: number): integer
@@ -196,6 +266,12 @@
 ---@field _MaxInstanceId integer
 ---Select from validated templates with availability already resolved; no clock, registries or global RNG.
 ---@field _Select fun(i: integer, pool: PW.ChallengeCandidate[], opts: PW.ChallengeSelectOptions): PW.ChallengeWeek
+---@field _ProgressPlan PW.ChallengePlanFn
+---@field _NewProgress fun(plan: PW.ChallengeProgressPlan, saved?: PW.ChallengeFileWeek): PW.ChallengeProgressState
+---@field _AdvanceProgress PW.ChallengeAdvanceFn
+---@field _ResetProgress PW.ChallengeResetFn
+---@field _ReadProgress PW.ChallengeProgressReadFn
+---@field _SaveProgress fun(plan: PW.ChallengeProgressPlan, state: PW.ChallengeProgressState): PW.ChallengeFileWeek
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib

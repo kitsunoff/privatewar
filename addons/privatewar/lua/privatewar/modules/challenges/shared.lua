@@ -7,7 +7,9 @@ if SERVER then
     AddCSLuaFile("privatewar/modules/challenges/sh_rotation.lua")
     AddCSLuaFile("privatewar/modules/challenges/sh_filters.lua")
     AddCSLuaFile("privatewar/modules/challenges/sh_template.lua")
+    AddCSLuaFile("privatewar/modules/challenges/sh_progress.lua")
 end
 include("privatewar/modules/challenges/sh_rotation.lua")
 include("privatewar/modules/challenges/sh_filters.lua")
 include("privatewar/modules/challenges/sh_template.lua")
+include("privatewar/modules/challenges/sh_progress.lua")
