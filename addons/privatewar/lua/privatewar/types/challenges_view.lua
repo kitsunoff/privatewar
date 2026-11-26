@@ -43,6 +43,11 @@
 ---@field bonus PW.ChallengeBonusView
 ---@field byId table<string, PW.ChallengeRowView>
 
+---@class PW.ChallengePreviewRow
+---@field text string
+---@field fraction number
+---@field progressText string
+
 ---@class PW.ChallengeToast
 ---@field id string
 ---@field kind "milestone"|"complete"|"bonus"
@@ -63,3 +68,5 @@
 ---@field _ChallengeCountdown fun(endsAt: integer, now: integer): string
 ---@field _UpdateChallengeToasts PW.ChallengeToastUpdater
 ---@field _OwnerChallengeView fun(api: PW, owner: Player, now: integer): PW.ChallengeWeekView?
+---@field _PlayPreviewRows fun(snapshot: PW.ChallengeWeekView?): PW.ChallengePreviewRow[]
+---@field _OpenPlayPreview fun(model: PW.UIRouterModel): boolean

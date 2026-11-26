@@ -22,6 +22,7 @@
 ---    deps: PW.ChallengeViewTestDeps): PW.ChallengeViewTestModel
 ---@alias PW.ChallengeViewTestUpdate fun(queue: PW.ChallengeViewTestToast[], before: PW.ChallengeViewTestModel?,
 ---    after: PW.ChallengeViewTestModel): PW.ChallengeViewTestToast[]
+---@alias PW.ChallengePreviewTestRows fun(snapshot: PW.ChallengeViewTestModel?): { text: string, fraction: number }[]
 
 local reset = 1795392000
 
@@ -278,6 +279,42 @@ return {
                 f.count = 8
                 notify()
                 expect(f.reads).to.equal(before + 2)
+            end
+        },
+        {
+            name = "PLAY weekly preview shows short text and independent progress for each challenge",
+            func = function()
+                local lib = assert(PW.Challenges)
+                local rows = rawget(lib, "_PlayPreviewRows") --[[@as PW.ChallengePreviewTestRows?]]
+                assert(rows ~= nil, "PLAY must expose the weekly preview rows")
+                local active = week({ instance("fixture_a", 8), instance("fixture_b", 20) })
+                local preview = rows(view(active, { 2, 15 }))
+                expect(#preview).to.equal(2)
+                expect(preview[1].text).to.equal("Reach 8 with SMG")
+                expect(preview[1].fraction).to.equal(0.25)
+                expect(preview[2].text).to.equal("Reach 20 with SMG")
+                expect(preview[2].fraction).to.equal(0.75)
+                expect(#rows(nil)).to.equal(0)
+            end
+        },
+        {
+            name = "PLAY weekly preview opens Progress Weekly Challenges without stacking duplicates",
+            func = function()
+                local kit = assert(PW.UI)
+                local registry = assert(PW.Registries.screens)
+                local model = kit.Router.New(registry.GetEnabledList() --[[@as PW.Screen[] ]], { "play", "progress" })
+                local open = rawget(assert(PW.Challenges), "_OpenPlayPreview")
+                    --[[@as (fun(model: PW.UIRouterModel): boolean)?]]
+                assert(open ~= nil, "PLAY must route directly to Weekly Challenges")
+                expect(kit.Router.SwitchTab(model, "play")).to.beTrue()
+                expect(assert(kit.Router.Top(model)).ClassName).to.equal("lobby_hub")
+                expect(open(model)).to.beTrue()
+                expect(assert(kit.Router.Top(model)).ClassName).to.equal("progress_challenges")
+                expect(kit.Router.SwitchTab(model, "play")).to.beTrue()
+                expect(open(model)).to.beTrue()
+                local action = assert(kit.Input.Press(kit.Input.New(), KEY_XBUTTON_B))
+                expect(kit.Router.Act(model, action, "LOBBY")).to.equal("pop")
+                expect(assert(kit.Router.Top(model)).ClassName).to.equal("progress_home")
             end
         },
         {

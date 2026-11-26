@@ -158,15 +158,21 @@ end
 ---@return PW.ChallengeReadyCandidate?
 local function weighted(choices, draw)
     if #choices == 0 then return nil end
-    local total, largest = 0, 1
+    ---@type number
+    local total = 0
+    ---@type number
+    local largest = 1
     for _, choice in ipairs(choices) do
         local weight = choice.template.weight
-        total, largest = total + weight, math.max(largest, weight)
+        total = total + weight
+        largest = math.max(largest, weight)
     end
     -- Keep the same ratios when adding finite weights would otherwise overflow.
+    ---@type number
     local scale = 1
     if total == math.huge then
-        scale, total = largest, 0
+        scale = largest
+        total = 0
         for _, choice in ipairs(choices) do total = total + choice.template.weight / scale end
     end
     local roll, cumulative = draw() * total, 0
