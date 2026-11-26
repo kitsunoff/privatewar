@@ -18,6 +18,7 @@ if SERVER then
     AddCSLuaFile("privatewar/modules/challenges/sh_progress.lua")
     AddCSLuaFile("privatewar/modules/challenges/sh_storage.lua")
     AddCSLuaFile("privatewar/modules/challenges/sh_wire.lua")
+    AddCSLuaFile("privatewar/modules/challenges/sh_view.lua")
 end
 include("privatewar/modules/challenges/sh_rotation.lua")
 include("privatewar/modules/challenges/sh_filters.lua")
@@ -26,3 +27,4 @@ include("privatewar/modules/challenges/sh_events.lua")
 include("privatewar/modules/challenges/sh_progress.lua")
 include("privatewar/modules/challenges/sh_storage.lua")
 include("privatewar/modules/challenges/sh_wire.lua")
+include("privatewar/modules/challenges/sh_view.lua")
