@@ -1,4 +1,22 @@
 local lib = PW.Challenges --[[@as PW.ChallengesViewLib]]
+
+function lib._PlayPreviewRows(snapshot)
+    ---@type PW.ChallengePreviewRow[]
+    local rows = {}
+    if snapshot == nil then return rows end
+    for _, row in ipairs(snapshot.rows) do
+        rows[#rows + 1] = { text = row.description, fraction = row.fraction, progressText = row.progressText }
+    end
+    return rows
+end
+
+function lib._OpenPlayPreview(model)
+    local router = PW.UI and PW.UI.Router
+    local id = "progress_challenges"
+    if router == nil or model.screens[id] == nil or not router.SwitchTab(model, "progress") then return false end
+    local current = router.Top(model)
+    return (current ~= nil and current.ClassName == id) or router.Push(model, id)
+end
 local scopeText = { cumulative = "across matches", match = "in a single match", round = "in a single round",
     life = "without dying" }
 local thresholds = { 75, 50, 25 }
