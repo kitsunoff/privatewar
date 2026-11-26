@@ -705,6 +705,12 @@ Client `PW_UnlockGranted` queues one `UNLOCKED` popup per grant group. Its item 
 `event` → `Event reward`, `admin` → `Granted by the host`, otherwise `Reward`. The grant popup is for `PREMATCH`,
 `LIVE` and `POSTMATCH`; in the lobby the `NEW` badge is used instead.
 
+### Victim calling card (element `kill_card`)
+
+`hud/kill_card.lua` (`Order = 20`, `LIVE` only) renders one banner centred above the XP bar.
+It uses the victim snapshot delivered to the human killer and replaces its current entry on a new kill.
+See [calling cards](calling-cards.md) for selection, timing, material fallback and message bounds.
+
 ### Bottom XP bar and LEVEL UP (element `progression`)
 
 `hud/progression.lua` (`Order = 15`, phases `PREMATCH`, `LIVE`, `POSTMATCH`); rules in `modules/hud/sh_xpbar.lua` (bar
@@ -1156,6 +1162,8 @@ and the net messages are in `loadout.md` "Classes"; this section is the screen.
 
 - **OPERATOR** (T-11.9). A second-row button next to NEW CLASS opens the operator picker `loadout_operator`
   (`operators.md`, "UI").
+- **CALLING CARD** opens the `loadout_card` picker, with a controller-focusable grid and a separate preview.
+  See [calling cards](calling-cards.md) for locked entries and the saved preference.
 
 The screen decides nothing: the server repairs, checks and answers; the screen only draws the state. Editing classes is the
 class editor (T-4.8, T-7.4).

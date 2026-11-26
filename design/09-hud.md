@@ -30,6 +30,8 @@ In-match HUD: element registry, hitmarkers, killfeed, score popups, scoreboard, 
        Show speed time remaining to one decimal and active `HEALING` / `ARMOR` labels. Pending injections are not active
        effects; the equipment line continues to show the slot hint and remaining charges.
      - weekly challenge toasts: top-right progress milestones and completions during `LIVE` and `POSTMATCH`.
+     - kill card banner: bottom centre, above the XP bar, `LIVE` only. Show the victim's calling card and name
+       to the human killer only, excluding team kills (`06-progression.md` d.6); a new kill replaces the banner.
 
 - **Revision 2026-11-07 (user decisions after the first playtest; decision 2 stays valid for everything not mentioned here):**
 

@@ -2,7 +2,7 @@
 
 **RESEARCH / NOT DECIDED.** This note explains facts and options; it decides nothing. No decision in `design/`, no
 frozen API and no implementation is changed or authorized by it. The plan built on it is
-[`changes/in-progress/stim-equipment.md`](../changes/in-progress/stim-equipment.md). Repository code was read on branch
+[`changes/done/stim-equipment.md`](../changes/done/stim-equipment.md). Repository code was read on branch
 `docs/plan-mwbase-stims-unlocks-challenges` at `cf7c4ed`, 2026-11-21. No game, Steam Deck, GLuaTest or performance run
 was performed. Sections 2–10 were written before the addon's Lua was available; **section 11 (source inspection,
 2026-11-21) supersedes them where they disagree.**

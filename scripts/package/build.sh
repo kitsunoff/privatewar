@@ -61,6 +61,11 @@ rm -rf "$gm"
 stage "$src/gamemodes" "$gm/gamemodes"
 cp "$src/gamemodes/privatewar/logo.png" "$src/gamemodes/privatewar/icon24.png" "$gm/gamemodes/privatewar/"
 stage "$src/lua/privatewar" "$gm/lua/privatewar"
+cards="materials/privatewar/cards"
+if [[ -d "$src/$cards" ]]; then
+    mkdir --parents "$gm/$cards"
+    rsync --archive --no-links --include='/*.png' --exclude='*' "$src/$cards/" "$gm/$cards/"
+fi
 cp "$src/addon.json" "$gm/addon.json"
 notices "$gm" privatewar
 bash "$here/verify.sh" "$gm" gamemode

@@ -128,7 +128,11 @@ XP, unlocks, persistence.
      ```
 
    - **Rotation without a backend:** "Featured" changes daily, "Weekly" weekly; the selection is deterministic from the current date, so every player sees the same shop. A permanent catalogue sells single unlocks by `Price`.
-   - **Minimal cosmetics for MVP**, so bundles have something to sell: kinds `models/` (player models, "operators", visible in match and lobby) and `cards/` (calling cards: lobby, killfeed, killcam, scoreboard); camos already exist (decision 2).
+   - **Minimal cosmetics for MVP**, so bundles have something to sell: kinds `models/` (player models, "operators", visible in match and lobby) and `cards/` (calling cards); camos already exist (decision 2).
+   - A player equips one calling card (client setting, validated by the server like the operator choice, d.7).
+     When a player is killed by another human, only the killer sees a banner with the victim's name and calling
+     card, centred above the XP bar during `LIVE`. Team kills do not show a banner. Lobby, killfeed, killcam and
+     scoreboard placements stay future work.
    - After MVP, as separate modules: battle pass (100 reward tiers per season; season derived from the date, no backend), supply drops (random rewards for currency).
 
 7. **Operators and bot names** (decided with the user on 2026-11-07; module `operators`, `../docs/api/operators.md`).

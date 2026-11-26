@@ -1,6 +1,6 @@
-# Stim equipment: healing stim and speed stim
+# Stim equipment: heal, speed and armor stims
 
-Status: `in-progress`
+Status: `done`
 
 Recorded: 2026-11-21
 
@@ -12,14 +12,17 @@ The coordinator checked scope, all 51 required test names and the assertion bodi
 full Deck suite with `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test`: 2185 passed,
 0 failed, 1 skipped. The skip checks restoring the Arctic vial ConVar; that optional addon was not installed.
 The corrected Deck screenshot shows the Speed Stim countdown clear of the ready UAV square and its key hint.
-Task gates are green; integration gates and the human checklist remain pending.
+The visual-placement regression ran 2184 passed, 1 failed, 1 skipped before the correction and 2185 passed,
+0 failed, 1 skipped after it. Merged locally into `integration/overnight-2026-11-22` at `76ed4c8` on 2026-11-22,
+not into `main`. Integration `make check` and pre-commit passed; full `make test` passed 2248, 0 failed,
+1 skipped for the same optional Arctic case. Human acceptance remains pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
 Related: the items' `Unlock` field must stay valid under [programmatic unlocks](../done/unlock-entitlements.md); stim usage
-  may later become a [weekly challenge](weekly-challenges.md) event (not in this scope).
+  may later become a [weekly challenge](../in-progress/weekly-challenges.md) event (not in this scope).
 
 Research: [Arctic's Combat Stims research](../../notes/30-arctic-stims-research.md). This record is tracking, not
 authorization: it does not authorize implementation, design or contract changes, Steam Deck access, redistribution or
@@ -598,7 +601,7 @@ cases use injectable stores; in-game cases reuse shared bots (`beforeAll`/`after
   and HL2 weapons; health and speed change only by PW values (`ArcticMedShots_ActiveEffects` stays empty); map
   health vials are not replaced by random stims; note doubled sounds if any.
 - [ ] Without Arctic's addon: everything above except the animation works.
-- [ ] Game Setup shows the five `stims.*` settings and a changed value applies in the next match.
+- [ ] Game Setup shows all eight `stims.*` settings and a changed value applies in the next match.
 - [ ] Steam Deck frame time shows no visible hitch on injection.
 
 ## 13. Gates
