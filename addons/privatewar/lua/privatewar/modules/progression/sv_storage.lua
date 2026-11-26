@@ -23,11 +23,12 @@ local lib = PW.Progression --[[@as PW.ProgressionLib]]
 
 ---@param store PW.ProgressionStore
 ---@param ply Player
+---@param levelBefore? integer already resolved for a claim-bound gain
 ---@return PW.ProgressionMatch
-local function matchOf(store, ply)
+local function matchOf(store, ply, levelBefore)
     local record = store.matches[ply]
     if record == nil then
-        record = { xp = 0, levelBefore = lib._Level(store, ply), weapons = {}, medals = {} }
+        record = { xp = 0, levelBefore = levelBefore or lib._Level(store, ply), weapons = {}, medals = {} }
         store.matches[ply] = record
     end
     return record
@@ -43,9 +44,9 @@ function lib._PendingOf(store, ply)
     return pending
 end
 
-function lib._Track(store, ply, xp, weaponClass)
+function lib._Track(store, ply, xp, weaponClass, levelBefore)
     local pending = lib._PendingOf(store, ply)
-    local record = matchOf(store, ply)
+    local record = matchOf(store, ply, levelBefore)
     pending.xp = pending.xp + xp
     record.xp = record.xp + xp
     if weaponClass == nil then return end

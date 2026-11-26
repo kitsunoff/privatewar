@@ -49,6 +49,8 @@
 ---@class PW.UnlockGrantOptions
 ---@field source string
 ---@field grant? string idempotency key
+---@field xp? number finite nonnegative player XP, requires grant; uses normal XP scaling
+---@field currency? number finite nonnegative currency, requires grant; skipped if economy is inactive
 
 ---@class PW.UnlockGrantMeta
 ---@field source string

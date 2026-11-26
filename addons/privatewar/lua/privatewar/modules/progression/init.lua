@@ -157,6 +157,28 @@ local function addWeapon(store, ply, weaponClass, amount, params)
     return after > before
 end
 
+function lib._PrepareXP(store, amount)
+    local params = lib._Params(store.read)
+    return math.floor(sane(amount) * params.xpScale), params
+end
+
+-- No engine edges here: preparation resolves settings, and the caller has already committed the claim.
+function lib._StageClaimXP(store, ply, scaled, params)
+    local state = stateOf(store, ply)
+    local before = lib._PlayerLevel(params, state.xp)
+    lib._Track(store, ply, scaled, nil, before)
+    state.xp = state.xp + scaled
+    return before
+end
+
+function lib._NotifyClaimXP(store, ply, scaled, before, params)
+    store.notify("PW_ProgressionXP", ply, scaled)
+    local after = lib._PlayerLevel(params, stateOf(store, ply).xp)
+    if after > before then store.notify("PW_ProgressionLevelUp", ply, after, before) end
+    publishLevel(store, ply)
+    if after > before then lib._LevelsChanged(store, ply) end
+end
+
 ---Adds scaled XP to the player and, with a class, to the weapon. The gain joins the next delta and this match's
 ---record; a level change resends the levels and re-checks the classes (T-4.10).
 ---@param store PW.ProgressionStore
@@ -164,8 +186,7 @@ end
 ---@param amount number
 ---@param weaponClass string?
 local function gain(store, ply, amount, weaponClass)
-    local params = lib._Params(store.read)
-    local scaled = math.floor(sane(amount) * params.xpScale)
+    local scaled, params = lib._PrepareXP(store, amount)
     if scaled <= 0 then return end
     lib._Track(store, ply, scaled, weaponClass)
     local state = stateOf(store, ply)

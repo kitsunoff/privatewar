@@ -285,6 +285,7 @@
 ---@field sendDelta fun(owner: Player, delta: PW.ChallengeDelta)
 
 ---@class PW.ChallengeConnection
+---@field rewards? table<string, PW.ChallengePendingReward>
 ---@field upload? PW.ChallengeFileWeeks validated, bounded rows; projected only when their week is active
 ---@field progress PW.ChallengeProgressState
 ---@field dirty table<string, boolean>
@@ -295,6 +296,10 @@
 ---@field spawnedAt? number
 ---@field lifeKills integer
 ---@field attachments table<string, table<string, boolean>>
+
+---@class PW.ChallengePendingReward
+---@field reward PW.ChallengeReward
+---@field busy? boolean
 
 ---@class PW.ChallengeServer
 ---@field deps PW.ChallengeServerDeps
@@ -406,6 +411,8 @@
 ---@field _ChallengeBoundary fun(server: PW.ChallengeServer, ply: Player, boundary: PW.ChallengeProgressBoundary)
 ---@field _ChallengeEvent fun(server: PW.ChallengeServer, ply: Player, kind: string, facts?: PW.ChallengeEventFacts)
 ---@field _ChallengeCatalogue fun(): PW.ChallengeCandidate[]
+---@field _QueueChallengeReward fun(server: PW.ChallengeServer, ply: Player, week: PW.ChallengeWeek, id: string)
+---@field _RetryChallengeRewards fun(server: PW.ChallengeServer)
 
 ---@class PW
 ---@field Challenges? PW.ChallengesLib

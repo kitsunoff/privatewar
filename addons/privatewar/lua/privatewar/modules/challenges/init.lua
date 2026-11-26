@@ -3,6 +3,7 @@ local lib = assert(PW.Challenges)
 
 include("privatewar/modules/challenges/sv_catalogue.lua")
 include("privatewar/modules/challenges/sv_session.lua")
+include("privatewar/modules/challenges/sv_rewards.lua")
 include("privatewar/modules/challenges/sv_events.lua")
 
 local uploadName = "pw_challenges_upload"
@@ -106,6 +107,7 @@ end
 function module:PW_PhaseChange(phase, previous)
     local server = PW._ChallengeServer
     if server == nil then return end
+    lib._RetryChallengeRewards(server)
     lib._FlushChallenges(server, true, true, true)
     if phase == "LIVE" then
         -- Core announces LIVE before spawning the mode's initial roster. Preserve that first

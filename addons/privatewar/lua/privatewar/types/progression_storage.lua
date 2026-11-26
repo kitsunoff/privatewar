@@ -141,7 +141,7 @@
 ---@field _EncodeSummary fun(summary: PW.ProgressionSummary, writer: PW.ProgressionWriter)
 ---@field _DecodeSummary fun(reader: PW.ProgressionReader): PW.ProgressionSummary
 ---Internal (server): batching, upload, match records.
----@field _Track fun(store: PW.ProgressionStore, ply: Player, xp: number, weaponClass?: string)
+---@field _Track fun(store: PW.ProgressionStore, ply: Player, xp: number, weaponClass?: string, levelBefore?: integer)
 ---@field _CountMedal fun(store: PW.ProgressionStore, ply: Player, eventId: string)
 ---@field _LevelsChanged fun(store: PW.ProgressionStore, ply: Player)
 ---@field _LevelsOf fun(store: PW.ProgressionStore, ply: Player): PW.ProgressionLevels

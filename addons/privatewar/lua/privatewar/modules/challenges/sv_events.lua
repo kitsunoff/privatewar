@@ -67,12 +67,17 @@ function lib._ChallengeEvent(server, ply, kind, facts)
     local before = {}
     for _, objective in ipairs(routes.increments) do remember(server, connection, before, objective.id) end
     for _, rule in ipairs(routes.resets) do remember(server, connection, before, rule.objective.id) end
+    local week = server.week
     local result = lib._AdvanceProgress(server.plan, connection.progress, ev)
     markDifferences(server, ply, connection, before)
-    for _, id in ipairs(result.completed) do PW.Notify("PW_ChallengeCompleted", ply, id, server.week.label) end
+    for _, id in ipairs(result.completed) do
+        lib._QueueChallengeReward(server, ply, week, id)
+        PW.Notify("PW_ChallengeCompleted", ply, id, week.label)
+    end
     if result.bonus then
         connection.persist = true
-        PW.Notify("PW_ChallengeBonus", ply, server.week.label)
+        lib._QueueChallengeReward(server, ply, week, "bonus")
+        PW.Notify("PW_ChallengeBonus", ply, week.label)
     end
     if #result.completed > 0 or result.bonus then
         lib._FlushChallengeProgress(server, ply, true)

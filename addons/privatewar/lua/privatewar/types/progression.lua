@@ -58,6 +58,9 @@
 ---@field SetState fun(ply: Player, state: PW.ProgressionState)
 ---Server. Adds XP (times progression.xpscale) to the player, and to the weapon class when given.
 ---@field AddXP fun(ply: Player, amount: number, weaponClass?: string)
+---@field _PrepareXP fun(store: PW.ProgressionStore, amount: number): number, PW.ProgressionParams
+---@field _StageClaimXP fun(store: PW.ProgressionStore, ply: Player, xp: number, cfg: PW.ProgressionParams): integer
+---@field _NotifyClaimXP fun(s: PW.ProgressionStore, ply: Player, xp: number, old: integer, cfg: PW.ProgressionParams)
 ---Level of the player: the server state, a client the NW2 value of its own HUD.
 ---@field GetLevel fun(ply: Player): integer
 ---Client and server: XP into the level and XP needed for the next one (0 at the cap), from NW2.
