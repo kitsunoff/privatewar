@@ -48,6 +48,12 @@
 ---@field fields? table<string, "string"|"number"|"boolean">
 ---@field label? string
 
+---@class PW.ChallengeEventInput
+---@field type string
+---@field player Player
+---@field value? number
+---@field data? table<string, PW.ChallengeValue>
+
 ---@class PW.ChallengeWindow
 ---@field count integer
 ---@field seconds number
@@ -142,6 +148,7 @@
 
 ---The original resolved definition and its precompiled objectives.
 ---@class PW.ChallengeTemplate
+---@field filterFailed? boolean
 ---@field id string
 ---@field definition PW.Challenge
 ---@field tiers PW.ChallengeTier[]
@@ -302,6 +309,7 @@
 ---@field busy? boolean
 
 ---@class PW.ChallengeServer
+---@field badReportData? table<string, boolean>
 ---@field deps PW.ChallengeServerDeps
 ---@field players table<Player, PW.ChallengeConnection>
 ---@field week PW.ChallengeWeek
@@ -343,7 +351,14 @@
 ---@alias PW.ChallengeUploadFn fun(weeks: PW.ChallengeFileWeeks, active: PW.ChallengeWeek,
 ---    modes: table<string, PW.ChallengeCombine>): PW.ChallengeFileWeek
 
+---@alias PW.ChallengeEventFn fun(server: PW.ChallengeServer, ply: Player, kind: string,
+---    facts?: PW.ChallengeEventFacts): boolean
+
 ---@class PW.ChallengesLib
+---@field RegisterEventType fun(id: string, def: PW.ChallengeEventType): boolean
+---@field Report fun(ev: PW.ChallengeEventInput): boolean server only
+---@field _CustomEventTypes PW.ChallengeEventTypes
+---@field _KnownEvent fun(id: string, types: PW.ChallengeEventTypes): boolean
 ---Monday-based week index for a UTC Unix timestamp.
 ---@field WeekIndex fun(unixUtc: number): integer
 ---The ISO 8601 week label, using the calendar year of the Thursday.
@@ -409,7 +424,7 @@
 ---@field _FlushChallengeDelta fun(server: PW.ChallengeServer, ply: Player)
 ---@field _FlushChallenges fun(server: PW.ChallengeServer, view: boolean, file: boolean, force?: boolean)
 ---@field _ChallengeBoundary fun(server: PW.ChallengeServer, ply: Player, boundary: PW.ChallengeProgressBoundary)
----@field _ChallengeEvent fun(server: PW.ChallengeServer, ply: Player, kind: string, facts?: PW.ChallengeEventFacts)
+---@field _ChallengeEvent PW.ChallengeEventFn
 ---@field _ChallengeCatalogue fun(): PW.ChallengeCandidate[]
 ---@field _QueueChallengeReward fun(server: PW.ChallengeServer, ply: Player, week: PW.ChallengeWeek, id: string)
 ---@field _RetryChallengeRewards fun(server: PW.ChallengeServer)

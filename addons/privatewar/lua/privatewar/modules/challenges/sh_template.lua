@@ -15,6 +15,10 @@ local builtins = {
 }
 local shorthand = { "Event", "Filters", "Filter", "Target", "Count", "Scope", "Within", "ResetOn" }
 
+function lib._KnownEvent(id, types)
+    return builtins[id] == true or types[id] ~= nil
+end
+
 ---@param value any
 ---@param minimum integer
 ---@return boolean

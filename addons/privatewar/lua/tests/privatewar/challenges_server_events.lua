@@ -41,6 +41,8 @@
 
 local index = 2967
 local upload = "pw_challenges_upload"
+local questionProbe = "PW.Test.WeeklyChallengeCanCount"
+local customId = "pw_test:escaped"
 
 ---@param userId integer
 ---@param bot? boolean
@@ -54,13 +56,14 @@ end
 
 ---@param lib PW.ChallengesLib
 ---@param defs table<string, table<string, any>>
+---@param custom? PW.ChallengeEventTypes
 ---@return PW.ChallengeCandidate[]
-local function catalogue(lib, defs)
+local function catalogue(lib, defs, custom)
     ---@type PW.ChallengeCandidate[]
     local result = {}
     for id, def in pairs(defs) do
         def.Name, def.Description = id, id
-        result[#result + 1] = { template = assert(lib._Compile(id, def)) }
+        result[#result + 1] = { template = assert(lib._Compile(id, def, custom)) }
     end
     return result
 end
@@ -89,8 +92,9 @@ end
 ---@param defs table<string, table<string, any>>
 ---@param players Player[]
 ---@param isPlayer? fun(ply: Player): boolean
+---@param custom? PW.ChallengeEventTypes
 ---@return PW.TestChallengeServer?
-local function boot(defs, players, isPlayer)
+local function boot(defs, players, isPlayer, custom)
     local lib, module = PW.Challenges, PW.Modules.Get("challenges") --[[@as PW.Module?]]
     if lib == nil or module == nil then return nil end
     local new = rawget(lib, "_NewServer") --[[@as (fun(deps: PW.TestChallengeDependencies): table)?]]
@@ -98,7 +102,7 @@ local function boot(defs, players, isPlayer)
     ---@type PW.TestChallengeServer
     local f = { lib = lib, module = module, utc = lib.WeekBounds(index), now = 0, phase = "LOBBY", players = players,
         timers = {}, logs = {}, out = {} }
-    rawset(PW, "_ChallengeServer", new(dependencies(f, catalogue(lib, defs), isPlayer)))
+    rawset(PW, "_ChallengeServer", new(dependencies(f, catalogue(lib, defs, custom), isPlayer)))
     return f
 end
 
@@ -249,8 +253,69 @@ end
 return {
     groupName = "PW challenges server events and scheduling",
     beforeEach = function(state) state.previous = rawget(PW, "_ChallengeServer") end,
-    afterEach = function(state) rawset(PW, "_ChallengeServer", state.previous) end,
+    afterEach = function(state)
+        hook.Remove("PW_ChallengeCanCount", questionProbe)
+        rawset(PW, "_ChallengeServer", state.previous)
+    end,
     cases = {
+        {
+            name = "Events: PW_ChallengeCanCount false drops the event",
+            func = function()
+                local ply = actor(11)
+                local f = assert(boot({ kills = { Event = "kill", Target = 5 } }, { ply }))
+                start(f)
+                local calls = 0
+                hook.Add("PW_ChallengeCanCount", questionProbe, function(owner, ev)
+                    if rawequal(owner, ply) and ev.type == "kill" then
+                        calls = calls + 1
+                        return false
+                    end
+                end)
+                kill(f, ply)
+                expect(calls).to.equal(1)
+                expect(value(f, ply, "kills") or 0).to.equal(0)
+                hook.Remove("PW_ChallengeCanCount", questionProbe)
+                kill(f, ply)
+                expect(value(f, ply, "kills")).to.equal(1)
+            end
+        },
+        {
+            name = "Custom: Report validates type and data; an erroring Filter is isolated through PW.Call"
+                .. " and other templates count",
+            func = function()
+                local lib = assert(PW.Challenges)
+                local register = rawget(lib, "RegisterEventType")
+                    --[[@as (fun(id: string, def: PW.ChallengeEventType): boolean)?]]
+                local report = rawget(lib, "Report")
+                    --[[@as (fun(ev: { type: string, player: Player, data?: table<string, any> }): boolean)?]]
+                expect(register ~= nil and report ~= nil).to.beTrue()
+                assert(register ~= nil and report ~= nil)
+                local def = { fields = { role = "string", bonus = "number" } } --[[@as PW.ChallengeEventType]]
+                expect(register("missing_namespace", def)).to.beFalse()
+                expect(register(customId, def)).to.beTrue()
+                local ply, bot = actor(11), actor(12, true)
+                local brokenCalls = 0
+                local f = assert(boot({
+                    good = { Event = customId, Target = 5, Filters = { data = { role = "runner" } } },
+                    broken = { Event = customId, Target = 5, Filter = function()
+                        brokenCalls = brokenCalls + 1
+                        error("intentional challenge predicate failure")
+                    end }
+                }, { ply, bot }, nil, { [customId] = def }))
+                expect(report({ type = customId, player = ply })).to.beFalse()
+                start(f)
+                expect(report({ type = "pw_test:unknown", player = ply })).to.beFalse()
+                expect(report({ type = customId, player = bot })).to.beFalse()
+                local ev = { type = customId, player = ply, data = { role = "runner", bonus = "bad", extra = true } }
+                expect(report(ev)).to.beTrue()
+                expect(report(ev)).to.beTrue()
+                expect(ev.data.bonus).to.equal("bad")
+                expect(#f.logs).to.equal(1)
+                expect(brokenCalls).to.equal(1)
+                expect(value(f, ply, "broken") or 0).to.equal(0)
+                expect(value(f, ply, "good")).to.equal(2)
+            end
+        },
         {
             name = "Events: bots never progress and bot victims count for humans",
             func = function()

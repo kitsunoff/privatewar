@@ -13,6 +13,26 @@ local function routesFor(plan, event)
     return routes
 end
 
+---@param template PW.ChallengeTemplate
+---@param objective PW.ChallengeCompiledObjective
+---@param params PW.ChallengeParams
+---@return PW.ChallengePredicate
+local function matchObjective(template, objective, params)
+    local match, filter = objective.bind(params), objective.filter
+    if filter == nil then
+        return function(ev) return not template.filterFailed and match(ev) end
+    end
+    local caller = { ClassName = template.id, Filter = function(_, ev, resolved)
+        return true, filter(template.definition, ev, resolved)
+    end }
+    return function(ev)
+        if template.filterFailed or not match(ev) then return false end
+        local ran, accepted = PW.Call(caller, "Filter", ev, params)
+        if ran ~= true then template.filterFailed = true end
+        return ran == true and accepted == true
+    end
+end
+
 ---@param plan PW.ChallengeProgressPlan
 ---@param instance PW.ChallengeInstance
 ---@param template PW.ChallengeTemplate
@@ -25,7 +45,8 @@ local function bindItem(plan, instance, template, rounds)
         ---@type PW.ChallengePlannedObjective
         local objective = { id = instance.id, slot = slot, target = instance.targets[slot],
             scope = not rounds and compiled.scope == "round" and "match" or compiled.scope,
-            count = compiled.count, within = compiled.within, matches = compiled.bind(instance.params) }
+            count = compiled.count, within = compiled.within,
+            matches = matchObjective(template, compiled, instance.params) }
         item.objectives[slot] = objective
         for _, event in ipairs(compiled.events) do
             local increments = routesFor(plan, event).increments
@@ -33,7 +54,9 @@ local function bindItem(plan, instance, template, rounds)
         end
         for _, reset in ipairs(compiled.reset) do
             local resets = routesFor(plan, reset.event).resets
-            resets[#resets + 1] = { objective = objective, matches = reset.bind(instance.params) }
+            local matches = reset.bind(instance.params)
+            resets[#resets + 1] = { objective = objective,
+                matches = function(ev) return not template.filterFailed and matches(ev) end }
         end
     end
 end

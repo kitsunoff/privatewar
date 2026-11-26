@@ -61,9 +61,12 @@ end
 ---@param available table<PW.ChallengeParamSource, table<string, boolean>>
 ---@return boolean
 local function eligible(requires, available)
-    return requires == nil or (any(requires.modes, available.modes) and any(requires.playlists, available.playlists)
+    if requires == nil then return true end
+    for _, id in ipairs(requires.events or {}) do
+        if not lib._KnownEvent(id, lib._CustomEventTypes) then return false end
+    end
+    return any(requires.modes, available.modes) and any(requires.playlists, available.playlists)
         and any(requires.categories, available.categories) and hasKinds(requires.kinds)
-        and (requires.events == nil or #requires.events == 0))
 end
 
 ---@param param PW.ChallengeParam
@@ -92,7 +95,7 @@ end
 local function compiledOf(entity)
     local parsed = compiled[entity]
     if parsed ~= nil then return parsed end
-    local template, reason = lib._Compile(entity.ClassName, entity)
+    local template, reason = lib._Compile(entity.ClassName, entity, lib._CustomEventTypes)
     if template == nil then
         print("[PW] challenge " .. entity.ClassName .. " rejected: " .. (reason or "invalid template"))
     end
@@ -108,7 +111,9 @@ function lib._ChallengeCatalogue()
     local candidates = {}
     for _, entity in ipairs(registry.GetEnabledList()) do
         local template = compiledOf(entity)
-        if template == false or not eligible(template.definition.Requires, available) then continue end
+        if template == false or template.filterFailed or not eligible(template.definition.Requires, available) then
+            continue
+        end
         ---@type table<string, string[]>
         local values = {}
         for key, param in pairs(template.params) do values[key] = valuesFor(param, available) end

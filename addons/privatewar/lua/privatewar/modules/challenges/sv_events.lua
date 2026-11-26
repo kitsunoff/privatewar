@@ -52,16 +52,17 @@ end
 
 function lib._ChallengeEvent(server, ply, kind, facts)
     local match = server.match
-    if match == nil or server.deps.phase() ~= "LIVE" or not lib._ChallengeHuman(server, ply) then return end
+    if match == nil or server.deps.phase() ~= "LIVE" or not lib._ChallengeHuman(server, ply) then return false end
     local routes = server.plan.byType[kind]
     local connection = lib._ChallengeConnection(server, ply)
     local now = server.deps.clock()
     if connection.presentAt == nil and lib._ChallengeParticipant(server, ply) then connection.presentAt = now end
-    if routes == nil then return end
+    if routes == nil then return false end
     ---@type PW.ChallengeEvent
     local ev = { type = kind, player = ply, value = 1, mode = match.mode, modeBase = match.modeBase,
         playlist = match.playlist, match = server.serial, week = server.week.index, time = now }
     for key, value in pairs(facts or {}) do rawset(ev, key, value) end
+    if PW.Ask("PW_ChallengeCanCount", ply, ev) == false then return false end
 
     ---@type table<string, PW.ChallengeBefore>
     local before = {}
@@ -83,6 +84,61 @@ function lib._ChallengeEvent(server, ply, kind, facts)
         lib._FlushChallengeProgress(server, ply, true)
         lib._FlushChallengeDelta(server, ply)
     end
+    return true
+end
+
+---@param server PW.ChallengeServer
+---@param kind string
+---@param def PW.ChallengeEventType
+---@param raw any
+---@return table<string, PW.ChallengeValue>
+local function reportData(server, kind, def, raw)
+    ---@type table<string, PW.ChallengeValue>
+    local out = {}
+    local stripped = raw ~= nil and type(raw) ~= "table"
+    local fields = def.fields or {}
+    if type(raw) == "table" then
+        ---@cast raw table<any, any>
+        for key, value in pairs(raw) do
+            if type(key) == "string" and fields[key] == type(value)
+                and (type(value) ~= "number" or math.abs(value) < math.huge) then
+                out[key] = value
+            else
+                stripped = true
+            end
+        end
+    end
+    if stripped then
+        local logged = server.badReportData or {}
+        server.badReportData = logged
+        if not logged[kind] then
+            logged[kind] = true
+            server.deps.log("challenges: discarded invalid data for " .. kind)
+        end
+    end
+    return out
+end
+
+---@param input PW.ChallengeEventInput
+---@return boolean
+local function report(input)
+    local server = PW._ChallengeServer
+    if server == nil or type(input) ~= "table" or type(input.type) ~= "string" then return false end
+    if server.match == nil or server.deps.phase() ~= "LIVE" or not lib._ChallengeHuman(server, input.player) then
+        return false
+    end
+    local def = lib._CustomEventTypes[input.type]
+    if def == nil then return false end
+    local amount = input.value
+    if amount ~= nil and (type(amount) ~= "number" or not (amount >= 0 and amount < math.huge)) then return false end
+    return lib._ChallengeEvent(server, input.player, input.type, {
+        value = amount or 1, data = reportData(server, input.type, def, input.data)
+    })
+end
+
+function lib.Report(input)
+    local ok, reached = pcall(report, input)
+    return ok and reached == true
 end
 
 local objectives = { dom_capture = "capture", kc_confirm = "confirm", kc_deny = "deny",
