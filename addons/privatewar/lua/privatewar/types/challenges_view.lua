@@ -12,6 +12,11 @@
 ---@field fraction number
 ---@field progressText string
 
+---@class PW.ChallengePreviewLayout
+---@field height number
+---@field visible integer
+---@field extra integer
+
 ---@class PW.ChallengeRowView
 ---@field id string
 ---@field name string
@@ -69,4 +74,6 @@
 ---@field _UpdateChallengeToasts PW.ChallengeToastUpdater
 ---@field _OwnerChallengeView fun(api: PW, owner: Player, now: integer): PW.ChallengeWeekView?
 ---@field _PlayPreviewRows fun(snapshot: PW.ChallengeWeekView?): PW.ChallengePreviewRow[]
+---@field _PlayPreviewMetrics { header: number, row: number, footer: number }
+---@field _PlayPreviewLayout fun(count: integer, height: number, px: fun(n: number): integer): PW.ChallengePreviewLayout
 ---@field _OpenPlayPreview fun(model: PW.UIRouterModel): boolean

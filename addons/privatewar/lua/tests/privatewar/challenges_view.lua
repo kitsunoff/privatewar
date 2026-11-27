@@ -23,6 +23,8 @@
 ---@alias PW.ChallengeViewTestUpdate fun(queue: PW.ChallengeViewTestToast[], before: PW.ChallengeViewTestModel?,
 ---    after: PW.ChallengeViewTestModel): PW.ChallengeViewTestToast[]
 ---@alias PW.ChallengePreviewTestRows fun(snapshot: PW.ChallengeViewTestModel?): { text: string, fraction: number }[]
+---@alias PW.ChallengePreviewTestLayout fun(count: integer, height: number, px: fun(n: number): integer):
+---    { height: number, visible: integer, extra: integer }
 
 local reset = 1795392000
 
@@ -295,6 +297,18 @@ return {
                 expect(preview[2].text).to.equal("Reach 20 with SMG")
                 expect(preview[2].fraction).to.equal(0.75)
                 expect(#rows(nil)).to.equal(0)
+            end
+        },
+        {
+            name = "PLAY weekly preview uses PARTY-height header and truncates to the space above PARTY",
+            func = function()
+                local layout = assert(rawget(assert(PW.Challenges), "_PlayPreviewLayout"))
+                    --[[@as PW.ChallengePreviewTestLayout]]
+                ---@param n number
+                local function pixels(n) return math.floor(n) end
+                expect(layout(5, 332, pixels)).to.deepEqual({ height = 332, visible = 5, extra = 0 })
+                expect(layout(12, 332, pixels)).to.deepEqual({ height = 312, visible = 4, extra = 8 })
+                expect(layout(5, 51, pixels)).to.deepEqual({ height = 0, visible = 0, extra = 5 })
             end
         },
         {

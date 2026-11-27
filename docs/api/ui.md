@@ -1001,7 +1001,8 @@ and no playlist). The status line carries the note `waiting for host` for a play
 
 **The hub** (`lobby_hub`, `Root = true`, `Order = 10`, title "Private War"). Left: `PWCardList` of the playlists and the
 Custom game card. Centre: `PWOperator`. Right: the weekly challenge preview at the top, the PARTY `PWPlayerList`
-near the bottom, and GAME SETUP below the party. The hub does not show match settings or start a match. GAME SETUP
+near the bottom, and GAME SETUP below the party. The preview uses the PARTY header and panel styling, with progress
+per challenge and an overflow count when space is limited. The hub does not show match settings or start a match. GAME SETUP
 opens the selected playlist's setup or the custom game's setup section. Esc on the hub opens the leave dialog in
 `LOBBY` ("Leaving from the lobby"; see "Router (U-3)"). Selecting Custom sends `pw_playlist_pick ""` and opens the
 custom screen on its mode and map section.

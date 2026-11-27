@@ -19,9 +19,9 @@ local challenges = PW.Challenges --[[@as PW.ChallengesViewLib?]]
 ---@field cardList PWCardList
 ---@field operator PWOperator
 ---@field weekly PWButton
----@field weeklyTitle DLabel
----@field weeklyRows { label: DLabel, bar: PWProgressBar }[]
----@field weeklyCount integer
+---@field weeklyRows PW.ChallengePreviewRow[]
+---@field weeklyCount string
+---@field weeklyLayout? PW.ChallengePreviewLayout
 ---@field hintCard PWInfoCard entry hint (Singleplayer, P2P off)
 ---@field players PWPlayerList
 ---@field setup PWButton
@@ -76,39 +76,75 @@ local function showHint(view, hint)
     view.hintCard:SetText(hint.text)
 end
 
----@param parent Panel
----@param font "body"|"small"
----@return DLabel
-local function weeklyLabel(parent, font)
-    local label = vgui.Create("DLabel", parent) --[[@as DLabel]]
-    label:SetMouseInputEnabled(false)
-    label:SetFont(PW.UI.FontName(font))
-    label:SetTextColor((PW.UI.Style --[[@as PW.UIStyle]]).text)
-    return label
+---@param text string
+---@param font string
+---@param width number
+---@return string
+local function fit(text, font, width)
+    surface.SetFont(font)
+    return PW.UI.Board.Fit(text, math.max(0, width), function(value)
+        local w = surface.GetTextSize(value)
+        return w
+    end)
+end
+
+---@param row PW.ChallengePreviewRow
+---@param y number
+---@param w number
+local function paintWeeklyRow(row, y, w)
+    local kit = PW.UI --[[@as PW.UILib]]
+    local paint, s = kit.Draw, kit.Style --[[@as PW.UIStyle]]
+    local px = paint.Px
+    local left, right = px(36), w - px(20)
+    local body, small = kit.FontName("body"), kit.FontName("small")
+    surface.SetFont(small)
+    local progressWidth = surface.GetTextSize(row.progressText)
+    local text = fit(row.text, body, right - left - progressWidth - px(12))
+    paint.Rect(px(20), y + px(10), px(4), px(30), s.border_strong)
+    draw.SimpleText(text, body, left, y + px(18), s.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(row.progressText, small, right, y + px(18), s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    local barWidth = math.max(0, right - left)
+    paint.Rect(left, y + px(36), barWidth, px(6), s.bg_raised)
+    paint.Rect(left, y + px(36), math.floor(barWidth * row.fraction), px(6), s.accent)
+end
+
+---@param view PWLobbyHubView
+---@param w number
+---@param h number
+local function paintWeekly(view, w, h)
+    local layout = view.weeklyLayout
+    if challenges == nil or layout == nil then return end
+    local kit = PW.UI --[[@as PW.UILib]]
+    local paint, s = kit.Draw, kit.Style --[[@as PW.UIStyle]]
+    local px, metrics = paint.Px, challenges._PlayPreviewMetrics
+    local header, rowH = px(metrics.header), px(metrics.row)
+    local active = view.weekly._pwFocused or view.weekly:IsHovered()
+    local pad = px(20)
+    paint.Rect(0, 0, w, h, s.bg_panel)
+    paint.Rect(0, 0, w, header, active and s.bg_hover or s.bg_raised)
+    draw.SimpleText("WEEKLY CHALLENGES", kit.FontName("h2"), pad, header / 2, s.text,
+        TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(view.weeklyCount, kit.FontName("body"), w - pad, header / 2, s.text_muted,
+        TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    for index = 1, layout.visible do
+        local row = view.weeklyRows[index]
+        if row ~= nil then paintWeeklyRow(row, header + (index - 1) * rowH, w) end
+    end
+    local rowsEnd = header + layout.visible * rowH
+    if layout.extra > 0 and h > rowsEnd then
+        draw.SimpleText(string.format("+%d more", layout.extra), kit.FontName("small"), pad, (rowsEnd + h) / 2,
+            s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    end
+    paint.Outline(0, 0, w, h, active and s.accent or s.border)
 end
 
 ---@param view PWLobbyHubView
 local function showWeekly(view)
     local owner = LocalPlayer()
-    local rows = challenges ~= nil and IsValid(owner)
-        and challenges._PlayPreviewRows(challenges._OwnerChallengeView(PW, owner, os.time())) or {}
-    view.weeklyCount = #rows
-    view.weekly:SetVisible(#rows > 0)
-    for index, row in ipairs(rows) do
-        local pair = view.weeklyRows[index]
-        if pair == nil then
-            local bar = vgui.Create("PWProgressBar", view.weekly) --[[@as PWProgressBar]]
-            bar:SetMouseInputEnabled(false)
-            pair = { label = weeklyLabel(view.weekly, "small"), bar = bar }
-            view.weeklyRows[index] = pair
-        end
-        pair.label:SetText(row.progressText .. "  ·  " .. row.text)
-        pair.bar:SetProgress(row.fraction)
-    end
-    for index, pair in ipairs(view.weeklyRows) do
-        pair.label:SetVisible(index <= #rows)
-        pair.bar:SetVisible(index <= #rows)
-    end
+    local snapshot = challenges ~= nil and IsValid(owner)
+        and challenges._OwnerChallengeView(PW, owner, os.time()) or nil
+    view.weeklyRows = challenges ~= nil and challenges._PlayPreviewRows(snapshot) or {}
+    view.weeklyCount = snapshot ~= nil and string.format("%d/%d", snapshot.bonus.completed, #snapshot.rows) or ""
     view:InvalidateLayout(true)
 end
 
@@ -133,11 +169,11 @@ local function fill(view)
     end
     view.operator = vgui.Create("PWOperator", view) --[[@as PWOperator]]
     view.weekly = vgui.Create("PWButton", view) --[[@as PWButton]]
-    view.weekly:SetVariant("secondary")
+    view.weekly:SetVisible(false)
     PW.UI.Focusable(view.weekly, "hub_weekly", "weekly_preview")
-    view.weeklyCount, view.weeklyRows = 0, {}
-    view.weeklyTitle = weeklyLabel(view.weekly, "body")
-    view.weeklyTitle:SetText("WEEKLY CHALLENGES")
+    view.weeklyCount, view.weeklyRows = "", {}
+    local weekly = view.weekly --[[@as PANEL]]
+    weekly.Paint = function(_, w, h) paintWeekly(view, w, h) return true end
     view.hintCard = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
     view.hintCard:SetVisible(false)
     view.players = vgui.Create("PWPlayerList", view) --[[@as PWPlayerList]]
@@ -151,23 +187,17 @@ end
 
 ---@param view PWLobbyHubView
 ---@param rect PW.UIRect
+---@param budget number
 ---@param px fun(n: number): integer
 ---@return number
-local function layoutWeekly(view, rect, px)
-    local count = view.weeklyCount
-    if count == 0 then return 0 end
-    local height, width = px(42 + 34 * count), rect.w
-    local padding = px(16)
-    view.weekly:SetPos(rect.x, rect.y)
-    view.weekly:SetSize(width, height)
-    view.weeklyTitle:SetPos(padding, px(6))
-    view.weeklyTitle:SetSize(width - 2 * padding, px(28))
-    for index = 1, count do
-        local pair, y = view.weeklyRows[index], px(36 + 34 * (index - 1))
-        pair.label:SetPos(padding, y)
-        pair.label:SetSize(width - 2 * padding, px(22))
-        pair.bar:SetPos(padding, y + px(24))
-        pair.bar:SetSize(width - 2 * padding, px(6))
+local function layoutWeekly(view, rect, budget, px)
+    local layout = challenges ~= nil and challenges._PlayPreviewLayout(#view.weeklyRows, budget, px) or nil
+    local height = layout ~= nil and layout.height or 0
+    view.weeklyLayout = layout
+    view.weekly:SetVisible(height > 0)
+    if height > 0 then
+        view.weekly:SetPos(rect.x, rect.y)
+        view.weekly:SetSize(rect.w, height)
     end
     return height
 end
@@ -177,15 +207,19 @@ end
 ---@param px fun(n: number): integer
 local function layoutRight(view, right, px)
     local gap, buttonH = px(20), px(64)
-    local weeklyH = layoutWeekly(view, right, px)
+    local hintH = view.hintCard:IsVisible() and view.hintCard:WantedHeight(right.w) or 0
+    local partyWanted = view.players:WantedHeight(right.w)
+    local hintSpace = hintH > 0 and hintH + gap or 0
+    local budget = right.h - buttonH - gap * 2 - hintSpace - math.min(partyWanted, px(152))
+    local weeklyH = layoutWeekly(view, right, budget, px)
     local y = right.y + (weeklyH > 0 and weeklyH + gap or 0)
-    if view.hintCard:IsVisible() then
+    if hintH > 0 then
         view.hintCard:SetPos(right.x, y)
-        view.hintCard:SetSize(right.w, view.hintCard:WantedHeight(right.w))
-        y = y + view.hintCard:GetTall() + gap
+        view.hintCard:SetSize(right.w, hintH)
+        y = y + hintSpace
     end
     local buttonsY = right.y + right.h - buttonH
-    local partyH = math.min(view.players:WantedHeight(right.w), math.max(0, buttonsY - gap - y))
+    local partyH = math.min(partyWanted, math.max(0, buttonsY - gap - y))
     view.players:SetPos(right.x, buttonsY - gap - partyH)
     view.players:SetSize(right.w, partyH)
     view.setup:SetPos(right.x, buttonsY)

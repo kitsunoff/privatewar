@@ -1,5 +1,19 @@
 local lib = PW.Challenges --[[@as PW.ChallengesViewLib]]
 
+local previewMetrics = { header = 52, row = 56, footer = 36 }
+lib._PlayPreviewMetrics = previewMetrics
+
+function lib._PlayPreviewLayout(count, height, px)
+    local header, row, footer = px(previewMetrics.header), math.max(1, px(previewMetrics.row)),
+        px(previewMetrics.footer)
+    if count == 0 or height < header then return { height = 0, visible = 0, extra = count } end
+    local full = header + count * row
+    if full <= height then return { height = full, visible = count, extra = 0 } end
+    if height < header + footer then return { height = header, visible = 0, extra = count } end
+    local visible = math.max(0, math.floor((height - header - footer) / row))
+    return { height = header + visible * row + footer, visible = visible, extra = count - visible }
+end
+
 function lib._PlayPreviewRows(snapshot)
     ---@type PW.ChallengePreviewRow[]
     local rows = {}
