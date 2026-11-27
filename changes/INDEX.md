@@ -26,11 +26,14 @@ human-acceptance evidence; planned status is retained.
 - [Automatic Search and Destroy support for `de_` maps](planned/snd-de-autodetect.md)
 - [MW Base integration and Deck performance profile (T-3.8)](planned/mwbase-integration.md)
 - [TFA Base integration with attachments (T-3.7)](planned/tfa-integration.md)
+- [Progression rebalance: pacing, attachment spread and long tail](planned/progression-rebalance.md) (questions for
+  the maintainer open)
+- [Search and Destroy bot behaviour: site choice, route variety, corner checks, empty grenade](planned/snd-bot-behaviour.md)
 
 ## In progress
 
-- [Weekly challenges](in-progress/weekly-challenges.md): pure rotation and filters verified; implementation
-  continues on top of the local unlock authority.
+- [Weekly challenges](in-progress/weekly-challenges.md): core feature and PLAY preview locally integrated;
+  guarded dev commands, API documentation, and manual acceptance remain open.
 - [Scheduled events (T-11.16)](in-progress/scheduled-events.md): Lua infrastructure/content candidate; game gates pending.
 
 ## Blocked

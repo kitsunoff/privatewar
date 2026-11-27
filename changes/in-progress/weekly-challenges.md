@@ -4,6 +4,15 @@ Status: `in-progress`
 
 Recorded: 2026-11-21
 
+Latest checkpoint (2026-11-28): core weekly challenges and the PLAY lobby refresh are locally integrated at
+`bed1f99`, whose tree matches the tested feature head `2eeee7b`. `make check` passed on the integration
+tree. The full Deck run on the matching tree passed: 2390 passed, 0 failed, 1 skipped (optional Arctic).
+This covers rewards, client synchronization, 22 starter templates, the PROGRESS screen and toasts, and the
+PLAY preview. Playlist setup shares the Custom Game layout, with read-only settings and a host-only start.
+Guarded dev commands and the final weekly API documentation are not complete; optional Hardpoint content and
+manual visual, controller and real-guest acceptance remain open. A fresh Deck run was not performed on the
+release candidate.
+
 The independent rotation and filter work started on 2026-11-22 on `feat/weekly-challenges` from
 `f5199de`. Remaining implementation resumed on `53f04d4`, which includes the local unlock authority and tactical
 stims. Whole-feature gates and human acceptance are pending.
