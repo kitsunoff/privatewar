@@ -1,7 +1,7 @@
 # Lambda Players: personalities, profiles and bot chatter
 
 Status: **research and proposal, not an approved design**. Inspected on 2026-11-11. Follow-up:
-[planned Lambda bot voice](../changes/planned/lambda-bot-voice.md).
+[Lambda bot voice change record](../changes/done/lambda-bot-voice.md).
 
 ## Bottom line
 

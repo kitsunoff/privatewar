@@ -1,24 +1,29 @@
 # Lambda-compatible bot voices, names and chat
 
-Status: `planned`
+Status: `done`
 Recorded: 2026-11-11
 
 Research: [Lambda Players voice research](../../notes/28-lambda-voice-research.md). This record is tracking only; it does not authorize implementation, design changes, Deck access, redistribution or publication.
 
-## Candidate scope
+## Delivery and verification
 
-Make Private War's real Player bots able to use installed Lambda voice content for contextual chatter, draw nicknames from Lambda data, and send contextual messages using Lambda text lines. Keep a stable social identity across respawns and support idle and combat-event reactions. The approved boundary below uses a PW-owned chatter service with an optional installed-content adapter and independently selected stable voice/text profiles; it does not require a personal-profile bundle. Preserve `design/07-bots.md` d.2 and d.10; do not copy third-party code or bundle assets.
+Merged into `main` as `1446796` on 2026-11-21. The integration passed `make check` and the full Deck suite:
+2131 passed, 0 failed, 0 skipped. This records delivery and automated verification, not manual acceptance
+of playback with every installed Lambda content source.
+
+Private War's Player bots can use installed Lambda names, spatial voice and contextual text through the
+optional PW-owned chatter service. Voice and text profiles are selected independently and remain stable
+across respawns. Third-party content is not bundled.
 
 The user approved optional names from installed Lambda content on 2026-11-11; `design/06-progression.md` d.7 records the extension. Preserve uniqueness, safe name handling and the built-in fallback. The built-in pool retains its original restrictions; the extension does not authorize redistributing third-party material.
 
-## Approved boundary (2026-11-11; not implemented)
+## Approved boundary (2026-11-11)
 
 The user explicitly approved `design/12-audio.md` d.1–3 and the
 [Lambda contract](../../docs/api/feature-contracts.md#optional-lambda-content-boundary): locally installed content
 only, no distribution/download, built-in fallback, no semantic content filtering beyond necessary safety;
 idle/enemy-spotted/kill/death events, spatial voice, common chat and bounded rate/concurrency. Names remain unique
-and safe, identity stable across respawns. These are decisions, not research recommendations. Runtime, game
-verification and human acceptance remain pending; this record stays planned and grants no device/publication access.
+and safe, identity stable across respawns. These are decisions, not research recommendations.
 
 ## Additional approved decisions (2026-11-11)
 
@@ -36,11 +41,6 @@ verification and human acceptance remain pending; this record stays planned and 
 
 - No product blocker remains for these defaults, supported sources or independent selection. Broader personal
   profile imports, additional sources and a full Lambda template language remain outside the approved minimum.
-- Read-only inspection of the chatter feature's shared/server/content/client files establishes the inventory and
-  initial technical values only; it does not establish native compatibility, independent randomness, safe event
-  ordering, respawn stability, performance or human acceptance. Verify these through tests before acceptance.
+- Manual checks with mounted assets, audible playback, chat delivery and multiplayer behavior remain separate
+  from the automated integration result.
 - Do not call third-party entity APIs on Player bots or conflate social profiles with combat personalities.
-
-## Verification and gates
-
-If implementation is separately approved, use tests first: cover event eligibility and lifecycle, profile discovery and fallbacks, nickname collisions and fallback, placeholder substitution and missing targets, chat recipients, missing content/addon, filtering and permissions, rate limits, cleanup and multiplayer behavior as applicable. Verify actual mounted assets, chat delivery and Player playback in game, including server/client behavior and performance; current research includes no game test. Before merge run `nix develop --command make check` and `nix develop --command make test` with `pipefail`, plus required project and human gates. Steam Deck access requires fresh explicit permission and confirmation it is free; without game testing, report the gate incomplete. Record evidence without exposing private Deck paths or contents.

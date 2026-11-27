@@ -22,7 +22,6 @@ unresolved choices and unimplemented work. [Approved contracts](../docs/api/feat
 human-acceptance evidence; planned status is retained.
 
 - [Fira Sans fonts](planned/fira-sans.md)
-- [Lambda-compatible bot voices, names and chat](planned/lambda-bot-voice.md)
 - [Automatic Search and Destroy support for `de_` maps](planned/snd-de-autodetect.md)
 - [MW Base integration and Deck performance profile (T-3.8)](planned/mwbase-integration.md)
 - [TFA Base integration with attachments (T-3.7)](planned/tfa-integration.md)
@@ -42,6 +41,8 @@ human-acceptance evidence; planned status is retained.
 
 ## Done
 
+- [Lambda-compatible bot voices, names and chat](done/lambda-bot-voice.md): merged and game-tested;
+  manual acceptance remains separate.
 - [After-match rotation by default for playlists](done/aftermatch-rotation-default.md): local overnight integration;
   human checkpoint pending.
 - [Programmatic unlocks and entitlements](done/unlock-entitlements.md): local overnight integration;
