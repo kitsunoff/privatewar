@@ -132,6 +132,7 @@ end
 ---@class PW.TestPlaylistSetup
 ---@field start PW.LobbyAction
 ---@field canEdit boolean
+---@field actions PW.LobbyAction[]
 
 ---@alias PW.TestPlaylistSetupBuild fun(input: PW.LobbyHubInput, id: string): PW.TestPlaylistSetup
 ---@alias PW.TestPlaylistChoose fun(input: PW.LobbyHubInput, id: string, pick: fun(id: string),
@@ -225,6 +226,31 @@ return {
             end
         },
         {
+            name = "Playlist setup uses the Custom Game builder with the requested playlist",
+            func = function()
+                local chunk = assert(CompileFile("privatewar/screens/lobby_playlist.lua"))
+                local screen = {}
+                local custom = {}
+                local built = {}
+                local ctx = {}
+                local env = setmetatable({ SCREEN = screen, PW = {
+                    Lobby = { PlaylistSetupId = function() return "event" end },
+                    Registries = { screens = { Get = function(id)
+                        assert(id == "lobby_custom")
+                        return custom
+                    end } },
+                    Call = function(entity, method, context, playlist)
+                        assert(entity == custom and method == "Build")
+                        assert(context == ctx and playlist == "event")
+                        return built
+                    end
+                } }, { __index = _G })
+                setfenv(chunk, env)()
+                local build = assert(rawget(screen, "Build")) --[[@as fun(self: table, ctx: table): table]]
+                expect(build(screen, ctx)).to.equal(built)
+            end
+        },
+        {
             name = "Playlist setup stays read-only and only starts the acknowledged available playlist as host",
             func = function()
                 local setup = assert(rawget(lobby(), "_PlaylistSetup")) --[[@as PW.TestPlaylistSetupBuild]]
@@ -238,6 +264,8 @@ return {
                 list.active = "event"
                 local selected = setup(input, "event")
                 expect(selected.canEdit).to.beFalse()
+                expect(#selected.actions).to.equal(1)
+                expect(selected.actions[1]).to.equal(selected.start)
                 expect(selected.start.locked).to.beFalse()
                 expect(selected.start.request).to.deepEqual({ playlist = "event" })
                 list.canStart = false

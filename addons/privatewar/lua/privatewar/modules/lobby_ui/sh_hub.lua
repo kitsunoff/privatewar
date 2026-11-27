@@ -359,11 +359,15 @@ function lib._PlaylistSetup(input, id)
         start.reason = "Playlist is unavailable"
     end
     local fill = item ~= nil and item.fill > 0 and item.fill or nil
+    ---@type { [1]: string, [2]: string }[]
+    local rows = { { "Mode and map", "Picked by the playlist" } }
+    if fill ~= nil then rows[#rows + 1] = { "Bots fill", tostring(fill) } end
+    if item ~= nil and list ~= nil then rows[#rows + 1] = { "Schedule", lib._PlaylistTimer(item, list.sampledAt) } end
     return {
         name = item ~= nil and item.name or "Playlist",
         description = item ~= nil and description(item.summary) or "",
-        timer = item ~= nil and list ~= nil and lib._PlaylistTimer(item, list.sampledAt) or nil,
-        fill = fill, warning = lib._SlotWarning(fill, input.maxPlayers), canEdit = false, start = start
+        rows = rows, party = partyOf(input, fill), warning = lib._SlotWarning(fill, input.maxPlayers),
+        canEdit = false, start = start, actions = { start }
     }
 end
 

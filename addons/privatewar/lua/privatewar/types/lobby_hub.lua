@@ -92,11 +92,12 @@
 ---@class PW.LobbyPlaylistSetup
 ---@field name string
 ---@field description string
----@field timer? string
----@field fill? integer
+---@field rows { [1]: string, [2]: string }[]
+---@field party PW.UIPlayerSection[]
 ---@field warning? string
 ---@field canEdit boolean
 ---@field start PW.LobbyAction
+---@field actions PW.LobbyAction[]
 
 ---@alias PW.LobbyPlaylistChoice fun(input: PW.LobbyHubInput, id: string, pick: fun(id: string),
 ---    open: fun(id: string)): boolean

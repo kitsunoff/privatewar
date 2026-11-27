@@ -1006,9 +1006,10 @@ opens the selected playlist's setup or the custom game's setup section. Esc on t
 `LOBBY` ("Leaving from the lobby"; see "Router (U-3)"). Selecting Custom sends `pw_playlist_pick ""` and opens the
 custom screen on its mode and map section.
 
-**Playlist setup** (`lobby_playlist`, pushed from the hub). Selecting an available playlist sends a pick and opens
-this screen only for the host; it does not move guests or start a match. The description, bot fill and schedule are
-read-only. START PLAYLIST requires a server-confirmed, startable selection and host privileges. Back returns to PLAY.
+**Playlist setup** (`lobby_playlist`, pushed from the hub) uses the Custom Game layout. Selecting an available
+playlist sends a pick and opens this screen only for the host; it does not move guests or start a match. The
+description, bot fill and schedule are read-only. Custom Game actions are hidden except START PLAYLIST, which
+requires a server-confirmed, startable selection and host privileges. Back returns to PLAY.
 
 **The custom game screen** (`lobby_custom`, pushed from the hub, title "Custom game"). Left: the actions as cards (START
 MATCH, MODE & MAP, GAME SETUP, ENABLED CONTENT, NAVMESH) and the summary. Centre: the section of the selected action:
