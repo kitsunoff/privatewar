@@ -11,6 +11,7 @@ local lib = PW.Progression --[[@as PW.ProgressionLib]]
 
 include("privatewar/modules/progression/sv_storage.lua")
 include("privatewar/modules/progression/sv_wallet.lua")
+include("privatewar/modules/progression/sv_entitlements.lua")
 
 ---@param ply Player
 ---@param level integer
@@ -49,6 +50,7 @@ function lib._NewStore(opts)
     opts = opts or {}
     return {
         players = weakKeys(), pending = weakKeys(), batches = weakKeys(), matches = weakKeys(), uploaded = weakKeys(),
+        unlocksUploaded = weakKeys(),
         read = opts.read or function(id) return PW.Setting(id) end,
         publish = opts.publish or defaultPublish,
         notify = opts.notify or function(name, ...) PW.Notify(name, ...) end,
@@ -68,6 +70,7 @@ do -- a reload keeps the sessions and the batching, the functions are new
         store.batches = previous.batches or store.batches
         store.matches = previous.matches or store.matches
         store.uploaded = previous.uploaded or store.uploaded
+        store.unlocksUploaded = previous.unlocksUploaded or store.unlocksUploaded
         store.nextFlush = previous.nextFlush
     end
     PW._Progression = store
@@ -82,9 +85,11 @@ local function stateOf(store, ply)
         state = { xp = 0, weapons = {}, currency = 0, owned = {} }
         store.players[ply] = state
     end
-    -- A session kept across a reload may predate the wallet fields.
+    -- A session kept across a reload may predate the wallet and unlock fields.
     state.currency = state.currency or 0
     state.owned = state.owned or {}
+    state.grants = state.grants or {}
+    state.claims = state.claims or {}
     return state
 end
 
@@ -122,6 +127,7 @@ end
 
 function lib._SetState(store, ply, state)
     local source = istable(state) and state or {}
+    local current = stateOf(store, ply)
     ---@type table<string, number>
     local weapons = {}
     local list = istable(source.weapons) and source.weapons or {}
@@ -131,7 +137,7 @@ function lib._SetState(store, ply, state)
     store.players[ply] = {
         xp = sane(source.xp), weapons = weapons,
         currency = lib._CheckXP(source.currency, lib.MaxCurrency) or 0,
-        owned = lib._CheckOwned(source.owned, lib.MaxOwned)
+        owned = lib._CheckOwned(source.owned, lib.MaxOwned), grants = current.grants, claims = current.claims
     }
     publishLevel(store, ply)
 end
@@ -151,6 +157,28 @@ local function addWeapon(store, ply, weaponClass, amount, params)
     return after > before
 end
 
+function lib._PrepareXP(store, amount)
+    local params = lib._Params(store.read)
+    return math.floor(sane(amount) * params.xpScale), params
+end
+
+-- No engine edges here: preparation resolves settings, and the caller has already committed the claim.
+function lib._StageClaimXP(store, ply, scaled, params)
+    local state = stateOf(store, ply)
+    local before = lib._PlayerLevel(params, state.xp)
+    lib._Track(store, ply, scaled, nil, before)
+    state.xp = state.xp + scaled
+    return before
+end
+
+function lib._NotifyClaimXP(store, ply, scaled, before, params)
+    store.notify("PW_ProgressionXP", ply, scaled)
+    local after = lib._PlayerLevel(params, stateOf(store, ply).xp)
+    if after > before then store.notify("PW_ProgressionLevelUp", ply, after, before) end
+    publishLevel(store, ply)
+    if after > before then lib._LevelsChanged(store, ply) end
+end
+
 ---Adds scaled XP to the player and, with a class, to the weapon. The gain joins the next delta and this match's
 ---record; a level change resends the levels and re-checks the classes (T-4.10).
 ---@param store PW.ProgressionStore
@@ -158,8 +186,7 @@ end
 ---@param amount number
 ---@param weaponClass string?
 local function gain(store, ply, amount, weaponClass)
-    local params = lib._Params(store.read)
-    local scaled = math.floor(sane(amount) * params.xpScale)
+    local scaled, params = lib._PrepareXP(store, amount)
     if scaled <= 0 then return end
     lib._Track(store, ply, scaled, weaponClass)
     local state = stateOf(store, ply)
@@ -211,12 +238,18 @@ function lib._ViewOf(store, ply, lookup)
     if store.ownedActive() then
         owned = function(key) return lib._GetOwned(store, ply)[key] == true end
     end
-    return {
+    ---@type PW.ProgressionView
+    local view = {
         level = lib._Level(store, ply),
         weaponLevel = function(weaponId) return lib._WeaponLevelOf(store, ply, weaponId) end,
         lookup = lookup, unlockAll = params.unlockAll, maxAttachments = isnumber(cap) and cap --[[@as number]] or 5,
-        owned = owned
+        owned = owned,
+        granted = function(key)
+            local grants = stateOf(store, ply).grants
+            return grants ~= nil and grants[key] ~= nil
+        end
     }
+    return (PW.Unlocks --[[@as PW.UnlocksLib]])._BindPolicy(view, ply)
 end
 
 -- Hooks --------------------------------------------------------------------------------------------------------------

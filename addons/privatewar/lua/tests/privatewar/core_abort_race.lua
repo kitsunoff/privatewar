@@ -2,7 +2,7 @@
 -- arrives after an Abort never wins). Guards the candidates checked for the cp1.sh 5.2 failure: a Finish queued
 -- during a transition, a Finish in the same tick as the abort, an abort while a transition is in progress. Every case
 -- runs an isolated machine store (fake clock, capturing logger) with fresh PW.Call, settings and enable stores, and
--- restores them, PW.ActiveMode, pw_aftermatch and the test listeners afterwards; the real machine stays untouched.
+-- restores them, PW.ActiveMode and the test listeners afterwards; the real machine stays untouched.
 
 local listenerId = "PW_Test_AbortRace"
 local watched = { "PW_PhaseChange", "PW_MatchEnd" }
@@ -21,11 +21,6 @@ local function match()
     return must(PW.Match)
 end
 
----@return ConVar
-local function afterMatchVar()
-    return must(GetConVar("pw_aftermatch"))
-end
-
 ---@param state table<string, any>
 local function installStore(state)
     PW._Match = match()._NewStore({
@@ -36,12 +31,7 @@ local function installStore(state)
         clock = function() return state.now end,
         players = function() return {} end,
         settings = function()
-            local settings = match()._ReadSettings()
-            settings.prematch = 60
-            settings.countdown = 10
-            settings.postmatch = 15
-            settings.vote = 15
-            return settings
+            return { prematch = 60, countdown = 10, postmatch = 15, vote = 15, afterMatch = state.afterMatch }
         end
     })
 end
@@ -81,7 +71,7 @@ local function driveTo(state, mode, target)
     if target == "LIVE" then return end
     assert(match().Finish({ winner = 1 }), "Finish failed")
     if target == "POSTMATCH" then return end
-    afterMatchVar():SetString("rotation")
+    state.afterMatch = "rotation"
     expire(state)
 end
 
@@ -99,12 +89,11 @@ return {
         state.previousEnable = PW._Enable
         state.previousCall = PW._Call
         state.previousMode = PW.ActiveMode
-        state.previousAfterMatch = afterMatchVar():GetString()
         PW._Settings = must(PW.Settings)._NewStore()
         PW._Enable = must(PW.Enable)._NewStore({ registries = function() return {} end })
         PW._Call = { log = function() end, failed = setmetatable({}, { __mode = "k" }), profile = {} }
         PW.ActiveMode = nil
-        afterMatchVar():SetString("lobby")
+        state.afterMatch = "lobby"
         state.now = 1000
         state.logged = {}
         state.registries = {}
@@ -123,7 +112,6 @@ return {
         PW._Enable = state.previousEnable
         PW._Call = state.previousCall
         PW.ActiveMode = state.previousMode
-        afterMatchVar():SetString(state.previousAfterMatch)
     end,
     cases = {
         {
@@ -136,7 +124,7 @@ return {
                     expect(match().Abort("abort in " .. target)).to.beTrue()
                     expect(match().GetPhase()).to.equal("LOBBY")
                     expect(match().GetAbortReason()).to.equal("abort in " .. target)
-                    afterMatchVar():SetString("lobby")
+                    state.afterMatch = "lobby"
                 end
             end
         },

@@ -1,8 +1,20 @@
 # Calling cards: equip a card, show the victim's card to the killer
 
-Status: `planned`
+Status: `done`
 
 Recorded: 2026-11-22
+
+Implemented on `feat/calling-card-kill-banner` from `76ed4c8` and merged locally into
+`integration/overnight-2026-11-22` at `0710176` on 2026-11-22. Not merged into `main`.
+
+- Test-first runs covered choice and wire, server validation, HUD, and picker. All 18 mandatory names and
+  28 card tests were verified. On `f308644` and again on `0710176`, `make check` passed and the full Deck
+  `make test` passed 2276, 0 failed, 1 skipped (requires the optional Arctic addon).
+- Package verification compared all ten 512×128 release PNGs byte-for-byte and rejected unrelated and nested
+  PNGs. The source artwork is not packaged.
+- Deck smoke confirmed Recruit in the picker, the reason on a reward-locked card, and the victim's card and
+  name above the XP strip after an actual enemy kill. The gradient edge was corrected and rechecked.
+  Profile data and settings checked by the probe were unchanged. The human checkpoint below remains pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
@@ -12,8 +24,9 @@ This record is tracking only; it does not authorize implementation, design or AP
 publication. Paths: `P = addons/privatewar/lua/privatewar/`, `T = addons/privatewar/lua/tests/privatewar/`; checked
 at `cf7c4ed`. Numbers are **proposed defaults, user to confirm**.
 
-Related: card unlocks must stay valid under [programmatic unlocks](unlock-entitlements.md) (cards are natural
-[weekly challenge](weekly-challenges.md) rewards); the selection flow mirrors operators (`docs/api/operators.md`).
+Related: card unlocks must stay valid under [programmatic unlocks](../done/unlock-entitlements.md) (cards are natural
+[weekly challenge](../in-progress/weekly-challenges.md) rewards); the selection flow mirrors operators
+(`docs/api/operators.md`).
 
 ## 1. User request
 
@@ -49,14 +62,16 @@ Related: card unlocks must stay valid under [programmatic unlocks](unlock-entitl
 ### 4.1 Selection (mirrors operators, `design/06-progression.md` d.7)
 
 - [ ] New module `P/modules/calling_cards/` (`shared.lua`, `init.lua`, `cl_init.lua`), library `PW.CallingCards`.
-- [ ] Client setting `calling_cards.selected` (scope `client`, string, default `""`), shown in SETTINGS > Personal and
+- [ ] Client setting `calling_cards.selected` (scope `client`, dynamic enum, default `default` for Recruit), shown in
+  SETTINGS > Personal and
   edited by a picker screen LOADOUT > CALLING CARD (`P/screens/loadout_card.lua`, modelled on
   `P/screens/loadout_operator.lua`): grid of cards, locked ones shown locked with the requirement text, preview of the
   banner at the bottom.
 - [ ] The client sends `pw_card_choice` (string, at most 32 bytes) on join and on change through `PW.Net.Receive`
-  (`who = "any"`, `rate = 2`, `maxLen = 34`, owner the module).
+  (`who = "any"`, `rate = 2`, `maxLen = 34`, owner the module). The empty string remains a wire-only reset to Recruit;
+  it is not a settings enum option. The settings core does not change.
 - [ ] Server validation, pure `PW.CallingCards._Resolve(id, facts) -> string`: returns `id` when the card is registered,
-  enabled and unlocked for the player (`PW.Progression.IsUnlocked(ply, "cards", id)`, later `PW.Unlocks.IsUnlocked`),
+  enabled and unlocked for the player (`PW.Unlocks.IsUnlocked(ply, "cards", id)`),
   else the default card id. Malformed input keeps the previous choice. Re-checked at every spawn (an unlock can be
   lost when the host changes settings).
 - [ ] The resolved id is published as the NW2 string `pw_card` on the player (written only on change).
@@ -123,12 +138,13 @@ Related: card unlocks must stay valid under [programmatic unlocks](unlock-entitl
 - [ ] Readability does not depend on the art: the banner always draws a left-to-right dark gradient under the name
   (`bg` token, alpha about 0.85 at the left edge fading to 0 at 55 % of the width) before the text. Pure layout case
   in section 7: `Name plate gradient is drawn under the name on every card`.
-- [ ] The `{ level = false, reward = ... }` form exists only after [programmatic unlocks](unlock-entitlements.md).
+- [ ] The `{ level = false, reward = ... }` form exists only after [programmatic unlocks](../done/unlock-entitlements.md).
   Until then the six challenge cards are registered but hidden from the picker (or the whole challenge half ships
   with weekly challenges); the four level cards need no other change.
 - [ ] Each weekly challenge template grants its card through `Rewards.items` (`{ kind = "cards", id = ... }`) when the
   challenge is completed: `headshots` (C2), `longshots` (C8), `captures` (C10), `streak_kills` (C15), `life_kills`
-  (C20), `wins` (C17) in `changes/planned/weekly-challenges.md` section 7. Which tier grants it is open question 7.
+  (C20), `wins` (C17) in `changes/in-progress/weekly-challenges.md` section 7, at any existing tier. Delivery of
+  these rewards is owned by the weekly change and is not part of this feature's verification.
 - [ ] The three existing samples (`bomb`, `gold_medal`, `lightning`, store and bundle items) stay; their 16-pixel icons
   are drawn **centred** on a rarity plate, never stretched (pure layout case in section 7).
 
@@ -202,10 +218,8 @@ User answers (2026-11-22):
 4. Team kills: **no banner**.
 5. Bots: **random card per bot**.
 
-Still open:
-
 6. Show the victim's level next to the name? **No for now** (bots have no real level).
-7. Which challenge completion grants its card: **any tier** of that challenge in any week, or only the hard tier?
+7. Which challenge completion grants its card: **any existing tier**, implemented separately with weekly challenges.
 
 ## 10. Gates
 

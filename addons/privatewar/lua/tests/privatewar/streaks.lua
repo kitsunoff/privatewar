@@ -5,7 +5,7 @@
 -- ends after Duration, the bot wiring with the shared bot); reveal cases over a fresh reveal store; wiring cases for
 -- the kind, the slots and the defaults; the last case activates the real streaks in a LIVE test match.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---@class PW.StreaksTestState
 ---@field phase string
@@ -197,6 +197,72 @@ local pureCases = {
 }
 
 local moduleCases = {
+    {
+        name = "Streaks: earned and activated notifications fire once with the streak id",
+        func = function()
+            local streaks = lib()
+            local ply = fakePlayer("streak notification")
+            local module = must(must(PW.Modules).Get("streaks"))
+            ---@type { name: string, player: Player, id: string }[]
+            local events = {}
+            stub(PW, "Notify").with(function(name, owner, id)
+                if name == "PW_StreakEarned" or name == "PW_StreakActivated" then
+                    events[#events + 1] = { name = name, player = owner, id = id }
+                end
+            end)
+
+            test.settings.earn = "score"
+            expect(must(streaks._OnSpawn)(ply)).to.beTrue()
+            PW.Call(module, "PW_ScoreEvent", ply, "dom_capture", 500)
+            PW.Call(module, "PW_ScoreEvent", ply, "kill", 100)
+            expect(streaks.Inventory(ply)).to.deepEqual({ "pwt_uav", "pwt_cuav", "pwt_strike" })
+            expect(must(streaks.Use)(ply, "pwt_unknown")).to.beFalse()
+            expect(must(streaks.Use)(ply, "pwt_uav")).to.beTrue()
+            expect(must(streaks.Use)(ply, "pwt_uav")).to.beFalse()
+            expect(must(streaks.Give)(ply, "pwt_uav")).to.beTrue()
+            expect(events).to.deepEqual({
+                { name = "PW_StreakEarned", player = ply, id = "pwt_uav" },
+                { name = "PW_StreakEarned", player = ply, id = "pwt_cuav" },
+                { name = "PW_StreakEarned", player = ply, id = "pwt_strike" },
+                { name = "PW_StreakActivated", player = ply, id = "pwt_uav" }
+            })
+        end
+    },
+    {
+        name = "Streaks: damage streak id is scoped to tagged callbacks and restored after nested errors",
+        func = function()
+            local streaks = lib()
+            local currentId = streaks.DamageStreakId
+            expect(type(currentId)).to.equal("function")
+            assert(currentId ~= nil)
+            local damage = must(streaks.StreakDamage)
+            ---@type string[]
+            local observed = {}
+            local legacyDamage = false
+            local function observe()
+                observed[#observed + 1] = currentId() or "none"
+            end
+
+            expect(currentId()).to.beNil()
+            damage(function()
+                legacyDamage = streaks.IsDamage()
+                observe()
+            end)
+            damage("pwt_strike", function()
+                observe()
+                damage("pwt_uav", function()
+                    observe()
+                    error("nested streak damage test")
+                end)
+                observe()
+            end)
+            expect(legacyDamage).to.beTrue()
+            expect(observed).to.deepEqual({ "none", "pwt_strike", "pwt_uav", "pwt_strike" })
+            expect(currentId()).to.beNil()
+            expect(streaks.IsDamage()).to.beFalse()
+            expect(must(PW._Streaks).depth).to.equal(0)
+        end
+    },
     {
         name = "Mandatory: earning by kills: each streak of the set is earned when the kill count reaches its cost",
         func = function()
@@ -504,7 +570,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             expect(match().GetPhase()).to.equal("LOBBY")
             expect(match().Start(must(PW.Modes.Get("tdm")))).to.beTrue()
             local function fail(message)

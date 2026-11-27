@@ -8,7 +8,7 @@
 -- nothing"): a bot killed while cooking a frag drops the live grenade at its body; it explodes with the remaining
 -- fuse and the bot as the attacker.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---@class PW.GrenadesTestState
 ---@field bot Player?
@@ -361,7 +361,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             expect(match().GetPhase()).to.equal("LOBBY")
             expect(match().Start(must(PW.Modes.Get("tdm")))).to.beTrue()
             local function fail(message)

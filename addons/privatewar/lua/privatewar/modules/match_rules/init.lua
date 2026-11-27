@@ -68,14 +68,47 @@ local function reset(store)
     store.kills, store.teamKills, store.respawnAt, store.points = {}, {}, {}, {}
 end
 
+---@param weapon Weapon?
+---@return boolean?
+local function aiming(weapon)
+    if weapon == nil or not IsValid(weapon) then return nil end
+    local adapters = rawget(PW, "Adapters") --[[@as PW.AdaptersLib?]]
+    if adapters == nil then return nil end
+    ---@type any
+    local ads = adapters.CallFor(weapon, "IsAiming", weapon)
+    if type(ads) == "boolean" then return ads end
+    return nil
+end
+
+---@param victim Player
+---@param killer Player
+---@param dmg CTakeDamageInfo
+---@param weapon Weapon?
+---@param headshot boolean
+---@return table<string, any>
+local function killContext(victim, killer, dmg, weapon, headshot)
+    local streaks = PW.Streaks
+    local streakKill = streaks ~= nil and streaks.IsDamage ~= nil and streaks.IsDamage()
+    -- Older or disabled streak modules can identify damage without identifying the individual streak.
+    local damageId = (streakKill and streaks ~= nil and rawget(streaks, "DamageStreakId") or nil)
+        --[[@as (fun(): string?)?]]
+    return {
+        victim = victim, victimBot = victim:IsBot(), headshot = headshot,
+        distance = killer:GetPos():Distance(victim:GetPos()) * 0.01905, ads = aiming(weapon),
+        crouch = killer:Crouching(), airborne = not killer:IsOnGround(), explosive = dmg:IsDamageType(DMG_BLAST),
+        streakKill = streakKill, streak = damageId ~= nil and damageId() or nil
+    }
+end
+
 function lib.ScoreKill(victim, attacker, dmg)
     local isPlayer = IsValid(attacker) and attacker:IsPlayer()
     local killer = attacker --[[@as Player]]
+    local headshot = victim:LastHitGroup() == HITGROUP_HEAD
     local events = lib._KillEvents({
         suicide = attacker == victim,
         player = isPlayer,
         enemy = isPlayer and isEnemy(killer, victim),
-        headshot = victim:LastHitGroup() == HITGROUP_HEAD
+        headshot = headshot
     })
     if #events == 0 then return end
     local n = teamCount(PW.ActiveMode)
@@ -89,7 +122,8 @@ function lib.ScoreKill(victim, attacker, dmg)
     local score = PW.Score
     if score == nil then return end
     local weapon = weaponOf(killer, dmg)
-    for _, id in ipairs(events) do score.Award(killer, id, { weapon = weapon }) end
+    local opts = { weapon = weapon, context = killContext(victim, killer, dmg, weapon, headshot) }
+    for _, id in ipairs(events) do score.Award(killer, id, opts) end
 end
 
 ---@type Player[]

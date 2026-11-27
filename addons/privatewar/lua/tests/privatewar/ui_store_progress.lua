@@ -265,7 +265,7 @@ return {
                 expect(open.locked).to.beFalse()
                 expect(open.label).to.equal("BUY  300 CR")
                 expect(store().BuyButton(bomb, "owned", 650).reason).to.equal("You own this item")
-                expect(store().BuyButton(bomb, "unlocked", 650).reason).to.equal("Your level already unlocks this item")
+                expect(store().BuyButton(bomb, "unlocked", 650).reason).to.equal("This item is already unlocked")
                 local poor = store().BuyButton(offer("models", "riot", 800), "funds", 650)
                 expect(poor.locked).to.beTrue()
                 expect(poor.reason).to.equal("Not enough credits: 800 CR needed, 650 CR held")
@@ -299,7 +299,7 @@ return {
                     unknown = "Operator Pack is not sold any more",
                     notoffered = "Operator Pack has left the rotation",
                     owned = "You already own Operator Pack",
-                    unlocked = "Your level already unlocks Operator Pack",
+                    unlocked = "Operator Pack is already unlocked",
                     funds = "Not enough credits for Operator Pack (balance 1,250 CR)",
                     strange = "Purchase failed: strange"
                 }

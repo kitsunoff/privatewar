@@ -3,8 +3,8 @@
 -- Spawn in LIVE equips the resolved loadout with full counts; once the loadout's weapons are given
 -- (PW_LoadoutGiven, a tick later so perks are equipped) every slot's grenade SWEP is given with ammo = count.
 -- Death, disconnect and the end of the match empty it; a grenade being cooked at death is dropped first. A use (the
--- grenade SWEP's release through _Release, or a bot through Use) calls OnUse on the instance through PW.Call. Engine
--- calls are fields of the store, so the tests drive the rules with fakes; the SWEP parts are sv_grenades.lua.
+-- grenade SWEP's release through _Release, a bot through Use, or a weapon-less key request) calls OnUse through
+-- PW.Call. Engine calls are fields of the store; the SWEP parts are in sv_grenades.lua.
 
 local lib = PW.Equipment --[[@as PW.EquipmentLib]]
 
@@ -185,6 +185,19 @@ function lib.Use(ply, slot, opts)
     if entry.weapon ~= nil then return lib._BotThrow(ply, slot, entry, opts) end
     return lib._Spend(ply, slot, entry, opts)
 end
+
+function lib._ClientUse(ply, slot)
+    local entry = lib._UsableEntry(ply, slot)
+    if entry == nil or entry.weapon ~= nil then return false end
+    return lib._Spend(ply, slot, entry, nil)
+end
+
+assert(PW.Net).Receive("pw_equipment_use", { who = "any", phases = { "LIVE" }, rate = 4, maxLen = 1, owner = MODULE },
+    function(ply, bits)
+        if bits ~= 2 then return end
+        local slot = lib.Slots[net.ReadUInt(2)]
+        if slot ~= nil then lib._ClientUse(ply, slot) end
+    end)
 
 function lib._Release(ply, wep, opts)
     local slot = (wep --[[@as table]]).PWSlot --[[@as string?]]

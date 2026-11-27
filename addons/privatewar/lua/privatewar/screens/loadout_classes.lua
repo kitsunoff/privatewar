@@ -5,6 +5,7 @@
 -- Under the contents: EDIT, COPY, RENAME, DELETE and NEW CLASS (PW.LoadoutUI.ClassActions). A custom class opens
 -- the class editor (screens/loadout_editor.lua; RENAME starts in its name field). COPY duplicates its saved contents.
 -- OPERATOR opens the operator picker (screens/loadout_operator.lua, 06-progression.md d.7).
+-- CALLING CARD opens the calling-card picker (screens/loadout_card.lua, 06-progression.md d.6).
 -- Thin glue over PW.Loadout._ClassCards and _ClassRows (sh_classes_repair.lua) and the loadout_ui module.
 
 SCREEN.Tab = "loadout"
@@ -62,9 +63,14 @@ end
 
 ---@param view PWLoadoutClassesView
 local function showActions(view)
+    local cards = PW.CallingCards
+    local callingCard = cards ~= nil and cards.OpenPicker ~= nil and cards._Active()
+    view.buttons.calling_card:SetVisible(callingCard)
     local ui = editors()
     if ui == nil or ui.ClassActions == nil or ui.ReadClasses == nil then
-        for id, button in pairs(view.buttons) do button:SetVisible(id == "operator") end
+        for id, button in pairs(view.buttons) do
+            if id ~= "calling_card" then button:SetVisible(id == "operator") end
+        end
         return
     end
     for _, action in ipairs(ui.ClassActions(view.viewing, #ui.ReadClasses(), ui.MaxClasses())) do
@@ -146,11 +152,16 @@ local function create(view, base, from)
 end
 
 ---@param view PWLoadoutClassesView
----@param id PW.LoadoutUIActionId|"operator"
+---@param id PW.LoadoutUIActionId|"operator"|"calling_card"
 local function run(view, id)
     if id == "operator" then
         local operators = rawget(PW, "Operators") --[[@as PW.OperatorsLib?]]
         if operators ~= nil and operators.OpenPicker ~= nil then operators.OpenPicker() end
+        return
+    end
+    if id == "calling_card" then
+        local cards = PW.CallingCards
+        if cards ~= nil and cards.OpenPicker ~= nil then cards.OpenPicker() end
         return
     end
     local ui = editors()
@@ -213,14 +224,15 @@ end
 
 ---@param view PWLoadoutClassesView
 local function buildButtons(view)
-    view.buttons, view.order = {}, { "edit", "copy", "rename", "delete", "new", "operator" }
+    view.buttons, view.order = {}, { "edit", "copy", "rename", "delete", "new", "operator", "calling_card" }
     local labels = {
-        edit = "EDIT", copy = "COPY", rename = "RENAME", delete = "DELETE", new = "NEW CLASS", operator = "OPERATOR"
+        edit = "EDIT", copy = "COPY", rename = "RENAME", delete = "DELETE", new = "NEW CLASS", operator = "OPERATOR",
+        calling_card = "CALLING CARD"
     }
     for _, id in ipairs(view.order) do
         local button = vgui.Create("PWButton", view) --[[@as PWButton]]
         button:SetText(labels[id])
-        local second = id == "new" or id == "operator"
+        local second = id == "new" or id == "operator" or id == "calling_card"
         button:SetVariant(id == "delete" and "danger" or (second and "secondary" or nil))
         local spec = PW.UI.Focusable(button, second and "class_new" or "class_actions")
         spec.axis = "horizontal"

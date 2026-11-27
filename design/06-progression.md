@@ -11,10 +11,11 @@ XP, unlocks, persistence.
 0. Progression is local per player, sent to the host on join, and forgeable (accepted; `../DESIGN.md`, Decided).
 
 1. **MVP layers: player level, weapon level, unlock-all.**
-   - Player level (XP) unlocks entities through their `Unlock` field: weapons, perks, equipment, killstreaks, wildcards.
+   - Player level (XP) unlocks entities through their `Unlock` field; other sources (purchases, grants,
+     `unlockall`, addons) follow d.8.
    - Weapon level (XP per weapon) unlocks attachments (decision 2).
    - `server` setting `progression.unlockall`: the host opens everything with one switch (friends on a fresh install should not grind to play). Progression still accumulates.
-   - After MVP: prestige, challenges (for example "100 headshots" → camo).
+   - After MVP: prestige and per-weapon camo challenges. Weekly challenges are defined by d.9.
 
 2. **Attachments and camos are curated inside the weapon entry; fallback by count.**
 
@@ -35,6 +36,9 @@ XP, unlocks, persistence.
 
    - Attachments do not become registry entities (no per-attachment ConVars; there are thousands). They stay adapter data (`04-weapons.md` decision 1); curation lives in the weapon entry, declarative (`weapons/<class>.lua`) or programmatic.
    - With curation: `Unlock` by weapon level (MW2019 style), `Cost` for Pick X (`05-loadout.md` decision 2), `Hidden` to never offer an option.
+   - `Unlock` is an integer, `{ level = N }`, `false` (no level path), or a table with `level` (integer or
+     `false`) and an optional `hint` (text or `#phrase` shown while locked). The same forms apply to attachment
+     and camo curation.
    - Without curation: the weapon level unlocks the **number** of attachments that may be installed (level 1 → 1 attachment, level 5 → 5), any attachment allowed; capped by `loadout.maxattachments`. Any pack works without markup.
    - `PW_PreRegister` runs on the weapon entry, so another addon can patch the attachment curation of someone else's weapon.
    - `soft = true` merges nested tables per option: a curated file overrides automatic values option by option, not the whole `Attachments` table.
@@ -48,7 +52,9 @@ XP, unlocks, persistence.
    - A host setting turns the automatic levels off (then the fallback by count applies).
    - Decided (confirmed by the user on 2026-11-07; the local manual checklist (not published) section 7, item 65): the formula weights and normalisation as implemented (`../docs/api/progression.md`, "Automatic unlock levels"; one table `PW.AutoUnlock.Weights`).
    - Decided on 2026-11-07 (added during implementation, confirmed by the user): weapons of the built-in starter classes (Assault, Close Quarters, Run and Gun) are always open at level 1 and count towards the 1-2 weapons open per category, so the ready-made classes stay usable for a new player with a large pack.
-   - Camos are the bases' cosmetic attachment options (`cosmetic` flag); MVP unlocks them by weapon level only; challenge unlocks come later.
+   - Camos are the bases' cosmetic attachment options (`cosmetic` flag). They unlock by weapon level or by an
+     entitlement (d.8); the server enforces camo levels like attachment levels. An entitled option is not counted
+     toward the weapon-level attachment count.
    - Banning a single attachment for a match: `set` setting `loadout.bannedatts` with `"<adapter>:<option id>"` strings.
 
 3. **One source for match score, XP and streak progress: score events, a kind `score_events/`.**
@@ -66,7 +72,11 @@ XP, unlocks, persistence.
    ```
 
    - Modes and modules award: `PW.Score.Award(ply, "kill", { weapon = wep })`.
-   - The `score` module adds match score and fires the notification `PW_ScoreEvent(ply, eventId, points, xp, weapon)`. Listeners: progression (player XP, and weapon XP when `weapon` is given), killstreaks in `score` mode (`05-loadout.md` decision 9), HUD popups and medals, announcer.
+   - `PW.Score.Award` accepts optional `opts.context`, a plain table of event facts (such as kill victim, headshot,
+     distance, ADS and stance). The `score` module adds match score and fires
+     `PW_ScoreEvent(ply, eventId, points, xp, weapon, context)`. The sixth argument is additive; old listeners are unchanged.
+     Listeners include progression, killstreaks in `score` mode (`05-loadout.md` d.9), HUD popups and medals, announcer
+     and weekly challenges (d.9).
    - Question hook `PW_ScoreValue(ply, eventId, points)` changes the value of any event (hardcore playlists, modes with other balance).
    - Medals are events with `Medal = true`. Their detectors (double kill, revenge, first blood, ...) are code in a medals module that calls `Award`. No separate `medals/` kind (replaces it in the draft kind list of `01-extensibility.md`).
    - Weapon XP comes only from events awarded with `weapon` (usually kills and headshots).
@@ -84,17 +94,24 @@ XP, unlocks, persistence.
    - The coefficients are `server` settings, so a host can speed up progression (double XP) without `unlockall`.
 
 5. **Storage and transfer: everything lives on the client.**
-   - Client file `data/privatewar/progression.json`: `{ v, xp, weapons = { [class] = xp } }`, next to `classes.json` (`05-loadout.md` decision 12).
+   - Client file `data/privatewar/progression.json` keeps its version 2 format, next to `classes.json`
+     (`05-loadout.md` decision 12). Its `owned` field stores purchases only.
+   - Granted entitlements live in a separate client file, `data/privatewar/unlocks.json`: grants with source,
+     time and grant ID, plus claimed grant IDs. The client uploads this data in a separate message on join and
+     applies server changes through the same delta batches. A separate file keeps grants safe when the player
+     joins a server running an older version.
    - On join the client sends progression together with classes; the server only sanity-checks (no negatives, numbers in sane bounds). Forgery is not detected (accepted).
    - During the match the server accumulates earned XP and every 10 s sends the client a **delta**; the client adds it and saves. A crash loses at most 10 s of progress.
    - The server does not store anyone's progression.
-   - At match end the client receives a summary (XP earned, levels gained, unlocks) for the `POSTMATCH` screen.
+   - At match end the client receives a summary (XP earned, levels gained) for the `POSTMATCH` screen.
 
 ### Economy
 
-6. **Meta currency and a shop (module `economy`; disabling it leaves level-only unlocks).**
+6. **Meta currency and a shop (module `economy`; disabling it ignores purchases, not grants).**
    - Currency is earned through score events: optional `EVENT.Currency`, default 10 % of XP, plus an end-of-match bonus. Stored in `progression.json` next to XP; forgeable (accepted). No real money, ever.
-   - Entities may have `Price` next to `Unlock`: an item is unlocked if the level is reached **or** it was bought. Purchases are stored in `progression.json`.
+   - Entities may have `Price` next to `Unlock`. An item is unlocked by any source of d.8; a purchase counts only
+     while the economy module is active, a grant always counts. Purchases are stored in `progression.json`.
+   - An item the player already owns or was granted cannot be bought (reason `owned`).
    - **Shop bundles: a kind `bundles/` (data), curated by addon authors.**
 
      ```lua
@@ -111,17 +128,60 @@ XP, unlocks, persistence.
      ```
 
    - **Rotation without a backend:** "Featured" changes daily, "Weekly" weekly; the selection is deterministic from the current date, so every player sees the same shop. A permanent catalogue sells single unlocks by `Price`.
-   - **Minimal cosmetics for MVP**, so bundles have something to sell: kinds `models/` (player models, "operators", visible in match and lobby) and `cards/` (calling cards: lobby, killfeed, killcam, scoreboard); camos already exist (decision 2).
+   - **Minimal cosmetics for MVP**, so bundles have something to sell: kinds `models/` (player models, "operators", visible in match and lobby) and `cards/` (calling cards); camos already exist (decision 2).
+   - A player equips one calling card (client setting, validated by the server like the operator choice, d.7).
+     When a player is killed by another human, only the killer sees a banner with the victim's name and calling
+     card, centred above the XP bar during `LIVE`. Team kills do not show a banner. Lobby, killfeed, killcam and
+     scoreboard placements stay future work.
    - After MVP, as separate modules: battle pass (100 reward tiers per season; season derived from the date, no backend), supply drops (random rewards for currency).
 
 7. **Operators and bot names** (decided with the user on 2026-11-07; module `operators`, `../docs/api/operators.md`).
-   - One global operator skin per player, not per class: chosen once, used in every match and in the lobby operator panel. The list holds every valid stock player model (`player_manager.AllValidModels()`, Workshop playermodels included) and the economy `models` entries: owned or free ones are selectable, locked purchasable ones show as locked with their price (or level).
+   - One global operator skin per player, not per class: chosen once, used in every match and in the lobby operator
+     panel. The list holds every valid stock player model (`player_manager.AllValidModels()`, Workshop playermodels
+     included) and the economy `models` entries: unlocked ones (d.8) are selectable; locked ones show their
+     requirement (price, level or reward).
    - Default: the player's own GMod `cl_playermodel` when it is valid, else a stock model. The choice is a client setting (`operators.model`, Personal settings); the picker with a model preview is LOADOUT > OPERATOR.
-   - The client sends the choice on join and on change through one small validated net message; the server checks it (a valid player model; an economy model must be unlocked or bought) and applies it in `PlayerSetModel` at spawn, with the player colour set to the team colour in team modes.
+   - The client sends the choice on join and on change through one small validated net message; the server checks it
+     (a valid player model; an economy model must be unlocked under d.8) and applies it in `PlayerSetModel` at spawn,
+     with the player colour set to the team colour in team modes.
    - Bots get a random valid player model when they join (economy models included, ownership ignored) and keep it for the session; no team-based split. In team modes their player colour is the team colour too.
    - Bots have an editable built-in pool of about 100 original first names, surnames and callsigns as a fallback; never "Bot01". Names must be unique among the current players.
    - User-approved extension (2026-11-11): an optional Lambda integration may also use names from locally installed Lambda content and personal profiles, including joke names that do not meet the original human-like-only restriction. The original exclusion of real people and copyrighted characters applies to the built-in pool, not as a blanket restriction on externally installed lists. No redistribution and no semantic content filtering; keep safety validation, uniqueness and the built-in fallback. The approved installed-source inventory and independent stable voice/text choices are defined by `12-audio.md` d.1–3 and `docs/api/feature-contracts.md`; broader personal-profile imports are not implied.
    - Details taken by recommendation (economy model wins over a stock model with the same path, fallback order, FFA colours): the local manual checklist (not published) section 7, item 68.
+
+8. **Unlock authority and entitlements** (approved 2026-11-22).
+   - One authority answers whether an item is unlocked for a player and why: `PW.Unlocks` in the progression
+     module. Items are registry entities (except shop bundles and preset classes) and weapon options
+     (`attachments` and `camos`, keyed `<weapon>:<option>`).
+   - The first applicable rule wins: unknown item (locked); `Hidden` option (never offered); `PW_UnlockOverride`
+     question hook; `progression.unlockall`; grant; purchase (economy active only, d.6); `Unlock = false`
+     (no level path, locked); price-only (d.6); player level for entities or weapon level for options.
+     An undeclared `Unlock` is open if no earlier rule applies.
+   - Entitlements are stored ownership records: purchases (d.6) and grants. Code can grant or revoke grants
+     through the API, for example for challenges, events, battle passes or admin commands. Grants are idempotent
+     by grant ID. Revocation removes grants only; purchases and claims remain.
+   - Levels are computed conditions, never stored entitlements, so curve changes apply retroactively.
+   - The authority supplies the requirement for locked items, such as "Unlocks at level 20",
+     "Buy it in the STORE for 600 CR", or a reward hint.
+   - Bots are not checked against unlocks (`05-loadout.md` d.14) and cannot receive grants.
+
+9. **Weekly challenges** (approved 2026-11-22).
+   - The `challenges/` kind holds templates (data and optional predicates). On Monday at 00:00 UTC a new
+     week starts. Each host deterministically selects enabled, available templates with bound parameters and a
+     difficulty mix, using the week and host seed. The default seed is 0; the default set is two easy,
+     two medium and one hard. Dots separate components of the instance ID, never appear inside them, and the
+     assembled ID is at most 40 bytes.
+   - Server-authoritative score, match, round, death and streak notifications and `PW.Challenges.Report`
+     drive progress for humans only. Victims may be bots, including recruit bots, and `progression.unlockall`
+     does not turn off tracking. A live match retains the week it started in.
+   - Progress travels with the client in versioned `data/privatewar/challenges.json`, separate from
+     `progression.json`; client upload and server state, progress and delta messages synchronize it.
+     Client counters are forgeable (d.0). Only matching active instances carry over to another host.
+     Missed weeks expire; there are no rerolls or catch-up in the first version.
+   - Completion automatically grants a reward once through the entitlement claim ledger (d.8).
+     Completing four challenges grants the default weekly bonus. The whole reward waits for
+     `PW.Unlocks.IsReady` before claim lookup or queuing XP/currency. An empty item list can record a claim;
+     XP and currency queued before the grant flush with it, and the client persists the claim first.
 
 ## Interfaces
 

@@ -4,6 +4,7 @@
 -- globals it touched.
 
 local listenerId = "PW_Test_Score"
+local legacyListenerId = "PW_Test_Score_Legacy"
 local hookNames = { "PW_ScoreValue", "PW_ScoreEvent", "PW_ScoreChanged" }
 
 ---Fails the case when a value is nil; returns it narrowed for the type checker.
@@ -71,6 +72,7 @@ return {
     afterEach = function(state)
         for _, registry in ipairs(state.registries --[[@as PW.Registry[] ]]) do registry._Release() end
         for _, name in ipairs(hookNames) do hook.Remove(name, listenerId) end
+        hook.Remove("PW_ScoreEvent", legacyListenerId)
         score()._Reset(PW._Score)
         PW._Score = state.previousStore
         PW.ActiveMode = state.previousMode
@@ -102,6 +104,45 @@ return {
                 expect(score().Get(ply)).to.equal(200)
                 expect(#calls).to.equal(2)
                 expect(calls[2][5]).to.beNil()
+            end
+        },
+        {
+            name = "Award passes opts.context as the sixth PW_ScoreEvent argument and old listeners still work",
+            func = function(state)
+                local registry = registryWith(state, { kill = { Name = "Kill", Points = 100, XP = 120 } })
+                local ply = fakePlayer()
+                local weapon = { class = "weapon_smg1" } --[[@as Weapon]]
+                local context = { headshot = false, distance = 20 }
+                ---@type PW.ScoreOpts
+                local opts = { weapon = weapon, context = context }
+
+                ---@type table[]
+                local calls = {}
+                ---@type table[]
+                local legacy = {}
+                record("PW_ScoreEvent", calls)
+                hook.Add("PW_ScoreEvent", legacyListenerId, function(who, id, points, xp, wep)
+                    legacy[#legacy + 1] = { who, id, points, xp, wep }
+                end)
+
+                local ok, points, xp = score()._Award(PW._Score, registry, ply, "kill", opts)
+                expect(ok).to.beTrue()
+                expect(points).to.equal(100)
+                expect(xp).to.equal(120)
+                expect(#legacy).to.equal(1)
+                expect(legacy[1][1]).to.equal(ply)
+                expect(legacy[1][2]).to.equal("kill")
+                expect(legacy[1][3]).to.equal(100)
+                expect(legacy[1][4]).to.equal(120)
+                expect(legacy[1][5]).to.equal(weapon)
+                expect(#calls).to.equal(1)
+                expect(rawequal(calls[1][6], context)).to.beTrue()
+
+                score()._Award(PW._Score, registry, ply, "kill", { weapon = weapon })
+                expect(#legacy).to.equal(2)
+                expect(legacy[2][5]).to.equal(weapon)
+                expect(#calls).to.equal(2)
+                expect(calls[2][6]).to.beNil()
             end
         },
         {

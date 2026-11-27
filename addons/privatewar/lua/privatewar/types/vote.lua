@@ -123,6 +123,8 @@
 ---@field resolveMode? fun(id: string): table? an enabled mode entity by id
 ---@field count? fun(): integer vote.options
 ---@field allowRepeat? fun(): boolean vote.allowrepeat
+---@field afterMatch? fun(): string vote.aftermatch
+---@field activePlaylist? fun(): string active playlist id ("" for Custom or an unavailable schedule)
 ---@field canPick? fun(ply: any): boolean
 ---@field readIndex? fun(): integer
 ---@field readPick? fun(): string, string mode id and map
@@ -143,6 +145,8 @@
 ---@field resolveMode fun(id: string): table?
 ---@field count fun(): integer
 ---@field allowRepeat fun(): boolean
+---@field afterMatch fun(): string
+---@field activePlaylist fun(): string
 ---@field canPick fun(ply: any): boolean
 ---@field readIndex fun(): integer
 ---@field readPick fun(): string, string
@@ -154,6 +158,8 @@
 ---@field Privilege string
 ---How many recently played maps are excluded: 2.
 ---@field RecentCount integer
+---Pure: resolves vote.aftermatch against the active playlist ("" = Custom); unknown values behave like "auto".
+---@field ResolveAfterMatch fun(setting: string, activePlaylist: string): PW.AfterMatch
 ---Pure: up to count distinct options sampled by weight (a mode by its playlist weight, then a fitting map). The
 ---last RecentCount maps are excluded when the playlist has 3 or more fitting maps; the current match is excluded
 ---unless allowRepeat. When the exclusions leave nothing, the recent rule and then the repeat rule are dropped.

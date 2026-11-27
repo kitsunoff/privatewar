@@ -1,15 +1,28 @@
-# Stim equipment: healing stim and speed stim
+# Stim equipment: heal, speed and armor stims
 
-Status: `planned`
+Status: `done`
 
 Recorded: 2026-11-21
+
+Implementation started 2026-11-22 on `feat/stim-equipment` from `226330a`. Scope is the approved three stims,
+equipment input, bot and HUD support, and optional animation integration.
+
+Task branch verification (2026-11-22, `8ba534a`): `nix develop --command make check` passed, including packaging.
+The coordinator checked scope, all 51 required test names and the assertion bodies, and independently ran the
+full Deck suite with `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test`: 2185 passed,
+0 failed, 1 skipped. The skip checks restoring the Arctic vial ConVar; that optional addon was not installed.
+The corrected Deck screenshot shows the Speed Stim countdown clear of the ready UAV square and its key hint.
+The visual-placement regression ran 2184 passed, 1 failed, 1 skipped before the correction and 2185 passed,
+0 failed, 1 skipped after it. Merged locally into `integration/overnight-2026-11-22` at `76ed4c8` on 2026-11-22,
+not into `main`. Integration `make check` and pre-commit passed; full `make test` passed 2248, 0 failed,
+1 skipped for the same optional Arctic case. Human acceptance remains pending.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
-Related: the items' `Unlock` field must stay valid under [programmatic unlocks](unlock-entitlements.md); stim usage
-may later become a [weekly challenge](weekly-challenges.md) event (not in this scope).
+Related: the items' `Unlock` field must stay valid under [programmatic unlocks](../done/unlock-entitlements.md); stim usage
+  may later become a [weekly challenge](../in-progress/weekly-challenges.md) event (not in this scope).
 
 Research: [Arctic's Combat Stims research](../../notes/30-arctic-stims-research.md). This record is tracking, not
 authorization: it does not authorize implementation, design or contract changes, Steam Deck access, redistribution or
@@ -391,9 +404,12 @@ PW.StimsArctic._ShouldSwap(current: string?) -> boolean
 - [ ] HUD equipment line: no code change. `P/hud/equipment.lua` already draws weapon-less items from the NW2 count
   (`[4] HEAL STIM x1`, dimmed at 0). Verify at the checkpoint, including the gamepad glyph `[D-LEFT]`.
 - [ ] Active-effect indicator: new HUD element `P/hud/stims.lua` (ui lane), `HUDELEMENT.Order = 31`, phases `LIVE`,
-  bottom right above the equipment lines (design units: right 1880, baseline 830). Lines: `SPEED 4.2` while the speed
-  effect runs (one decimal), `HEALING` / `ARMOR` while heal or armor ticks run. Text is rebuilt only when it changes; no allocation per
-  frame; colour token `text`, font `PW.UI.FontName("small")` as in `P/hud/equipment.lua`.
+  bottom right above the equipment lines (design units: right 1660, baseline 830). Reserve the right-edge streak
+  column, bar and key hints even if the streak element is disabled, so the stim lines never move when it toggles.
+  The original right anchor at 1880 overlapped the UAV tile in the 2026-11-22 Deck smoke check and was revised.
+  Lines: `SPEED 4.2` while the speed effect runs (one decimal), `HEALING` / `ARMOR` while heal or armor ticks run.
+  Text is rebuilt only when it changes; no allocation per frame; colour token `text`, font `PW.UI.FontName("small")`
+  as in `P/hud/equipment.lua`.
 - [ ] State reaches the client as NW2 floats on the player, written only on change through `PW.Stims.Mark`:
   `pw_stim_speed_until`, `pw_stim_heal_until`, `pw_stim_armor_until` (`CurTime` values, 0 = none).
 - [ ] Pure formatter (shared, `P/modules/stims/shared.lua`):
@@ -549,6 +565,7 @@ cases use injectable stores; in-game cases reuse shared bots (`beforeAll`/`after
 
 - [ ] `Stims HUD lines are cached until the effect state changes`
 - [ ] `Stims HUD draws nothing without active effects`
+- [ ] `Stims HUD stays left of the streak column and above the equipment rows`
 
 ### 11.6 `T/stims_bots.lua`
 
@@ -584,7 +601,7 @@ cases use injectable stores; in-game cases reuse shared bots (`beforeAll`/`after
   and HL2 weapons; health and speed change only by PW values (`ArcticMedShots_ActiveEffects` stays empty); map
   health vials are not replaced by random stims; note doubled sounds if any.
 - [ ] Without Arctic's addon: everything above except the animation works.
-- [ ] Game Setup shows the five `stims.*` settings and a changed value applies in the next match.
+- [ ] Game Setup shows all eight `stims.*` settings and a changed value applies in the next match.
 - [ ] Steam Deck frame time shows no visible hitch on injection.
 
 ## 13. Gates

@@ -34,6 +34,8 @@
 ---@field isCosmetic? fun(weaponId: string, buildSlot: string, option: string): boolean
 ---Progression (T-4.9): is the item unlocked for the player? Absent: nothing is locked. Set per player by the classes.
 ---@field isUnlocked? fun(kind: string, id: string): boolean
+---@field requirement? fun(kind: string, id: string): PW.UnlockRequirement
+---@field entitledOption? fun(weaponId: string, option: string): boolean exempt from the weapon-level count
 ---Progression (T-4.9): the option ids of a weapon build the player has not unlocked (curation and the count limit).
 ---@field lockedOptions? fun(weaponId: string, build: table<string, string|false>): table<string, boolean>
 ---Gunsmith (T-4.8): the options the weapon's adapter offers per build slot. Absent: the check is skipped.

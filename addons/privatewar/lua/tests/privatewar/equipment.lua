@@ -6,7 +6,7 @@
 -- T-11.4 (grenades as inventory SWEPs) removed the use message: the slot key selects the grenade SWEP and its
 -- release uses the slot (PW.Equipment._Release); the grenade cases are grenades_inventory.lua.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---A recorded OnUse call.
 ---@class PW.EquipmentTestUse
@@ -345,10 +345,16 @@ local wiringCases = {
         end
     },
     {
-        name = "Wiring: no use message any more (the slot key selects the grenade SWEP); pw_blind is registered",
+        name = "Wiring: only weapon-less equipment may use the slot request; pw_blind is registered",
         func = function()
             expect(rawget(lib(), "NetName")).to.beNil()
-            expect(must(PW._Net).defs.pw_equipment_use).to.beNil()
+            local request = must(must(PW._Net).defs.pw_equipment_use)
+            expect(IsValid(request.owner)).to.beTrue()
+            expect(request.owner).to.equal(PW.Modules.GetStored("equipment"))
+            expect(request.who).to.equal("any")
+            expect(request.phases).to.deepEqual({ LIVE = true })
+            expect(request.rate).to.equal(4)
+            expect(request.maxLen).to.equal(1)
             expect(util.NetworkStringToID("pw_blind")).toNot.equal(0)
         end
     }
@@ -389,7 +395,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             expect(match().GetPhase()).to.equal("LOBBY")
             expect(match().Start(must(PW.Modes.Get("tdm")))).to.beTrue()
             local function fail(message)

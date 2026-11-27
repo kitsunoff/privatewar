@@ -3,7 +3,7 @@
 -- host gets the default loadout on spawn in a LIVE match with shortened phase ConVars, restored after.
 
 local listenerId = "PW_Test_Loadout"
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---Fails the case when a value is nil; returns it narrowed for the type checker.
 ---@generic T
@@ -274,7 +274,7 @@ return {
                 must(GetConVar("pw_prematch_timeout")):SetString("0")
                 must(GetConVar("pw_countdown")):SetString("0")
                 must(GetConVar("pw_postmatch_time")):SetString("0.5")
-                must(GetConVar("pw_aftermatch")):SetString("lobby")
+                must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
                 expect(match().GetPhase()).to.equal("LOBBY")
                 local tdm = must(PW.Modes.Get("tdm"))
                 expect(match().Start(tdm)).to.beTrue()

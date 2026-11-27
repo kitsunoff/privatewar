@@ -5,7 +5,7 @@
 -- the last case is the in-game smoke: in a LIVE test match the shared bot spawns with a class from the pool, its
 -- weapons, its lethal and its streak set.
 
-local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch" }
+local phaseConVars = { "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_vote_aftermatch" }
 
 ---State of this group.
 ---@class PW.BotLoadoutsTestState
@@ -251,6 +251,10 @@ local glueCases = {
             if progression ~= nil then
                 stub(progression, "IsUnlocked").with(function() locked = locked + 1 return false end)
             end
+            local unlocks = PW.Unlocks
+            if unlocks ~= nil then
+                stub(unlocks, "IsUnlocked").with(function() locked = locked + 1 return false, "override" end)
+            end
             stub(lib(), "Harvest").with(function() end)
             store.players = { pwtest = {
                 { key = "pwtest:1", name = "Rifle", loadout = { primary = "weapon_ar2" } },
@@ -349,7 +353,7 @@ local gameCases = {
             must(GetConVar("pw_prematch_timeout")):SetString("0")
             must(GetConVar("pw_countdown")):SetString("0")
             must(GetConVar("pw_postmatch_time")):SetString("0.5")
-            must(GetConVar("pw_aftermatch")):SetString("lobby")
+            must(GetConVar("pw_vote_aftermatch")):SetString("lobby")
             local bot = sharedBot()
             local store = must(PW._BotLoadouts)
             local paused = store.paused

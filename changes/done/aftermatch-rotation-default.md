@@ -1,16 +1,28 @@
 # After-match rotation by default for playlists
 
-Status: `planned`
+Status: `done`
 
 Recorded: 2026-11-21
+
+Implemented on `feat/aftermatch-rotation-default` from `226330a` and merged locally into
+`integration/overnight-2026-11-22` at `f5199de` on 2026-11-22. Not merged into `main`.
+
+Verification on 2026-11-22:
+
+- New tests before implementation: 2131 passed, 13 failed (the 12 mandatory cases and the lobby preview case),
+  0 skipped. The implementation passed 2144 tests, 0 failed, 0 skipped (214 groups).
+- The coordinator reviewed the assertions and reran `nix develop --command make check` and
+  `set -o pipefail; nix develop --command env PW_TEST_TIMEOUT=480 make test` on task head `f875863`.
+  Static checks passed; the full Steam Deck run passed 2144 tests, 0 failed, 0 skipped.
+- Steam Deck screenshots at 1280×720 show both previews, the Host shortcut, enum selector and description.
+  Human acceptance remains pending; see the unchecked checkpoint below.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
 
-This record is tracking only; it does not authorize implementation, design or API changes, Deck access or
-publication. The user chose the direction on 2026-11-21 ("variant 3"); the exact wording of the design revision still
-needs approval before implementation.
+The user chose the direction on 2026-11-21 ("variant 3") and approved the revision on 2026-11-22.
+This record is not authorization for further implementation, Deck access or publication.
 
 ## Problem (verified in code on 2026-11-21)
 
@@ -117,16 +129,17 @@ So the core asks a question hook and the vote module answers.
 
 ## Implementation steps (TDD; one commit each)
 
-- [ ] Get approval for the design revision wording above; apply it to `design/00-core.md` d.2 and
+- [x] Get approval for the design revision wording above; apply it to `design/00-core.md` d.2 and
   `design/08-lobby.md` d.3 (commit `docs(design): ...`).
-- [ ] Tests first for `PW.Vote.ResolveAfterMatch` (pure) and the `PW_AfterMatch` answer with a fake store; run them
+- [x] Tests first for `PW.Vote.ResolveAfterMatch` (pure) and the `PW_AfterMatch` answer with a fake store; run them
   red (commit with the implementation of the next step is acceptable if the project keeps red tests out of commits).
-- [ ] Add the `vote.aftermatch` setting, `ResolveAfterMatch`, the hook answer and the types.
-- [ ] Core: remove `pw_aftermatch`, ask `PW_AfterMatch` in `_ReadSettings`; adapt core tests (`nil` → `lobby`,
+- [x] Add the `vote.aftermatch` setting, `ResolveAfterMatch`, the hook answer and the types.
+- [x] Core: remove `pw_aftermatch`, ask `PW_AfterMatch` in `_ReadSettings`; adapt core tests (`nil` → `lobby`,
   stubbed `rotation`).
-- [ ] Switch dev tooling and the remaining tests to `pw_vote_aftermatch`.
-- [ ] Update `docs/api/core.md`, `docs/api/modes.md`, `docs/agent-test-map.md` if it lists these cases.
-- [ ] Gates, then the human checkpoint.
+- [x] Switch dev tooling and the remaining tests to `pw_vote_aftermatch`.
+- [x] Update `docs/api/core.md`, `docs/api/modes.md`, `docs/agent-test-map.md` if it lists these cases.
+- [x] Pass the automated gates.
+- [ ] Complete the human checkpoint.
 
 ## Mandatory test cases
 
@@ -170,6 +183,6 @@ machine cases). New cases (proposed file and names):
 
 ## Gates
 
-- [ ] `nix develop --command make check` and `nix develop --command make test` with `set -o pipefail` before merge.
+- [x] `nix develop --command make check` and `nix develop --command make test` with `set -o pipefail` before merge.
 - [ ] Game tests and the checkpoint require explicit permission and confirmation that the Deck is free; record user
   acceptance separately from automated results.

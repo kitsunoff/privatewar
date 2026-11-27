@@ -1,7 +1,7 @@
 -- T-1.12 phase machine (TASKS.md, "Mandatory test cases" T-1.12 and the real-machine T-1.8 case; 00-core.md
 -- d.1-d.5; 02-modes.md d.7). Every case swaps in a fresh machine store (fake clock, injected players and
 -- durations, capturing logger), a fresh PW.Call store and fresh settings and enable stores (a started match takes
--- its snapshots there), and restores them, PW.ActiveMode, pw_aftermatch and the test listeners afterwards, so the
+-- its snapshots there), and restores them, PW.ActiveMode, PW.Ask and the test listeners afterwards, so the
 -- real machine stays in LOBBY and the real stores keep no match snapshot.
 
 local listenerId = "PW_Test_Phases"
@@ -15,11 +15,6 @@ local resources = include("privatewar_fixtures/resource_lifecycle.lua") --[[@as 
 local function must(value)
     assert(value ~= nil, "expected a value, got nil")
     return value
-end
-
----@return ConVar
-local function afterMatchVar()
-    return must(GetConVar("pw_aftermatch"))
 end
 
 ---@return PW.MatchLib
@@ -92,7 +87,7 @@ local function driveTo(state, target)
     if target == "LIVE" then return end
     assert(match().Finish({ winner = 1 }), "Finish failed")
     if target == "POSTMATCH" then return end
-    afterMatchVar():SetString("rotation")
+    state.afterMatch = "rotation"
     expire(state)
 end
 
@@ -107,6 +102,21 @@ local function eventCount(state, name)
     return count
 end
 
+---@param state table<string, any>
+local function installAfterMatch(state)
+    local ask = PW.Ask
+    state.previousAsk = ask
+    state.afterMatch = "lobby"
+    state.answerAfterMatch = function() return state.afterMatch end
+    ---@param name string
+    ---@param ... any
+    local function askWithAfterMatch(name, ...)
+        if name == "PW_AfterMatch" then return state.answerAfterMatch(...) end
+        return ask(name, ...)
+    end
+    rawset(PW, "Ask", askWithAfterMatch)
+end
+
 local group = {
     groupName = "PW phase machine",
     beforeEach = function(state)
@@ -118,7 +128,7 @@ local group = {
         PW._Enable = must(PW.Enable)._NewStore({ registries = function() return {} end })
         state.previousCall = PW._Call
         state.previousMode = PW.ActiveMode
-        state.previousAfterMatch = afterMatchVar():GetString()
+        installAfterMatch(state)
         state.now = 1000
         state.players = {}
         state.logged = {}
@@ -126,7 +136,6 @@ local group = {
         state.registries = {}
         state.counts = { Start = 0, Cleanup = 0, Think = 0 }
         PW.ActiveMode = nil
-        afterMatchVar():SetString("lobby")
         PW._Call = { log = function() end, failed = setmetatable({}, { __mode = "k" }), profile = {} }
         installStore(state)
         local events = state.events --[[@as string[] ]]
@@ -145,7 +154,7 @@ local group = {
         PW._Enable = state.previousEnable
         PW._Call = state.previousCall
         PW.ActiveMode = state.previousMode
-        afterMatchVar():SetString(state.previousAfterMatch)
+        rawset(PW, "Ask", state.previousAsk)
         -- Real listeners queued spawns/net work despite injected players. Restore first, then let the engine drain
         -- each case: a single group-end pause still overflows the client's reliable channel in the full suite.
         resources.Yield(timer.Simple)
@@ -287,7 +296,7 @@ local group = {
             func = function(state)
                 for _, phase in ipairs(PW.Phase.Names) do
                     installStore(state)
-                    afterMatchVar():SetString("lobby")
+                    state.afterMatch = "lobby"
                     driveTo(state, phase)
                     expect(match().GetPhase()).to.equal(phase)
                     match().Abort("host abort from " .. phase)
@@ -320,10 +329,64 @@ local group = {
             end
         },
         {
+            name = "POSTMATCH goes to LOBBY when no module answers PW_AfterMatch",
+            func = function(state)
+                driveTo(state, "POSTMATCH")
+                local asked = false
+                state.answerAfterMatch = function(mode)
+                    expect(mode).to.equal(state.mode)
+                    asked = true
+                    return nil
+                end
+                expire(state)
+                expect(match().GetPhase()).to.equal("LOBBY")
+                expect(asked).to.beTrue()
+                expect(PW.ActiveMode).to.beNil()
+            end
+        },
+        {
+            name = "POSTMATCH goes to VOTE when PW_AfterMatch answers rotation",
+            func = function(state)
+                driveTo(state, "POSTMATCH")
+                state.answerAfterMatch = function(mode)
+                    expect(mode).to.equal(state.mode)
+                    return "rotation"
+                end
+                expire(state)
+                expect(match().GetPhase()).to.equal("VOTE")
+                expect(match().GetPhaseEnd()).to.equal(state.now + 15)
+            end
+        },
+        {
+            name = "PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start",
+            func = function(state)
+                local askedAtDeadline = false
+                state.answerAfterMatch = function()
+                    if store().phase == "POSTMATCH" and state.now == store().endsAt then askedAtDeadline = true end
+                    return state.afterMatch
+                end
+                driveTo(state, "LIVE")
+                state.afterMatch = "rotation"
+                expect(match().Finish({})).to.beTrue()
+                state.now = store().endsAt - 0.1
+                match()._Tick()
+                expect(match().GetPhase()).to.equal("POSTMATCH")
+                expire(state)
+                expect(match().GetPhase()).to.equal("VOTE")
+                expect(askedAtDeadline).to.beTrue()
+            end
+        },
+        {
+            name = "pw_aftermatch is no longer created",
+            func = function()
+                expect(GetConVar("pw_aftermatch")).to.beNil()
+            end
+        },
+        {
             name = "After-match setting lobby: POSTMATCH -> LOBBY after the timer, VOTE skipped",
             func = function(state)
                 driveTo(state, "POSTMATCH")
-                afterMatchVar():SetString("lobby")
+                state.afterMatch = "lobby"
                 state.now = store().endsAt - 0.1
                 match()._Tick()
                 expect(match().GetPhase()).to.equal("POSTMATCH")
@@ -337,7 +400,7 @@ local group = {
             name = "After-match setting rotation: POSTMATCH -> VOTE -> PREMATCH with the next match",
             func = function(state)
                 driveTo(state, "POSTMATCH")
-                afterMatchVar():SetString("rotation")
+                state.afterMatch = "rotation"
                 expire(state)
                 expect(match().GetPhase()).to.equal("VOTE")
                 expect(match().GetPhaseEnd()).to.equal(state.now + 15)
@@ -376,7 +439,7 @@ local group = {
                 expect(counts.Cleanup).to.equal(1)
                 local afterLive = counts.Think
                 match()._Tick()
-                afterMatchVar():SetString("rotation")
+                state.afterMatch = "rotation"
                 expire(state)
                 match()._Tick()
                 expect(match().GetPhase()).to.equal("VOTE")
@@ -467,16 +530,18 @@ local group = {
             end
         },
         {
-            name = "Durations and the after-match setting come from ConVars",
-            func = function()
+            name = "Durations come from ConVars and PW_AfterMatch answers are normalized",
+            func = function(state)
                 local settings = match()._ReadSettings()
                 expect(settings.prematch).to.equal(must(GetConVar("pw_prematch_timeout")):GetFloat())
                 expect(settings.countdown).to.equal(must(GetConVar("pw_countdown")):GetFloat())
                 expect(settings.postmatch).to.equal(must(GetConVar("pw_postmatch_time")):GetFloat())
                 expect(settings.vote).to.equal(must(GetConVar("pw_vote_time")):GetFloat())
-                afterMatchVar():SetString("rotation")
+                state.afterMatch = "rotation"
                 expect(match()._ReadSettings().afterMatch).to.equal("rotation")
-                afterMatchVar():SetString("something")
+                state.afterMatch = "something"
+                expect(match()._ReadSettings().afterMatch).to.equal("lobby")
+                state.afterMatch = nil
                 expect(match()._ReadSettings().afterMatch).to.equal("lobby")
             end
         },

@@ -126,8 +126,8 @@ return {
                 ---@type table<string, true>
                 local guarded = {}
                 for _, name in ipairs(gate().Guarded) do guarded[name] = true end
-                for _, name in ipairs({ "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time", "pw_aftermatch",
-                    "pw_vote_time" }) do
+                for _, name in ipairs({ "pw_prematch_timeout", "pw_countdown", "pw_postmatch_time",
+                    "pw_vote_aftermatch", "pw_vote_time" }) do
                     expect(guarded[name], name).to.beTrue()
                 end
             end,

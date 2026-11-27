@@ -41,7 +41,9 @@ Hosting, Steam P2P join, the in-game pre-match lobby, map/mode vote.
    - Right: the party list (name, level, ready, host marker) and a "+N bots" line; bots are not listed individually.
    - Rejected: a squad line-up of every member's operator and weapon. It would require networking every member's cosmetics and attachment builds and assembling other players' weapons with attachments on each client (hard with ARC9/TFA).
    - Everyone: classes and gunsmith, store, progression, ready flag (informational, `00-core.md` decision 5).
-   - Host (privileges, `00-core.md` decision 7): playlist or Custom, map and mode, Game Setup, after-match behaviour (lobby or rotation), Start.
+   - Host (privileges, `00-core.md` decision 7): playlist or Custom, map and mode, Game Setup, after-match behaviour
+     (`vote.aftermatch` in SETTINGS > Host; `00-core.md` decision 2), Start. The playlist and Custom screens show a
+     read-only summary of the after-match behaviour for the host, with a shortcut to SETTINGS > Host.
    - Screens are built from registries: Game Setup from `Settings` (`01-extensibility.md` decision 17), gunsmith from adapters, store from `bundles/`. A module adds its own screen through the `screens/` kind.
    - Split of responsibility: `08-lobby` decides what the lobby contains and its rules; `10-frontend` decides how it is drawn (widget kit, operator scene, animations).
 

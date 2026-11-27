@@ -15,6 +15,7 @@ local hostHints = {
 SCREEN.Hints = hostHints
 
 local guestHints = { { action = "accept", label = "Select" }, { action = "back", label = "Back" } }
+local playlistHints = { { action = "accept", label = "Start playlist" }, { action = "back", label = "Back" } }
 
 -- The warning before a navmesh generation (03-mapdata.md d.8; notes/11-navmesh-generation.md "What the host sees").
 local navWarning = "Generating a navmesh takes from about a minute to over an hour on huge maps. The game " ..
@@ -28,9 +29,12 @@ local navWarning = "Generating a navmesh takes from about a minute to over an ho
 ---@field centre Panel holds the panels of the current section
 ---@field players PWPlayerList
 ---@field match PWInfoCard
+---@field afterMatch PWButton
 ---@field section string
 ---@field built? string the key the centre was built for (rebuilt when it changes)
 ---@field custom PW.LobbyCustom
+---@field playlist? string
+---@field playlistView? PW.LobbyPlaylistSetup
 ---@field parts table<string, Panel> panels of the current section by name
 ---@field framed boolean
 ---@field OnAction fun(self: PWLobbyCustomView, action: string)
@@ -47,7 +51,8 @@ end
 
 ---@param view PWLobbyCustomView
 local function startMatch(view)
-    local start = view.custom.start
+    local id = view.playlist
+    local start = id ~= nil and lobby()._PlaylistSetup(lobby().Input(), id).start or view.custom.start
     if start.locked or start.request == nil then return end
     lobby().SendStart(start.request)
 end
@@ -94,6 +99,11 @@ builders.setup = function(view, centre)
     form:SetSections(view.custom.sections, view.custom.canEdit)
     form.OnChange = function(_, control, value) lobby().SendSetting(control, value) end
     view.parts.body = form
+end
+
+builders.playlist = function(view, centre)
+    view.parts.title = title(centre, "Game setup (read only)")
+    view.parts.info = vgui.Create("PWInfoCard", centre) --[[@as PWInfoCard]]
 end
 
 ---The enable toggles as a generated form: one checkbox per entity, one section per kind.
@@ -164,6 +174,7 @@ end
 ---@param view PWLobbyCustomView
 ---@return string
 local function buildKey(view)
+    if view.playlist ~= nil then return "playlist" end
     local custom = view.custom
     return table.concat({ view.section, tostring(custom.modeSelected), tostring(custom.mapSelected),
         tostring(custom.canEdit),
@@ -187,15 +198,35 @@ end
 
 ---@param view PWLobbyCustomView
 local function refresh(view)
-    local custom = lobby()._Custom(lobby().Input())
-    view.custom = custom
-    lobby().SetCards(view.actions, custom.actions, view.section)
-    view.summary:SetSelection({ Name = custom.summary.mode, Short = custom.summary.badge }, custom.summary.map)
-    view.players:SetSections(custom.party)
+    local lib = lobby()
+    local input = lib.Input()
+    local id = view.playlist
+    if id ~= nil then
+        local playlist = lib._PlaylistSetup(input, id)
+        view.playlistView = playlist
+        lib.SetCards(view.actions, playlist.actions)
+        view.summary:SetSelection({ Name = playlist.name }, "Playlist")
+        view.players:SetSections(playlist.party)
+        view.match:SetRows(playlist.rows)
+        view.match:SetWarning(playlist.warning)
+        view.afterMatch:SetVisible(false)
+        buildCentre(view)
+        local info = view.parts.info --[[@as PWInfoCard]]
+        info:SetTitle(playlist.name)
+        info:SetText(playlist.description)
+    else
+        local custom = lib._Custom(input)
+        view.custom = custom
+        lib.SetCards(view.actions, custom.actions, view.section)
+        view.summary:SetSelection({ Name = custom.summary.mode, Short = custom.summary.badge }, custom.summary.map)
+        view.players:SetSections(custom.party)
+        view.match:SetRows(custom.rows)
+        view.match:SetWarning(custom.warning)
+        view.afterMatch:SetVisible(custom.afterMatch ~= nil)
+        view.afterMatch:SetText(custom.afterMatch or "")
+        buildCentre(view)
+    end
     view.match:SetTitle("Match")
-    view.match:SetRows(custom.rows)
-    view.match:SetWarning(custom.warning)
-    buildCentre(view)
     view.framed = false
     view:InvalidateLayout(true)
 end
@@ -209,6 +240,7 @@ local function onAction(view, id)
         view.actions:Refresh()
         return
     end
+    if view.playlist ~= nil then return end
     view.section = id
     buildCentre(view)
     if id == "modemap" and not view.custom.modeMap.locked then lobby().OpenPicker() end
@@ -237,11 +269,13 @@ local function layoutCentre(view, rect, px)
         local info = parts.info --[[@as PWInfoCard]]
         info:SetPos(0, bodyY)
         info:SetSize(rect.w, info:WantedHeight(rect.w))
-        local y = bodyY + info:GetTall() + gap
-        parts.fast:SetPos(0, y)
-        parts.fast:SetWide(rect.w)
-        parts.generate:SetPos(0, y + parts.fast:GetTall() + gap)
-        parts.generate:SetSize(px(360), px(64))
+        if parts.fast ~= nil and parts.generate ~= nil then
+            local y = bodyY + info:GetTall() + gap
+            parts.fast:SetPos(0, y)
+            parts.fast:SetWide(rect.w)
+            parts.generate:SetPos(0, y + parts.fast:GetTall() + gap)
+            parts.generate:SetSize(px(360), px(64))
+        end
     end
 end
 
@@ -262,34 +296,47 @@ local function layout(view, w, h)
     view.match:SetPos(right.x, right.y)
     view.match:SetSize(right.w, view.match:WantedHeight(right.w))
     local y = right.y + view.match:GetTall() + gap
+    if view.afterMatch:IsVisible() then
+        view.afterMatch:SetPos(right.x, y)
+        view.afterMatch:SetSize(right.w, px(52))
+        y = y + view.afterMatch:GetTall() + gap
+    end
     view.players:SetPos(right.x, y)
     view.players:SetSize(right.w, math.min(view.players:WantedHeight(right.w), right.y + right.h - y))
 end
 
-function SCREEN:Build(ctx)
+---@param playlist? string
+function SCREEN:Build(ctx, playlist)
     local view = vgui.Create("Panel", ctx.parent) --[[@as PWLobbyCustomView]]
     view:Dock(FILL)
+    view.playlist = playlist
     view.parts = {}
     view.actions = vgui.Create("PWCardList", view) --[[@as PWCardList]]
     view.actions.OnSelect = function(_, id) onAction(view, id) end
     view.summary = vgui.Create("PWSummary", view) --[[@as PWSummary]]
     view.centre = vgui.Create("Panel", view) --[[@as Panel]]
     view.match = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
+    view.afterMatch = lobby()._AfterMatchButton(view)
     view.players = vgui.Create("PWPlayerList", view) --[[@as PWPlayerList]]
     view.players:SetNote("Teams are assigned when the match starts.")
     local state = lobby().Input().state
     local host = state ~= false and state ~= nil and state.canStart
-    view.section = lobby().TakeSection() or (host and "modemap" or "setup")
+    view.section = playlist ~= nil and "playlist" or lobby().TakeSection() or (host and "modemap" or "setup")
     local hooks = view --[[@as PANEL]]
     hooks.PerformLayout = function(_, w, h) layout(view, w, h) end
     hooks.Think = function()
         if view.framed then return end
         view.framed = true
-        lobby().SetFrame(view.custom.note, view.custom.start.locked and guestHints or hostHints)
+        local playlistView = view.playlistView
+        if playlistView ~= nil then
+            lobby().SetFrame(playlistView.start.reason, playlistHints)
+        else
+            lobby().SetFrame(view.custom.note, view.custom.start.locked and guestHints or hostHints)
+        end
     end
     view.PWRefresh = function() refresh(view) end
     view.OnAction = function(_, action)
-        if action == "tertiary" then startMatch(view) end
+        if action == "tertiary" and view.playlist == nil then startMatch(view) end
     end
     refresh(view)
     return view

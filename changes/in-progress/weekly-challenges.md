@@ -1,12 +1,42 @@
 # Weekly challenges
 
-Status: `planned`
+Status: `in-progress`
 
 Recorded: 2026-11-21
+
+Latest checkpoint (2026-11-28): core weekly challenges and the PLAY lobby refresh are locally integrated at
+`bed1f99`, whose tree matches the tested feature head `2eeee7b`. `make check` passed on the integration
+tree. The full Deck run on the matching tree passed: 2390 passed, 0 failed, 1 skipped (optional Arctic).
+This covers rewards, client synchronization, 22 starter templates, the PROGRESS screen and toasts, and the
+PLAY preview. Playlist setup shares the Custom Game layout, with read-only settings and a host-only start.
+Guarded dev commands and the final weekly API documentation are not complete; optional Hardpoint content and
+manual visual, controller and real-guest acceptance remain open. A fresh Deck run was not performed on the
+release candidate.
+
+The independent rotation and filter work started on 2026-11-22 on `feat/weekly-challenges` from
+`f5199de`. Remaining implementation resumed on `53f04d4`, which includes the local unlock authority and tactical
+stims. Whole-feature gates and human acceptance are pending.
+
+Early scope evidence (2026-11-22, `19b1f71`): steps 1–4 are committed, with `nix develop --command make check`
+and pre-commit passing. Full Deck RED was 2144 passed, 23 failed, 0 skipped. After steps 1–3, all 14 of their new
+cases passed and the 10 step-4 cases failed as expected, including the dot-separator regression. Full Deck GREEN
+at `19b1f71` was 2168 passed, 0 failed, 0 skipped. This does not cover the remaining steps or approve integration.
+
+Design verification (2026-11-22, `4acd7f6`, not integrated): `nix develop --command make check` and pre-commit
+passed. Twenty test cases for steps 5–6 were drafted but are not in the branch: LuaLS rejected the drafts with
+`no-unknown` on two attempts. No game RED/GREEN was observed for them; neither step is implemented.
+
+Subsequent branch verification: steps 5–10 and the bounded state codec are implemented, not integrated.
+At `88a1e8a`, `make check` and the full Deck `make test` passed: 2319 passed, 0 failed, 1 skipped
+(optional Arctic). All 13 server cases and the 21 inherited cases that failed on the first server GREEN passed.
+The reward path and remaining steps are not verified.
 
 Approval (2026-11-22): the user approved every design change proposed in this record and the recommended
 default of every open question, except where an answer below says otherwise. This approves the design
 direction for implementation; push, PR, merge to `main` and publication still need separate approval.
+
+Instance ID clarification (approved 2026-11-22): a dot is only a component separator. Template IDs must not contain
+dots, and dotted parameter values are not selectable. The assembled format and 40-byte limit are unchanged.
 
 Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md) (CoD challenge design,
 generic quest architecture, the full event inventory and the gaps).
@@ -15,11 +45,11 @@ This record is tracking, not authorization. It does not authorize implementation
 Deck access, pushes or publication. Every number marked "proposed default" is unapproved. Existing decisions in
 `design/` and frozen contracts in `docs/api/` stay in force until the user approves the changes listed in section 2.
 
-Depends on [unlock entitlements](unlock-entitlements.md) (planned in parallel; see
+Uses the [unlock authority](../done/unlock-entitlements.md), already verified in the local integration (see
 [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md)). Item rewards and the
-reward idempotency ledger are delivered only through that system (`PW.Unlocks.Grant` with a claim id). XP and currency
-rewards go through the existing `PW.Progression.AddXP` and `PW.Progression.AddCurrency`. Implementation of this record
-starts only after the entitlement change has landed; steps 1 to 6 of section 9 (pure logic) may start earlier.
+reward idempotency ledger are delivered only through that system (`PW.Unlocks.Grant` with a claim id). Reward XP
+and currency are supplied in the same grant and follow the established progression scaling and economy rules.
+The unlock authority is a prerequisite; early pure steps may start before it lands.
 
 Line numbers below refer to branch `docs/plan-mwbase-stims-unlocks-challenges` at `cf7c4ed`; the implementer re-checks
 them before editing. Paths are relative to `addons/privatewar/` unless they start with a top-level folder.
@@ -35,7 +65,7 @@ them before editing. Paths are relative to `addons/privatewar/` unless they star
 
 None of these is approved. Proposed wording is for the user to accept, change or reject.
 
-- [ ] **D-WC1, `design/06-progression.md` new decision 8 "Weekly challenges"** (replaces the "After MVP: challenges"
+- [ ] **D-WC1, `design/06-progression.md` decision 9 "Weekly challenges"** (replaces the "After MVP: challenges"
   bullet of d.1 for weekly challenges; prestige and per-weapon camo challenges stay future work). Proposed wording:
   "Weekly challenges: a kind `challenges/` holds challenge templates (data plus an optional predicate). Every week
   (Monday 00:00 UTC) each host deterministically selects N templates from the enabled pool by the week number and a
@@ -67,10 +97,13 @@ None of these is approved. Proposed wording is for the user to accept, change or
   `PW.Unlocks.HasClaim(ply, grant)` on both realms, `PW.Unlocks.Describe(item)`, the question hook
   `PW_UnlockHint(kind, id)` and the notification `PW_UnlockGranted`. Missing and required here: (a) `Grant` with an
   empty item list records the claim (XP-only and currency-only rewards, and rewards whose items are all owned,
-  unresolved or refused as `"full"`); (b) XP and currency added before `Grant` travel in the same
-  `pw_progression_delta` batch as the claim (the flush inside `Grant` sends both); (c) the client persists claims
-  (`unlocks.json`) before applying XP and currency of that batch (`progression.json`), so a crash loses a reward at
-  worst and never grants it twice.
+   unresolved or refused as `"full"`); (b) as approved, optional grant XP and currency are queued only after
+   grant validation succeeds and travel in the same `pw_progression_delta` as the claim; (c) the client persists claims
+   (`unlocks.json`) before applying XP and currency of that batch (`progression.json`), so a crash loses a reward at
+   worst and never grants it twice.
+   Defer the entire reward while `PW.Unlocks.IsReady(ply)` is false, before checking claims. Grant refusal must not
+   queue reward balances; unrelated pending progression can flush independently. This extends the grant path only
+   for calls with explicit reward amounts and a valid claim ID. Existing calls and wire format are unchanged.
 - [ ] **D-WC7, Hardpoint objective time** (optional): `modules/hardpoint/init.lua` reports a
   challenge-only `objective_time` event (no score change). Without approval template C11 is dropped.
 - [ ] **D-WC8, UI placement**: a PROGRESS sub-screen "WEEKLY CHALLENGES" pushed from `progress_home`, and a new HUD
@@ -165,6 +198,7 @@ CHALLENGE.Rewards     = nil                     -- table<PW.ChallengeTier, PW.Ch
 
 Rules (validation in `sh_template.lua`):
 
+- [ ] Reject template ids that contain a dot; dots are reserved for the separators in the assembled instance id.
 - [ ] Exactly one of `Objectives` or the shorthand `Event`. 1 to 4 objectives. Each objective has a known event type
   (built-in or registered, 6.3) and a target ≥ 1 for every tier the template allows (a number target applies to every
   tier). `Within.count` ≥ 2, `Within.seconds` > 0. Unknown filter keys are rejected (typo protection) unless the
@@ -321,14 +355,12 @@ Grant ids follow the entitlement pattern `^[%w_%-%.:]+$`, at most 64 bytes (`unl
   `challenge:2026-W47:kills_category.smg`). Instance ids are at most 40 bytes so the grant id fits; the template id
   `bonus` is reserved.
 - [ ] Weekly bonus grant id: `challenge:<label>:bonus`.
-- [ ] Reward order on completion (server, `sv_rewards.lua`): (1) `PW.Unlocks.HasClaim(ply, id)` true → mark done,
-  grant nothing; (2) filter items: drop those whose `PW.Unlocks.Describe(item)` is invalid or that the player already
-  has (`PW.Unlocks.IsUnlocked`), adding `duplicateCurrency` for each; (3) `PW.Progression.AddXP` and
-  `PW.Progression.AddCurrency`; (4) `PW.Unlocks.Grant(ply, items, { source = "challenge", grant = id })`, which
-  records the claim and flushes the delta (D-WC6); (5) on refusal `"full"` or `"toomany"`, retry once with an empty
-  item list plus `duplicateCurrency` per item, so the claim is still recorded; any other refusal is logged and the
-  completion is retried at the next phase change (the XP of step 3 is not re-added: the module keeps a session flag
-  per grant id until the claim exists).
+- [ ] Reward order on completion (server, `sv_rewards.lua`): (1) wait for `PW.Unlocks.IsReady`; (2) if
+  `PW.Unlocks.HasClaim(ply, id)` is true, grant nothing; (3) filter unresolved and already unlocked items, adding
+  `duplicateCurrency` for each; (4) pass the prepared items and balances to `PW.Unlocks.Grant` with the claim ID
+  and `source = "challenge"` (D-WC6); (5) on `"full"` or `"toomany"`, retry once with an empty item list and
+  the appropriate extra compensation. Other refusals do not stage a payout; log the failure and retry at the
+  next phase change. No separate reward-paid flag is needed.
 - [ ] The challenge module keeps no claim flag of its own in `challenges.json` (`done` is progress, not a claim).
 
 ## 4. Event pipeline
@@ -461,7 +493,8 @@ their availability already resolved; `opts = { count, bonusNeeded, seed, bonusPo
 5. [ ] Parameters: for each param key in sorted order, the candidate values (static list, function result or built-in
    source) are filtered by availability and sorted; one is picked with `next()`. A template whose param has no
    candidate value is not selectable. Instance id: `<template>.<value1>.<value2>` (keys in sorted order). A value that
-   would make the instance id longer than 40 bytes or break the id pattern of 3.6 is not a candidate.
+   contains a dot, would make the instance id longer than 40 bytes, or would break the id pattern of 3.6 is not a
+   candidate. The same rule applies to values from static lists, functions and built-in sources.
 6. [ ] Targets and rewards resolved per tier; bonus item picked last from the sorted bonus pool.
 7. [ ] Determinism guarantee: the same `index`, `seed`, `count`, template definitions and resolved availability give
    the same week on every host and every run. Hosts with different installed content or settings may differ; progress
@@ -634,6 +667,11 @@ defaults of 3.5 unless stated. Every template uses only events that exist or tha
   /C22 `objective`; C14/C15 `streaks`; C17/C18/C23 `matches`.
 - [ ] Tier rewards per 3.5; hard C23 and C22 add `items` only after the bonus pool exists (left empty in the first
   version).
+- [ ] Existing tiers of C2, C8, C10, C15, C20 and C17 also grant `cards:challenge_headshots`,
+  `cards:challenge_longshots`, `cards:challenge_captures`, `cards:challenge_streak_kills`,
+  `cards:challenge_life_kills` and `cards:challenge_wins`, respectively. This adds no new tiers.
+  The [calling-card definitions](../done/calling-card-kill-banner.md) are needed for integration of the rewards, not for
+  the earlier progress, storage or event steps.
 - [ ] Display names for params: categories from a fixed table in the module (`ar` → "assault rifle", `smg` → "SMG",
   `shotgun` → "shotgun", `pistol` → "pistol", `special` → "special"; unknown → the id); weapons and modes from their
   registry `Name`.
@@ -740,6 +778,7 @@ Pure unless marked "in-game". Case names are exact; file names are proposed.
 - [ ] `Rotation: tier mix for 1, 3, 5 and 8 challenges`
 - [ ] `Rotation: weights bias selection and a zero-candidate tier falls back to an easier tier`
 - [ ] `Rotation: parameters bind deterministically and unavailable values are never chosen`
+- [ ] `Rotation: dots are reserved for instance id separators`
 - [ ] `Rotation: a different host seed changes the set`
 
 `challenges_filters.lua`:
@@ -909,8 +948,9 @@ The automated cases never replace the human checkpoint (section 14).
 ## Evidence and links
 
 - Research: [notes/32-weekly-challenges-research.md](../../notes/32-weekly-challenges-research.md).
-- Dependency: [unlock entitlements](unlock-entitlements.md) and
+- Dependency: [unlock entitlements](../done/unlock-entitlements.md) and
   [notes/31-unlock-entitlements-research.md](../../notes/31-unlock-entitlements-research.md).
 - Related: [scheduled events](../in-progress/scheduled-events.md) (UTC handling, playlist availability), store rotation
   `addons/privatewar/lua/privatewar/modules/economy/sh_rotation.lua`, `design/06-progression.md` d.0, d.1, d.3, d.5, d.6.
-- No implementation, test result or game result is claimed by this record.
+- Verification of the early scope and design commit is recorded above. The remaining implementation and full
+  feature gates are pending.

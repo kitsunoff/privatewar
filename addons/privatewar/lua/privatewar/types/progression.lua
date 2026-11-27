@@ -18,6 +18,8 @@
 ---@class PW.ProgressionState
 ---@field xp number total player XP
 ---@field weapons table<string, number> total XP per weapon class
+---@field grants? table<string, PW.UnlockGrantMeta> grants are independent of the purchase wallet
+---@field claims? table<string, integer> grant id to Unix time
 
 ---What the unlock rules read about one player. Injected in tests.
 ---@class PW.ProgressionView
@@ -26,6 +28,9 @@
 ---@field lookup PW.LoadoutLookup catalogue lookup (kind, id)
 ---@field unlockAll boolean
 ---@field maxAttachments integer loadout.maxattachments
+---@field granted? fun(key: string): boolean whether the key was granted, even with economy disabled
+---@field override? fun(kind: string, id: string): boolean? first boolean decides after unknown and Hidden
+---@field hint? fun(kind: string, id: string): string? requirement hint only
 
 ---Internal (server): sessions and the injectable engine edges. T-4.10 adds the batching and match records
 ---(types/progression_storage.lua).
@@ -53,6 +58,9 @@
 ---@field SetState fun(ply: Player, state: PW.ProgressionState)
 ---Server. Adds XP (times progression.xpscale) to the player, and to the weapon class when given.
 ---@field AddXP fun(ply: Player, amount: number, weaponClass?: string)
+---@field _PrepareXP fun(store: PW.ProgressionStore, amount: number): number, PW.ProgressionParams
+---@field _StageClaimXP fun(store: PW.ProgressionStore, ply: Player, xp: number, cfg: PW.ProgressionParams): integer
+---@field _NotifyClaimXP fun(s: PW.ProgressionStore, ply: Player, xp: number, old: integer, cfg: PW.ProgressionParams)
 ---Level of the player: the server state, a client the NW2 value of its own HUD.
 ---@field GetLevel fun(ply: Player): integer
 ---Client and server: XP into the level and XP needed for the next one (0 at the cap), from NW2.
@@ -91,6 +99,8 @@
 ---@field _IsUnlocked fun(view: PW.ProgressionView, kind: string, id: string): boolean
 ---@field _LockedOptions fun(view: PW.ProgressionView, weaponId: string, build: table<string, string|false>):
 ---table<string, boolean>
+---@field _EntitledOption fun(view: PW.ProgressionView, weaponId: string, option: string): boolean
+---@field _EntitledOptionOf fun(ply: Player, weaponId: string, option: string): boolean
 ---Internal: a store over injected edges.
 ---@field _NewStore fun(opts?: PW.ProgressionStoreOpts): PW.ProgressionStore
 ---Internal: the score listener body (weapon XP only with a valid weapon; bots earn nothing).

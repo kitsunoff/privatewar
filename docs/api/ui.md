@@ -671,7 +671,7 @@ Mandatory cases: `TASKS.md` T-6.2, U-8 and T-11.5 (`lua/tests/privatewar/hud_mat
 
 ### Score popups and medals (element `popups`, T-6.4)
 
-`hud/popups.lua` (`Order = 30`, phase `LIVE`); rules in `modules/hud/sh_popups.lua` (pure, shared). Source:
+`hud/popups.lua` (`Order = 30`); rules in `modules/hud/sh_popups.lua` (pure, shared). Source:
 `design/09-hud.md` d.2.
 
 - Net message `pw_score_popup`, server to the owner of the award only (humans only, no message for a bot or for 0 points):
@@ -696,8 +696,20 @@ Mandatory cases: `TASKS.md` T-6.2, U-8 and T-11.5 (`lua/tests/privatewar/hud_mat
 Pure functions: `PW.HUD._PopupNew`, `_PopupAdd`, `_PopupAlpha`, `_PopupPrune`, `_MedalNew`, `_MedalAdd`, `_MedalCurrent`,
 `_MedalAlpha`, `_PopupText`, `_PopupKind`, `_LevelUpAdd`, `_LevelUpScale`.
 
-The element draws in `LIVE` and `POSTMATCH` (a level-up or medal from the last award of a match shows before the match
-ends). The medal queue (`PW._HudMedals`) also carries the LEVEL UP popup of the element `progression` (next section).
+Score and medal presentation covers `LIVE` and `POSTMATCH` (a level-up or medal from the last award of a match
+can still show). The medal queue (`PW._HudMedals`) also carries the LEVEL UP popup of the element `progression`
+(next section) and the grant popup (`kind = "unlock"`).
+
+Client `PW_UnlockGranted` queues one `UNLOCKED` popup per grant group. Its item text is the name from
+`PW.Unlocks.Describe` or `<n> items` for a group with multiple items. Source text: `challenge` → `Challenge reward`,
+`event` → `Event reward`, `admin` → `Granted by the host`, otherwise `Reward`. The grant popup is for `PREMATCH`,
+`LIVE` and `POSTMATCH`; in the lobby the `NEW` badge is used instead.
+
+### Victim calling card (element `kill_card`)
+
+`hud/kill_card.lua` (`Order = 20`, `LIVE` only) renders one banner centred above the XP bar.
+It uses the victim snapshot delivered to the human killer and replaces its current entry on a new kill.
+See [calling cards](calling-cards.md) for selection, timing, material fallback and message bounds.
 
 ### Bottom XP bar and LEVEL UP (element `progression`)
 
@@ -969,6 +981,10 @@ Decisions: `design/10-frontend.md` d.8 to d.10, `design/08-lobby.md` d.2, d.3, `
 player may not use are never hidden: they are locked (focusable, the reason in the hint bar), and the server checks every
 request again.
 
+The playlist hub and Custom show the host a read-only **After match** summary when the vote module is active and
+the player can edit host settings. The line opens **SETTINGS > Host**, where `vote.aftermatch` can be changed.
+The hub previews the selected available playlist; Custom previews a Custom start.
+
 | Function | Contract |
 | --- | --- |
 | `PW.Lobby._Hub(input) -> PW.LobbyHub` | The hub model from a `PW.LobbyHubInput` (`state`, `selection`, `fits`, `playlists`, `players`, `maxPlayers`, `seen`, `shortOf`). `cards`: playlist cards then Custom (locked with the playlist reason without `canStart`); `selected`: the active playlist id or `@custom`; `start` (a `PW.LobbyAction` with `label` `START MATCH` or `START PLAYLIST` and `request` `{ playlist }` or `{ mode, map }`); `modeMap`, `setup`; `summary` (monogram, mode, map); `rows` (the MATCH card: up to 3 fields of each mode settings group and `Bots fill`, or `Playlist` and `Bots fill` with an active playlist); `warning`; `party`; `note`; `model` |
@@ -984,12 +1000,17 @@ generated: the map reloads when it is done`, `No mode is offered on any installe
 and no playlist). The status line carries the note `waiting for host` for a player who cannot start.
 
 **The hub** (`lobby_hub`, `Root = true`, `Order = 10`, title "Private War"). Left: `PWCardList` of the playlists and the
-Custom game card. Centre: `PWOperator`. Right: `PWSummary`, the MATCH `PWInfoCard` (with the slot warning), the PARTY
-`PWPlayerList` (note "Teams are assigned when the match starts."; host first with HOST, then `+N bots`), and at the
-bottom GAME SETUP (secondary button, `PW.Lobby.OpenCustom("setup")`) and START (primary). Hints: Select (Enter), Game
-setup (F), and Start match (R) for a player who may start. Esc on the hub opens the leave dialog in `LOBBY` ("Leaving from the lobby"; the router itself stays, "Router
-(U-3)"). Selecting the Custom game card, even when it is already selected, sends `pw_playlist_pick ""` (the active
-playlist resets to Custom) and opens the custom screen on its mode and map section.
+Custom game card. Centre: `PWOperator`. Right: the weekly challenge preview at the top, the PARTY `PWPlayerList`
+near the bottom, and GAME SETUP below the party. The preview uses the PARTY header and panel styling, with progress
+per challenge and an overflow count when space is limited. The hub does not show match settings or start a match. GAME SETUP
+opens the selected playlist's setup or the custom game's setup section. Esc on the hub opens the leave dialog in
+`LOBBY` ("Leaving from the lobby"; see "Router (U-3)"). Selecting Custom sends `pw_playlist_pick ""` and opens the
+custom screen on its mode and map section.
+
+**Playlist setup** (`lobby_playlist`, pushed from the hub) uses the Custom Game layout. Selecting an available
+playlist sends a pick and opens this screen only for the host; it does not move guests or start a match. The
+description, bot fill and schedule are read-only. Custom Game actions are hidden except START PLAYLIST, which
+requires a server-confirmed, startable selection and host privileges. Back returns to PLAY.
 
 **The custom game screen** (`lobby_custom`, pushed from the hub, title "Custom game"). Left: the actions as cards (START
 MATCH, MODE & MAP, GAME SETUP, ENABLED CONTENT, NAVMESH) and the summary. Centre: the section of the selected action:
@@ -1146,6 +1167,8 @@ and the net messages are in `loadout.md` "Classes"; this section is the screen.
 
 - **OPERATOR** (T-11.9). A second-row button next to NEW CLASS opens the operator picker `loadout_operator`
   (`operators.md`, "UI").
+- **CALLING CARD** opens the `loadout_card` picker, with a controller-focusable grid and a separate preview.
+  See [calling cards](calling-cards.md) for locked entries and the saved preference.
 
 The screen decides nothing: the server repairs, checks and answers; the screen only draws the state. Editing classes is the
 class editor (T-4.8, T-7.4).
@@ -1167,7 +1190,7 @@ nothing: the server quotes every purchase again.
 | `KindLabel(kind, plural?)` | A display name (`Model`, `Calling cards`); an unknown kind is capitalised |
 | `SecondsToRotation(now, period)` | Seconds to the next UTC midnight (`"daily"`) or the next UTC Monday (`"weekly"`) |
 | `CountdownText(seconds)` | `3d 4h`, `5h 07m` or `12m 03s` |
-| `OfferState(offer, facts)` | `"pending"`, `"owned"`, `"unlocked"`, `"funds"` or `"buyable"`, in the order the server's quote checks. A bundle is owned by its own key or when every item is owned. `facts` is `{ currency, owned(key), unlocked(kind, id), pending? }` |
+| `OfferState(offer, facts)` | `"pending"`, `"owned"`, `"unlocked"`, `"funds"` or `"buyable"`, in the order the server's quote checks. Ownership includes grants; a bundle is owned by its own purchase key or when every item is owned. `facts` includes `{ currency, owned(key), unlocked(kind, id), pending? }` |
 | `OfferCards(offers, facts)` | One `PW.UICard` per offer: the badge is the price, `OWNED`, `UNLOCKED` or `...`; the footer is the state text. Cards are never locked: only BUY is |
 | `Sections(view, facts, now)` | `featured` and `weekly` (with `countdown` and a note when empty), then one `kind:<kind>` section per permanent kind (`KindOrder` first, others by name). The Camos section exists only when camo offers exist |
 | `SectionCards(sections)` | The left-hand list: the countdown as the badge for the rotations, the offer count for the kinds |
@@ -1177,12 +1200,16 @@ nothing: the server quotes every purchase again.
 | `ItemViews(offer, lookup, facts)`, `ItemCards(items)` | The items of a bundle (`owned`, `unlocked` or `locked`; a camo id is `<weapon>:<camo>`) and their cards |
 | `RotationOf(view, key)`, `BundleRows(offer, items, rotation, now)` | The channel of a bundle; the info rows `PRICE`, `RARITY`, `ITEMS`, `LEAVES IN` |
 
+Store copy for the `unlocked` state is `Already unlocked` (offer state), `This item is already unlocked` (buy
+button reason) and `<offer name> is already unlocked` (purchase response). None assumes a level unlock.
+A granted item is `OWNED`, like a purchased item; the owned-state reason remains `You own this item`.
+
 ### `PW.UI.Progress` (shared, pure)
 
 | Function | Contract |
 | --- | --- |
 | `LevelView(level, into, need)` | `{ title = "LEVEL n", xpText, fraction, maxed }` |
-| `NextUnlocks(catalogue, level, limit?)` | Entities of every registry with a numeric (or `{ level = N }`) `Unlock` above the level, `Hidden` excluded; closest level first, ties by name, then kind, then id; cut to `limit` (the screen uses 8) |
+| `NextUnlocks(catalogue, level, limit?)` | Entities of every registry with a normalized numeric `Unlock` above the level (integer and table forms); grant-only and `Hidden` entries excluded. Closest level first, ties by name, then kind, then id; cut to `limit` (the screen uses 8) |
 | `UnlockRows(unlocks)` | `{ "LV n", "<name> (<kind>)" }` rows |
 | `Weapons(weapons, xp, levelOf)` | Every registry weapon plus every class that has XP, highest level first; `levelOf(xp)` returns level, into, need |
 | `WeaponCards(rows)` | Cards with `LV n`, the XP to the next level and the total XP |
@@ -1194,7 +1221,7 @@ The weapon level on the PROGRESS screen is computed on the client from the XP in
 
 | Function | Contract |
 | --- | --- |
-| `Store.LiveCatalogue()`, `LiveLookup()`, `LiveFacts()` | The registries (enabled entities by `ClassName`) and the local player's balance, purchases and unlocks |
+| `Store.LiveCatalogue()`, `LiveLookup()`, `LiveFacts()` | The registries (enabled entities by `ClassName`) and the local player's balance, purchases, grants and unlock decisions |
 | `Store.OpenBundle(key)`, `TakeBundle()` | Pushes `store_bundle`; the details screen reads the key back |
 | `Store.Buy(offer)`, `ConfirmBuy(offer, done?)` | Sends `PW.Economy.RequestBuy`; the confirm dialog shows the price and the balance after the purchase |
 | `Store.Tick()` | Expires a purchase with no answer |
@@ -1257,9 +1284,9 @@ Editor (`sh_editor.lua`):
 | Function | Contract |
 | --- | --- |
 | `SlotLabel(slot, index)` | The row label in capitals; `#n` is added for a slot with more than one place (for example `PERK 1 #2`) |
-| `LockText(entity)` | `text, reason`: `LV n`, `STORE` or `LOCKED` |
+| `LockText(entity)` | Short lock text and reason from the definition when no live requirement is supplied |
 | `Editor(input)` | `{ rows, slots, cost, meter, check? }` over the effective slot set (a perk such as Greed adds rows). Row order: weapons, equipment, perks by group, wildcards, streaks, other kinds after |
-| `Options(input, row, slots)` | The choices of a row, `NONE` first. An option carries `locked`, `reason` and `lockText` (`PICKED`, `BANNED`, `LV n`, `STORE`, `LOCKED`) |
+| `Options(input, row, slots)` | The choices of a row, `NONE` first. An option carries `locked`, `reason` and `lockText`; progression text comes from the unlock requirement |
 | `Budget(cost, budget)` | `{ cost, budget, state, text, fraction }`, state `ok`, `full`, `over` or `unlimited` |
 | `Normalize(input, value)`, `SetItem(input, rowId, id)` | Drops what the effective slots no longer hold; sets or clears one place (`<slot>#<n>`). A new first weapon drops that weapon's build |
 
@@ -1267,8 +1294,12 @@ Gunsmith (`sh_gunsmith.lua`):
 
 | Function | Contract |
 | --- | --- |
-| `Gunsmith(input)` | `{ gunsmith, title, slots, count, cap, levelCount, levelLimit, countText, over, problems, note }`. `gunsmith = false` (no slots) gives the "no gunsmith" note. Options carry `lockText` `LV n`, `FULL` or `BANNED` |
+| `Gunsmith(input)` | `{ gunsmith, title, slots, count, cap, levelCount, levelLimit, countText, over, problems, note }`. `gunsmith = false` (no slots) gives the "no gunsmith" note. Options use the unlock requirement; the count still uses `FULL`, and bans use `BANNED` |
 | `SetOption(build, slotId, option)` | Returns a copy of the build with one slot set or cleared |
+
+The editor uses `ctx.requirement(kind, id)` when provided, otherwise the static requirement from the definition.
+Gunsmith accepts `input.optionRequirement(optionId)` for curated, camo and entitled options; without it, the pure
+model falls back to weapon-level facts. Entitled options do not count toward the weapon-level allowance.
 
 ### Client glue (`cl_init.lua`)
 
@@ -1291,8 +1322,20 @@ These are helpers, not vgui classes: `RowButton(parent, group, id)` (a focusable
 
 ### Card field `lockText`
 
-`PW.UICard.lockText` (`ui_kit/cl_cards.lua`): the text drawn next to the lock icon of a locked card (`LV 12`, `STORE`,
-`BANNED`). A locked card with `lockText` reserves a taller collapsed area for it.
+`PW.UICard.lockText` (`ui_kit/cl_cards.lua`): the text drawn next to the lock icon of a locked card (for example `LV 12`,
+`600 CR`, `REWARD` or `BANNED`). A locked card with `lockText` reserves a taller collapsed area for it.
+
+Editor options and row problems, gunsmith options, operator picker cards and store bundle item views use
+`PW.Unlocks.Requirement` and `PW.Unlocks.LockText` for progression locks. The associated details panel can show
+the reward hint, including alongside the price for a purchasable grant-only item.
+
+### Newly granted items
+
+The editor, gunsmith, operator picker and store bundle item cards use `badge = "NEW"` for a locally granted key not
+yet seen. The LOADOUT tab uses its existing `new` dot while any grant is unseen. Focusing or selecting the card
+(including gamepad focus) marks it seen through `PW.UI.SeenSet` and `PW.UI.SaveSeen`: `PW.UI.Seen` stores
+`unlock:<key>` in `data/privatewar/ui_seen.json`. Purchases and level-ups do not count as new for this feature.
+Visual, controller and multiplayer behaviour remain pending the human checkpoint.
 
 ### Class screens
 

@@ -19,11 +19,11 @@
 ---@field Name string
 ---Required. Uses per life; refilled on spawn. Rounded down; negative counts as 0.
 ---@field Count number
----Required. Runs on the instance when the slot is used (the grenade SWEP's release, or a bot), through PW.Call.
+---Required. Runs on the instance when a grenade is released, a weapon-less key is used, or a bot acts, through PW.Call.
 ---Returning false refuses the use: the count is kept and the cooldown does not start.
 ---@field OnUse fun(self: PW.EquipmentItem, owner: Player, opts?: PW.EquipmentUse): boolean?
 ---The grenade SWEP class the item gives (T-11.4): the count is that SWEP's ammo; nil means no weapon (used through
----PW.Equipment.Use only).
+---PW.Equipment.Use or the slot key).
 ---@field Weapon? string
 ---Whether holding attack cooks the grenade (its fuse runs in hand, capped at PW.Equipment.CookCap).
 ---@field Cook? boolean
@@ -97,7 +97,7 @@
 ---@class PW
 ---@field Equipment? PW.EquipmentLib the equipment module (nil when the module is missing)
 
----Equipment module. No net message of its own: the slot keys select the grenade SWEP on the client.
+---Equipment module. Slot keys select a grenade or request weapon-less use over pw_equipment_use.
 ---@class PW.EquipmentLib
 ---Equipment slots in wire order.
 ---@field Slots string[]
@@ -125,6 +125,8 @@
 ---For an item with a grenade SWEP it selects the SWEP, throws and switches back to the previous weapon after
 ---BotHold. Returns true when the item was used (count decreased). Bots call it directly.
 ---@field Use? fun(ply: Player, slot: string, opts?: PW.EquipmentUse): boolean
+---Server: only uses a weapon-less entry; a grenade slot is never spent through a key packet.
+---@field _ClientUse? fun(ply: Player, slot: string): boolean
 ---Server: the release of a grenade SWEP (the SWEP calls it): uses the SWEP's slot with the cook options; after the
 ---last grenade the player returns to the previous weapon. Returns whether a grenade was thrown.
 ---@field _Release? fun(ply: Player, wep: Weapon, opts?: PW.EquipmentUse): boolean
@@ -188,6 +190,8 @@
 ---@field _CanUse fun(entry: PW.EquipmentUseFacts, now: number, cooldown: number): boolean, string?
 ---Pure: the slot of a pressed button, given the key code per slot; nil when the button is no slot key.
 ---@field _KeySlot fun(button: integer, codes: table<string, integer>): string?
+---Pure: how a pressed key handles the item, or nil for an empty or spent slot.
+---@field _KeyAction fun(itemId: string?, weaponClass: string?, count: integer): "select"|"use"|nil
 ---Pure: NW2 key of a slot's item id.
 ---@field _ItemKey fun(slot: string): string
 ---Pure: NW2 key of a slot's count.

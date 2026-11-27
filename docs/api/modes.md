@@ -157,6 +157,7 @@ active mode's method of the same name is called after the listeners.
 | `PW_ScoreEvent` | notification | `ply: Player, eventId: string, points: number, xp: number, weapon: Weapon?` | Fired by the score module after an award, after the score was added; `points` and `xp` are the final values | `06-progression.md` d.3 |
 | `PW_ScoreChanged` | notification | `ply: Player, score: integer, delta: number, team: integer?, teamScore: integer?` | The resulting score changed; fired right after `PW_ScoreEvent`. `score` is the player's new match score, `delta` the final points of the event, `team` the team index the points were added to (`nil` in FFA and outside teams `1..N`), `teamScore` the team's new score (`nil` with `team`) | `01-extensibility.md` d.9 |
 | `PW_KCTagCollected` | notification | `collector: Player, victim: any, verdict: "confirm"\|"deny"` | Fired by the `kc_tags` module on a valid pickup of a Kill Confirmed tag, after the tag was removed; the verdict is `"confirm"` for an enemy of the victim, `"deny"` for a teammate or the victim. `victim` is the dead player entity as given to `Spawn`. `kc` scores here (see "Kill Confirmed"). Fired through `PW.Notify`, so the active mode's method runs after the listeners | `02-modes.md` d.5; T-2.5 |
+| `PW_AfterMatch` | question | `mode: table?` (current match mode) | The live `"lobby"` or `"rotation"` answer, used by the core at the `POSTMATCH` deadline. Without an answer the core returns to `LOBBY`. See `vote.aftermatch` below | `00-core.md` d.2; `08-lobby.md` d.3 |
 | `PW_NextMatch` | question | `mode: table` (the mode of the match that just ended, `PW.ActiveMode`) | Asked by the core on the `VOTE` to `PREMATCH` step (timer end or `PW.Match.EndVote`). The answer is `{ mode = <mode entity>, map = <string?> }` (`PW.NextMatch`); `nil` repeats the mode on this map; any other answer is ignored with one log line and the mode repeats. The first non-nil answer wins. Answered by the vote module (see "Vote module"); a mode may answer it too. Documented in `core.md` "Hooks" | `08-lobby.md` d.5; `00-core.md` d.2 |
 | `PW_CanPickup` | question | not specified: "Open in design", item 13 | Named as an example of a question hook | `01-extensibility.md` d.9 |
 
@@ -758,9 +759,11 @@ Module `vote` (modes lane, T-2.13; `lua/privatewar/modules/vote/`). Source: `00-
 
 Rules (`08-lobby.md` d.5, `TASKS.md` T-2.13, mandatory cases):
 
-- The vote runs in the `VOTE` phase, which exists only with the host setting "rotation with vote" (`pw_aftermatch
-  rotation`, `00-core.md` d.2; `core.md` "Phases and match"). Entering `VOTE` opens a session (when the active mode is
-  one of the real `modes` registry); leaving it closes the session.
+- `vote.aftermatch` is a Host setting. `auto` continues an active playlist with a vote and returns to the lobby in
+  Custom, without the playlists module or when the active schedule has expired. `lobby` always returns; `rotation`
+  asks for `VOTE` even in Custom. Existing guards still prevent starting a match on an expired scheduled playlist.
+  The module answers `PW_AfterMatch` from the live setting and current playlist, without storing a decision for the match.
+  Entering `VOTE` opens a session when the active mode is in the real `modes` registry; leaving it closes the session.
 - Options are map and mode pairs. The source is the active playlist (`pw_playlist_active`): its `Modes` with weights and its
   `Maps`, or the curated map list (`PW.MapList.GetList`) when `Maps = nil`. **In Custom** (no active playlist) the
   only mode is the mode of the match that just ended, on the curated map list. A pair is a candidate only if
@@ -801,6 +804,7 @@ Types in `lua/privatewar/types/vote.lua`. Pure functions are shared; server func
 | Function | Realm | Contract |
 | --- | --- | --- |
 | `Privilege`, `RecentCount` | shared | `"pw.vote.pick"`, `2` |
+| `ResolveAfterMatch(setting, activePlaylist) -> PW.AfterMatch` | shared | Pure. Explicit `"lobby"` and `"rotation"` win; `"auto"` or an unknown setting returns `"rotation"` for a nonempty playlist id and `"lobby"` for `""` |
 | `Candidates(input) -> PW.VoteOption[]` | shared | Pure. `input = { modes, maps, fits?, recent, current?, allowRepeat, count, rng }`; the rules above |
 | `PushRecent(list, map)`, `FormatRecent(list)`, `ParseRecent(text)` | shared | Pure. The recent list (newest first, no duplicates, at most 2) and its ConVar text; invalid names are skipped |
 | `NewSession(options)`, `Cast(session, voter, isBot, index)`, `Tally(votes, count)`, `Winner(counts, rng)`, `Humans(players)`, `AllVoted(humans, votes)` | shared | Pure. `Cast` returns `false` and `"bot"`, `"ended"` or `"index"` when refused |
@@ -829,11 +833,11 @@ The privilege `pw.vote.pick` is declared by the module with default `superadmin`
 
 ### Settings
 
-Both are `server` settings (ConVars `pw_vote_options` and `pw_vote_allowrepeat`, replicated and archived, `core.md`
-"Settings"):
+These are `server` settings (replicated, archived ConVars generated by the settings schema; see `core.md` "Settings"):
 
 | Full id | Scope | Type | Default | Range | Source |
 | --- | --- | --- | --- | --- | --- |
+| `vote.aftermatch` | `server` | enum | `auto` | `auto`, `lobby`, `rotation` | `00-core.md` d.2, `08-lobby.md` d.3; `pw_vote_aftermatch` |
 | `vote.options` | `server` | int | 3 | 1..8 | `02-modes.md` d.5b |
 | `vote.allowrepeat` | `server` | bool | `false` | | `08-lobby.md` d.5 |
 
@@ -889,7 +893,7 @@ Cited by the design with their full ids; the declarations (min, max, labels) liv
 | `<mode id>.roundtime` (int, default 120, 0..600, `0` = none), `<mode id>.intermission` (float, default 5, 1..30) of the children of `round_base` | `match` | T-2.3 |
 | `kc.scorelimit`: inherits and sets the default to 65 (counts confirms); `kc.taglifetime` (int, default 0, 0..300, `0` = until picked up or the match ends) | `match` | `01-extensibility.md` d.17; T-2.5 |
 | `dom.scorelimit`: inherits and sets the default to 200 (counts points); `dom.capturerate` (float, default 10, 1..100), `dom.tickinterval` (float, default 5, 1..30) | `match` | T-2.4 |
-| `vote.options` (int, default 3, 1..8), `vote.allowrepeat` (bool, default `false`) | `server` | see "Vote module" |
+| `vote.aftermatch` (enum, default `auto`), `vote.options` (int, default 3, 1..8), `vote.allowrepeat` (bool, default `false`) | `server` | see "Vote module" |
 | `lobby.joininprogress` (bool, default `true`) | `server` | `08-lobby.md` d.4; T-8.4; see "Join in progress" |
 | `bots.fill` (int, default 12, 0..128), `bots.difficulty` (enum `recruit`, `regular`, `hardened`, `veteran`, default `regular`) | `match` | `02-modes.md` d.5a; see "Playlists" |
 

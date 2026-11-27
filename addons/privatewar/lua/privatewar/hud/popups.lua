@@ -7,7 +7,7 @@
 -- draws it larger, with a pop-in scale and its own sound. POSTMATCH is drawn too, so a level-up from the last award of
 -- a match shows before the match ends instead of waiting for the next one.
 HUDELEMENT.Order = 30
-HUDELEMENT.Phases = { "LIVE", "POSTMATCH" }
+HUDELEMENT.Phases = { "PREMATCH", "LIVE", "POSTMATCH" }
 
 local hud = PW.HUD --[[@as PW.HudLib]]
 
@@ -84,6 +84,13 @@ net.Receive("pw_score_popup", function()
     receive(id, net.ReadUInt(16))
 end)
 
+---@param ply Player
+---@param keys string[]
+---@param source string
+PW.HookFor(HUDELEMENT, "PW_UnlockGranted", function(_, ply, keys, source)
+    if ply == LocalPlayer() then hud._QueueUnlock(medals, keys, source, PW.Phase.GetPhase()) end
+end)
+
 ---Text with a one-pixel shadow so it reads on any background.
 ---@param text string
 ---@param font string
@@ -150,9 +157,23 @@ local function drawLevelUp(medal, age)
     DisableClipping(clipping)
 end
 
+---@param medal PW.MedalPopup
+---@param age number
+local function drawUnlock(medal, age)
+    local alpha = hud._MedalAlpha(age)
+    local x, y = ScrW() / 2, hud.Y(levelUpY)
+    local name = medal.label
+    if name:sub(1, 1) == "#" then name = language.GetPhrase(name:sub(2)) end
+    drawText(medal.name, fontOf("h1", 44), x, y, colour("accent"), alpha, TEXT_ALIGN_CENTER)
+    drawText(name, fontOf("h2", 32), x, y + hud.S(54), colour("text"), alpha, TEXT_ALIGN_CENTER)
+    drawText(medal.sourceText or "Reward", fontOf("body", 26), x, y + hud.S(94), colour("text"), alpha,
+        TEXT_ALIGN_CENTER)
+end
+
 ---@param now number
-local function drawMedal(now)
-    local medal = hud._MedalCurrent(medals, now)
+---@param phase string
+local function drawMedal(now, phase)
+    local medal = hud._PopupForPhase(medals, now, phase)
     if medal == nil then return end
     local levelUp = medal.kind == "levelup"
     if not medal.played then
@@ -164,6 +185,10 @@ local function drawMedal(now)
         drawLevelUp(medal, age)
         return
     end
+    if medal.kind == "unlock" then
+        drawUnlock(medal, age)
+        return
+    end
     local alpha = hud._MedalAlpha(age)
     local x, y = ScrW() / 2, hud.Y(medalY)
     drawText(medal.name, fontOf("h1", 44), x, y, colour("warning"), alpha, TEXT_ALIGN_CENTER)
@@ -172,6 +197,7 @@ end
 
 function HUDELEMENT:Draw()
     local now = CurTime()
-    drawPopups(now)
-    drawMedal(now)
+    local phase = PW.Phase.GetPhase()
+    if hud._ScorePopupPhase(phase) then drawPopups(now) end
+    drawMedal(now, phase)
 end

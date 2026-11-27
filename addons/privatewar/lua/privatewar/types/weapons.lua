@@ -42,19 +42,19 @@
 ---@field Weapons PW.Registry
 
 ---@class PW.AttachmentCuration
----@field Unlock? integer weapon level that unlocks the option
+---@field Unlock? PW.UnlockField weapon level or entitlement condition
 ---@field Cost? number Pick X cost of the option
 ---@field Hidden? boolean never offered
 
 ---@class PW.CamoCuration
----@field Unlock? integer weapon level that unlocks the camo
+---@field Unlock? PW.UnlockField weapon level or entitlement condition
 
 ---An entry of the weapons kind (04-weapons.md d.3): id = SWEP class. No field is required: a soft registration may
 ---carry only some fields and other sources fill the rest.
 ---@class PW.Weapon : PW.Entity
 ---@field Category? string weapon category, for example "ar" or "smg"
 ---@field Name? string display name
----@field Unlock? integer unlock level, read by 06-progression; empty means its default
+---@field Unlock? PW.UnlockField player level or entitlement condition
 ---@field Kind? PW.WeaponKind filled softly from the adapter's ListWeapons
 ---@field Slot? integer 1 primary, 2 secondary, 3 equipment; filled softly from ListWeapons
 ---@field Attachments? table<string, PW.AttachmentCuration> curation by option id (adapter.md "Weapon catalogue")

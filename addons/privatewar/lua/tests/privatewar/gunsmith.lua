@@ -125,6 +125,8 @@ local function openProgression(stubFn)
     local progression = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
     if progression == nil then return end
     stubFn(progression, "IsUnlocked").with(function() return true end)
+    local unlocks = rawget(PW, "Unlocks") --[[@as PW.UnlocksLib?]]
+    if unlocks ~= nil then stubFn(unlocks, "IsUnlocked").with(function() return true, "unlockall" end) end
     stubFn(progression, "LockedOptions").with(function() return {} end)
     stubFn(progression, "GetWeaponLevel").with(function() return 30 end)
 end

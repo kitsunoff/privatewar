@@ -226,7 +226,7 @@ screenshot() {
 # ConVars: saved before the first change, restored after step 4 (or on exit when the run stops earlier)
 
 declare -A saved_cvars=()
-cvar_names=(pw_countdown pw_postmatch_time pw_vote_time pw_aftermatch)
+cvar_names=(pw_countdown pw_postmatch_time pw_vote_time pw_vote_aftermatch)
 cvar_defaults=([0]=10 [1]=15 [2]=15 [3]=lobby)
 
 save_cvars() {
@@ -561,7 +561,7 @@ if [[ "$(field "$state" phase)" != "LOBBY" ]]; then
     send "pw_abort cp1 start from LOBBY"
     sleep 3
 fi
-send "pw_countdown 5" "pw_postmatch_time 5" "pw_vote_time 5" "pw_aftermatch lobby"
+send "pw_countdown 5" "pw_postmatch_time 5" "pw_vote_time 5" "pw_vote_aftermatch lobby"
 sleep 2
 state="$(ask_server)"
 seq0="$(field "$state" nwseq)"
@@ -615,7 +615,7 @@ step "4. Rotation: POSTMATCH > VOTE > PREMATCH, then pw_abort"
 
 state="$(ask_server)" || state=""
 seq0="$(field "$state" nwseq)"
-send "pw_aftermatch rotation"
+send "pw_vote_aftermatch rotation"
 sleep 2
 since="$(log_count)"
 send "pw_dev_start"

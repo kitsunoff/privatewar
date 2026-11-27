@@ -1,37 +1,30 @@
--- The lobby hub, root of the PLAY tab (U-5, T-8.1; notes/16-frontend-d1-proposal.md §4a; 10-frontend.md d.8, d.9;
--- 08-lobby.md d.2, d.3). Left: playlist cards and the Custom game card; centre: the operator; right: the selection
--- summary, the MATCH card (key settings, maxplayers warning) and the PARTY list; bottom right: GAME SETUP and START.
--- Thin glue: the data is PW.Lobby._Hub over PW.Lobby.Input() (lobby_ui/sh_hub.lua); the requests go through the
--- lobby_ui client (PW.Lobby.Send*). Actions a guest may not use are locked and explain themselves in the hint bar.
+-- PLAY: playlists and Custom Game on the left, operator in the centre, weekly challenges and party on the right.
+-- Match settings and Start live on the setup screens. Selecting a playlist changes only the host's local screen.
 
 SCREEN.Tab = "play"
 SCREEN.Root = true
 SCREEN.Order = 10
 SCREEN.Title = "Private War"
-SCREEN.Hints = {
+---@type PW.UIHintEntry[]
+local hints = {
     { action = "accept", label = "Select" }, { action = "secondary", label = "Game setup" },
     { action = "settings", label = "Settings" }
 }
+SCREEN.Hints = hints
 
 local customId = "@custom"
-local hostHints = {
-    { action = "accept", label = "Select" }, { action = "secondary", label = "Game setup" },
-    { action = "tertiary", label = "Start match" }, { action = "settings", label = "Settings" }
-}
-local guestHints = {
-    { action = "accept", label = "Select" }, { action = "secondary", label = "Game setup" },
-    { action = "settings", label = "Settings" }
-}
+local challenges = PW.Challenges --[[@as PW.ChallengesViewLib?]]
 
 ---@class PWLobbyHubView : Panel
 ---@field cardList PWCardList
 ---@field operator PWOperator
----@field summary PWSummary
----@field match PWInfoCard
----@field hintCard PWInfoCard entry hint (Singleplayer, P2P off); hidden without a hint
+---@field weekly PWButton
+---@field weeklyRows PW.ChallengePreviewRow[]
+---@field weeklyCount string
+---@field weeklyLayout? PW.ChallengePreviewLayout
+---@field hintCard PWInfoCard entry hint (Singleplayer, P2P off)
 ---@field players PWPlayerList
 ---@field setup PWButton
----@field start PWButton
 ---@field hub PW.LobbyHub
 ---@field framed boolean the status note and hints were applied after the root's frame update
 ---@field OnAction fun(self: PWLobbyHubView, action: string)
@@ -42,42 +35,38 @@ local function lobby()
 end
 
 ---@param view PWLobbyHubView
-local function startMatch(view)
-    local start = view.hub.start
-    if start.locked or start.request == nil then return end
-    lobby().SendStart(start.request)
+local function openSetup(view)
+    local selected = view.hub.selected
+    if selected == customId then
+        lobby().OpenCustom("setup")
+    else
+        lobby().OpenPlaylist(selected)
+    end
 end
 
----The Custom game card opens the custom screen even when it is already selected (Activate would ignore it).
+---@param id string
+local function choosePlaylist(id)
+    local lib = lobby()
+    lib._ChoosePlaylist(lib.Input(), id, lib.SendPick, lib.OpenPlaylist)
+end
+
+---Activation ignores a card that is already selected; it must still reopen its setup screen.
 ---@param view PWLobbyHubView
-local function wireCustomCard(view)
+local function wireSelectedCards(view)
     for index, card in ipairs(view.cardList.cards) do
+        local id = card.id
         if card.id == customId then
             view.cardList.panels[index].DoClick = function()
                 lobby().SendPick("")
                 lobby().OpenCustom("modemap")
             end
+        elseif id == view.hub.selected and not card.locked then
+            view.cardList.panels[index].DoClick = function() choosePlaylist(id) end
         end
     end
 end
 
----@param view PWLobbyHubView
----@param hub PW.LobbyHub
-local function showSummary(view, hub)
-    if not hub.ready then
-        view.summary:SetSelection({ Name = "Waiting for the server", Short = "..." }, "")
-    elseif hub.selected ~= customId then
-        local card = view.cardList.cards[1]
-        for _, item in ipairs(hub.cards) do
-            if item.id == hub.selected then card = item end
-        end
-        view.summary:SetSelection({ Name = card.title }, "Mode and map are picked by the playlist")
-    else
-        view.summary:SetSelection({ Name = hub.summary.mode, Short = hub.summary.badge }, hub.summary.map)
-    end
-end
-
----The entry hint (T-8.3) is an info card under the match card; without a hint the card is hidden.
+---The entry hint (T-8.3) stays in the lobby when one applies.
 ---@param view PWLobbyHubView
 ---@param hint? PW.EntryHint
 local function showHint(view, hint)
@@ -87,22 +76,87 @@ local function showHint(view, hint)
     view.hintCard:SetText(hint.text)
 end
 
+---@param text string
+---@param font string
+---@param width number
+---@return string
+local function fit(text, font, width)
+    surface.SetFont(font)
+    return PW.UI.Board.Fit(text, math.max(0, width), function(value)
+        local w = surface.GetTextSize(value)
+        return w
+    end)
+end
+
+---@param row PW.ChallengePreviewRow
+---@param y number
+---@param w number
+local function paintWeeklyRow(row, y, w)
+    local kit = PW.UI --[[@as PW.UILib]]
+    local paint, s = kit.Draw, kit.Style --[[@as PW.UIStyle]]
+    local px = paint.Px
+    local left, right = px(36), w - px(20)
+    local body, small = kit.FontName("body"), kit.FontName("small")
+    surface.SetFont(small)
+    local progressWidth = surface.GetTextSize(row.progressText)
+    local text = fit(row.text, body, right - left - progressWidth - px(12))
+    paint.Rect(px(20), y + px(10), px(4), px(30), s.border_strong)
+    draw.SimpleText(text, body, left, y + px(18), s.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(row.progressText, small, right, y + px(18), s.text_muted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    local barWidth = math.max(0, right - left)
+    paint.Rect(left, y + px(36), barWidth, px(6), s.bg_raised)
+    paint.Rect(left, y + px(36), math.floor(barWidth * row.fraction), px(6), s.accent)
+end
+
+---@param view PWLobbyHubView
+---@param w number
+---@param h number
+local function paintWeekly(view, w, h)
+    local layout = view.weeklyLayout
+    if challenges == nil or layout == nil then return end
+    local kit = PW.UI --[[@as PW.UILib]]
+    local paint, s = kit.Draw, kit.Style --[[@as PW.UIStyle]]
+    local px, metrics = paint.Px, challenges._PlayPreviewMetrics
+    local header, rowH = px(metrics.header), px(metrics.row)
+    local active = view.weekly._pwFocused or view.weekly:IsHovered()
+    local pad = px(20)
+    paint.Rect(0, 0, w, h, s.bg_panel)
+    paint.Rect(0, 0, w, header, active and s.bg_hover or s.bg_raised)
+    draw.SimpleText("WEEKLY CHALLENGES", kit.FontName("h2"), pad, header / 2, s.text,
+        TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(view.weeklyCount, kit.FontName("body"), w - pad, header / 2, s.text_muted,
+        TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    for index = 1, layout.visible do
+        local row = view.weeklyRows[index]
+        if row ~= nil then paintWeeklyRow(row, header + (index - 1) * rowH, w) end
+    end
+    local rowsEnd = header + layout.visible * rowH
+    if layout.extra > 0 and h > rowsEnd then
+        draw.SimpleText(string.format("+%d more", layout.extra), kit.FontName("small"), pad, (rowsEnd + h) / 2,
+            s.text_muted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    end
+    paint.Outline(0, 0, w, h, active and s.accent or s.border)
+end
+
+---@param view PWLobbyHubView
+local function showWeekly(view)
+    local owner = LocalPlayer()
+    local snapshot = challenges ~= nil and IsValid(owner)
+        and challenges._OwnerChallengeView(PW, owner, os.time()) or nil
+    view.weeklyRows = challenges ~= nil and challenges._PlayPreviewRows(snapshot) or {}
+    view.weeklyCount = snapshot ~= nil and string.format("%d/%d", snapshot.bonus.completed, #snapshot.rows) or ""
+    view:InvalidateLayout(true)
+end
+
 ---@param view PWLobbyHubView
 local function refresh(view)
     local hub = lobby()._Hub(lobby().Input())
     view.hub = hub
     lobby().SetCards(view.cardList, hub.cards, hub.selected)
-    wireCustomCard(view)
-    showSummary(view, hub)
+    wireSelectedCards(view)
     view.operator:ShowLocal()
-    view.match:SetTitle("Match")
-    view.match:SetRows(hub.rows)
-    view.match:SetWarning(hub.warning)
     showHint(view, hub.hint)
     view.players:SetSections(hub.party)
-    view.start:SetText(hub.start.label or "START MATCH")
-    view.start:SetLocked(hub.start.locked, hub.start.reason)
-    view.start:SetVariant(hub.start.countdown and "countdown" or "primary")
     view.framed = false
     view:InvalidateLayout(true)
 end
@@ -111,11 +165,15 @@ end
 local function fill(view)
     view.cardList = vgui.Create("PWCardList", view) --[[@as PWCardList]]
     view.cardList.OnSelect = function(_, id)
-        if id ~= customId then lobby().SendPick(id) end
+        if id ~= customId then choosePlaylist(id) end
     end
     view.operator = vgui.Create("PWOperator", view) --[[@as PWOperator]]
-    view.summary = vgui.Create("PWSummary", view) --[[@as PWSummary]]
-    view.match = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
+    view.weekly = vgui.Create("PWButton", view) --[[@as PWButton]]
+    view.weekly:SetVisible(false)
+    PW.UI.Focusable(view.weekly, "hub_weekly", "weekly_preview")
+    view.weeklyCount, view.weeklyRows = "", {}
+    local weekly = view.weekly --[[@as PANEL]]
+    weekly.Paint = function(_, w, h) paintWeekly(view, w, h) return true end
     view.hintCard = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
     view.hintCard:SetVisible(false)
     view.players = vgui.Create("PWPlayerList", view) --[[@as PWPlayerList]]
@@ -123,14 +181,25 @@ local function fill(view)
     view.setup = vgui.Create("PWButton", view) --[[@as PWButton]]
     view.setup:SetText("GAME SETUP")
     view.setup:SetVariant("secondary")
-    view.setup.DoClick = function() lobby().OpenCustom("setup") end
-    view.start = vgui.Create("PWButton", view) --[[@as PWButton]]
-    view.start:SetPrimary(true)
-    view.start.DoClick = function() startMatch(view) end
-    for _, button in ipairs({ view.setup, view.start }) do
-        local spec = PW.UI.Focusable(button, "hub_buttons")
-        spec.axis = "horizontal"
+    view.setup.DoClick = function() openSetup(view) end
+    PW.UI.Focusable(view.setup, "hub_buttons")
+end
+
+---@param view PWLobbyHubView
+---@param rect PW.UIRect
+---@param budget number
+---@param px fun(n: number): integer
+---@return number
+local function layoutWeekly(view, rect, budget, px)
+    local layout = challenges ~= nil and challenges._PlayPreviewLayout(#view.weeklyRows, budget, px) or nil
+    local height = layout ~= nil and layout.height or 0
+    view.weeklyLayout = layout
+    view.weekly:SetVisible(height > 0)
+    if height > 0 then
+        view.weekly:SetPos(rect.x, rect.y)
+        view.weekly:SetSize(rect.w, height)
     end
+    return height
 end
 
 ---@param view PWLobbyHubView
@@ -138,26 +207,23 @@ end
 ---@param px fun(n: number): integer
 local function layoutRight(view, right, px)
     local gap, buttonH = px(20), px(64)
-    local y = right.y
-    view.summary:SetPos(right.x, y)
-    view.summary:SetWide(right.w)
-    y = y + view.summary:GetTall() + gap
-    view.match:SetPos(right.x, y)
-    view.match:SetSize(right.w, view.match:WantedHeight(right.w))
-    y = y + view.match:GetTall() + gap
-    if view.hintCard:IsVisible() then
+    local hintH = view.hintCard:IsVisible() and view.hintCard:WantedHeight(right.w) or 0
+    local partyWanted = view.players:WantedHeight(right.w)
+    local hintSpace = hintH > 0 and hintH + gap or 0
+    local budget = right.h - buttonH - gap * 2 - hintSpace - math.min(partyWanted, px(152))
+    local weeklyH = layoutWeekly(view, right, budget, px)
+    local y = right.y + (weeklyH > 0 and weeklyH + gap or 0)
+    if hintH > 0 then
         view.hintCard:SetPos(right.x, y)
-        view.hintCard:SetSize(right.w, view.hintCard:WantedHeight(right.w))
-        y = y + view.hintCard:GetTall() + gap
+        view.hintCard:SetSize(right.w, hintH)
+        y = y + hintSpace
     end
     local buttonsY = right.y + right.h - buttonH
-    view.players:SetPos(right.x, y)
-    view.players:SetSize(right.w, math.min(view.players:WantedHeight(right.w), buttonsY - gap - y))
-    local setupW = math.floor((right.w - gap) * 0.4)
+    local partyH = math.min(partyWanted, math.max(0, buttonsY - gap - y))
+    view.players:SetPos(right.x, buttonsY - gap - partyH)
+    view.players:SetSize(right.w, partyH)
     view.setup:SetPos(right.x, buttonsY)
-    view.setup:SetSize(setupW, buttonH)
-    view.start:SetPos(right.x + setupW + gap, buttonsY)
-    view.start:SetSize(right.w - setupW - gap, buttonH)
+    view.setup:SetSize(right.w, buttonH)
 end
 
 ---@param view PWLobbyHubView
@@ -179,18 +245,23 @@ function SCREEN:Build(ctx)
     local view = vgui.Create("Panel", ctx.parent) --[[@as PWLobbyHubView]]
     view:Dock(FILL)
     fill(view)
+    local root = ctx.root --[[@as PWRoot]]
+    view.weekly.DoClick = function()
+        if challenges ~= nil and challenges._OpenPlayPreview(root.model) then root:Rebuild() end
+    end
+    hook.Add("PW_ChallengesChanged", view, function() showWeekly(view) end)
     local hooks = view --[[@as PANEL]]
     hooks.PerformLayout = function(_, w, h) layout(view, w, h) end
     hooks.Think = function()
         if view.framed then return end
         view.framed = true -- after the root's frame update, which resets the hints to SCREEN.Hints
-        lobby().SetFrame(view.hub.note, view.hub.start.locked and guestHints or hostHints)
+        lobby().SetFrame(view.hub.note, hints)
     end
     view.PWRefresh = function() refresh(view) end
     view.OnAction = function(_, action)
-        if action == "secondary" then lobby().OpenCustom("setup") end
-        if action == "tertiary" then startMatch(view) end
+        if action == "secondary" then openSetup(view) end
     end
     refresh(view)
+    showWeekly(view)
     return view
 end

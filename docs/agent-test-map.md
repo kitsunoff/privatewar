@@ -1,7 +1,7 @@
 # Agent mandatory test map
 
 Use with [TASKS.md](../TASKS.md) "Mandatory test cases" and the [workflow](agent-workflow.md).
-These are **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
+The exact-case tables map **existing regression cases**, not new tests or evidence of a current run. Preserve the whole suites and
 write additional task-specific cases first. Paths in the tables are relative to
 `addons/privatewar/lua/tests/privatewar/`. Clauses are copied verbatim from the task list; some clauses need
 multiple cases. The static checker verifies each clause is still in TASKS.md and each exact name still exists.
@@ -77,6 +77,56 @@ continued infected play, synchronous relationship/effect rollback, ordinary-mode
 their existing engine assertions too. Read `role_policy.lua`, `player_overrides.lua`, `bots_input.lua`,
 `infection_runtime.lua`, `infection_melee_smoke.lua` and the full T-11.14 contract before changing those seams.
 
+## After-match routing
+
+| Task | Mandatory clause | Suite | Exact existing case name |
+| --- | --- | --- | --- |
+| T-2.13 | ResolveAfterMatch: auto with a playlist is rotation | vote.lua | ResolveAfterMatch: auto with a playlist is rotation |
+| T-2.13 | ResolveAfterMatch: auto in Custom is lobby | vote.lua | ResolveAfterMatch: auto in Custom is lobby |
+| T-2.13 | ResolveAfterMatch: lobby and rotation override the playlist state | vote.lua | ResolveAfterMatch: lobby and rotation override the playlist state |
+| T-2.13 | ResolveAfterMatch: an unknown value behaves like auto | vote.lua | ResolveAfterMatch: an unknown value behaves like auto |
+| T-2.13 | PW_AfterMatch answers from the store | vote.lua | PW_AfterMatch answers from the store |
+| T-2.13 | PW_AfterMatch without the playlists module treats the game as Custom | vote.lua | PW_AfterMatch without the playlists module treats the game as Custom |
+| T-2.13 | auto with an expired scheduled playlist goes to the lobby | vote.lua | auto with an expired scheduled playlist goes to the lobby |
+| T-2.13 | vote.aftermatch schema: enum, default auto, three options, has a description | vote.lua | vote.aftermatch schema: enum, default auto, three options, has a description |
+| T-2.13 | POSTMATCH goes to LOBBY when no module answers PW_AfterMatch | core_phases.lua | POSTMATCH goes to LOBBY when no module answers PW_AfterMatch |
+| T-2.13 | POSTMATCH goes to VOTE when PW_AfterMatch answers rotation | core_phases.lua | POSTMATCH goes to VOTE when PW_AfterMatch answers rotation |
+| T-2.13 | PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start | core_phases.lua | PW_AfterMatch is asked at the end of POSTMATCH, not cached from the match start |
+| T-2.13 | pw_aftermatch is no longer created | core_phases.lua | pw_aftermatch is no longer created |
+
+The lobby preview also has a model case in `ui_hub.lua`. Preserve the existing vote, phase machine and
+scheduled-playlist safeguards.
+
+## Tactical stims (T-11.20)
+
+The [mandatory inventory](../TASKS.md#t-1120-tactical-stims) lists each exact test name under its suite.
+
+| Regression area | Suite | Required coverage |
+| --- | --- | --- |
+| Temporary movement | `player_overrides_move_sources.lua` | Sorted multiplication, profile/stat composition, baseline recovery, spawn reset, no health mutation |
+| Shared rules | `stims.lua` | Ticks, caps, item overrides, effect lines, tuning bounds |
+| Item lifecycle | `stims_items.lua` | Refusals, delays, expiry, instance cleanup, inheritance and owner-only message |
+| Equipment input | `stims_equipment.lua` | Live-phase weapon-less use only, reject grenade/index, charge/cooldown, spawn, Stockpile, sounds and categories |
+| Presentation | `hud_stims.lua` | Active-only lines, cached text, placement clear of streaks |
+| Bots | `stims_bots.lua` | Heal-only policy and a native bot's successful heal |
+| Optional animation | `integration_stims.lua` | Capability selection, no-dependency fallback and explicit optional session skip |
+
+Core grenade tests remain mandatory. `equipment.lua` now checks actual receiver registration, in addition to
+`stims_equipment.lua` invoking that receiver and asserting that a grenade cannot be spent through it.
+
+## Calling cards
+
+| Regression area | Suite | Required coverage |
+| --- | --- | --- |
+| Choice and server publication | `calling_cards.lua` | Dynamic enum and Recruit default, malformed and unavailable choices, spawn revalidation, NW2 updates, bot stability |
+| Kill ownership and wire | `calling_cards.lua` | Human enemy killer only in `LIVE`, 32-byte name and ID boundaries, explicit round trip, short and trailing payloads, choice rate and length |
+| HUD | `hud_kill_card.lua` | Timing, replacement, XP-strip clearance on Deck and desktop, missing material, centred icons, gradient and hide setting |
+| Picker and assets | `calling_cards_picker.lua` | Unlocked write, locked focus and requirement, preview without write, LOADOUT/Back routing and stock definition map |
+| Package | `scripts/package/selftest.sh` | Ten release PNGs copied unchanged, unrelated and nested material PNGs rejected |
+
+The change record owns the exact mandatory inventory and the separate human checkpoint. Keep the native
+kill/score and settings tests unchanged when extending either card selection or the HUD.
+
 ## Weapon adapters
 
 | Task | Mandatory clause | Suite | Exact existing case name |
@@ -148,6 +198,27 @@ Also retain these existing extension regressions in `wildcards.lua` (not additio
 Keep `loadout.lua`, `loadout_budget.lua`, `loadout_classes.lua`, `gunsmith.lua` and `perks.lua` when changing slot
 rules; these exercise wrong kind/filter, budget 0, cosmetics, bans, cap, repair/N/A and group composition. A new
 slot needs native giving plus UI/wire tests because effective-slot acceptance alone does not prove the slot is consumed.
+
+## Unlock entitlements
+
+The [mandatory inventory in TASKS.md](../TASKS.md#unlock-entitlements-mandatory-regression-inventory) lists 47 exact
+new case names. This table maps coverage areas to suites; it is not an assertion of runtime or checkpoint results.
+Preserve the whole inherited suites on these seams.
+
+| Coverage area | Suite |
+| --- | --- |
+| Specification, source precedence, keys, requirements, option counting and compatibility | `unlocks.lua` |
+| Transactions, readiness, persistence, wire, admin and server consumers | `unlocks_storage.lua` |
+| Editor, gunsmith, operators, store, next unlocks, badge and popup models | `unlocks_ui.lua` |
+| Explicit false and table curation survive stat-based levels | `autounlock.lua` |
+| Existing progression, storage and economy unlock regressions | `progression.lua`, `progression_storage.lua`, `economy.lua` |
+| Existing class repair, build validation and bot isolation | `loadout_classes.lua`, `gunsmith.lua`, `bots_loadouts.lua`, `bots_arc9_generated_native.lua` |
+| Existing frontend and operator regressions | `ui_classes_gunsmith.lua`, `ui_store_progress.lua`, `operators_names.lua` |
+| Existing soft registry merge and curation | `core_registry.lua`, `autounlock.lua` |
+
+Retain T-5.13's zero-call assertion for bot paths and the corresponding native bot regression; stub both
+`PW.Progression.IsUnlocked` and `PW.Unlocks.IsUnlocked` when changing consumer targets. The T-4.8 gunsmith stub must
+continue to open all options it previously opened. See the change record for gate and human-checkpoint evidence.
 
 ## Guidance evaluations
 

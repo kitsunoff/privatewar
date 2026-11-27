@@ -2,11 +2,11 @@
 -- Shared and pure: the slots lethal and tactical (declared in the loadout module, kind equipment, an action key
 -- each), the counts, the use rule and the slot keys; the grenade rules are sh_grenades.lua (T-11.4: grenades are
 -- inventory SWEPs). Server state, spawn and death hooks and the grenade SWEPs' glue are init.lua; the key handling
--- (select the grenade SWEP) is cl_init.lua; the items are lua/privatewar/equipment/.
+-- (select a grenade SWEP or request weapon-less use) is cl_init.lua; the items are lua/privatewar/equipment/.
 --
--- No net message of its own: the slot keys select the grenade SWEP on the client (input.SelectWeapon) and the SWEP
--- throws on release. Counts and item ids reach the client as NW2 values of the player ("pw_eq_<slot>",
--- "pw_eqn_<slot>"), written only when they change; the count is also the ammo of the grenade SWEP.
+-- The slot keys select the grenade SWEP on the client (input.SelectWeapon) and the SWEP throws on release.
+-- Weapon-less use sends the two-bit slot index in pw_equipment_use. The client reads the item and count through
+-- NW2 ("pw_eq_<slot>", "pw_eqn_<slot>"); the count is also the ammo of the grenade SWEP.
 --
 -- Decisions of the lane agent:
 --   1. Keys: lethal G (the design), tactical 4 (the design; F stays the flashlight). Each slot also has a console
@@ -64,6 +64,12 @@ function lib._KeySlot(button, codes)
         if codes[slot] == button then return slot end
     end
     return nil
+end
+
+function lib._KeyAction(itemId, weaponClass, count)
+    if itemId == nil or count < 1 then return nil end
+    if weaponClass ~= nil then return "select" end
+    return "use"
 end
 
 function lib._DeclareSlots()

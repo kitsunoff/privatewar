@@ -23,11 +23,12 @@ local lib = PW.Progression --[[@as PW.ProgressionLib]]
 
 ---@param store PW.ProgressionStore
 ---@param ply Player
+---@param levelBefore? integer already resolved for a claim-bound gain
 ---@return PW.ProgressionMatch
-local function matchOf(store, ply)
+local function matchOf(store, ply, levelBefore)
     local record = store.matches[ply]
     if record == nil then
-        record = { xp = 0, levelBefore = lib._Level(store, ply), weapons = {}, medals = {} }
+        record = { xp = 0, levelBefore = levelBefore or lib._Level(store, ply), weapons = {}, medals = {} }
         store.matches[ply] = record
     end
     return record
@@ -36,15 +37,16 @@ end
 function lib._PendingOf(store, ply)
     local pending = store.pending[ply]
     if pending == nil then
-        pending = { xp = 0, weapons = {}, earned = 0, spent = 0, owned = {} }
+        pending = { xp = 0, weapons = {}, earned = 0, spent = 0, owned = {},
+            granted = {}, revoked = {}, claims = {} }
         store.pending[ply] = pending
     end
     return pending
 end
 
-function lib._Track(store, ply, xp, weaponClass)
+function lib._Track(store, ply, xp, weaponClass, levelBefore)
     local pending = lib._PendingOf(store, ply)
-    local record = matchOf(store, ply)
+    local record = matchOf(store, ply, levelBefore)
     pending.xp = pending.xp + xp
     record.xp = record.xp + xp
     if weaponClass == nil then return end
@@ -81,6 +83,9 @@ function lib._Flush(store, ply)
     local pending = store.pending[ply]
     if pending == nil then return nil end
     store.pending[ply] = nil
+    if pending.xp == 0 and next(pending.weapons) == nil and pending.earned == 0 and pending.spent == 0
+        and next(pending.owned) == nil and next(pending.granted or {}) == nil
+        and next(pending.revoked or {}) == nil and next(pending.claims or {}) == nil then return nil end
     local batch = store.batches[ply]
     if batch == nil then
         batch = { session = math.random(1, 2 ^ 31 - 1), seq = 0 }
@@ -89,7 +94,8 @@ function lib._Flush(store, ply)
     batch.seq = batch.seq + 1
     ---@type PW.ProgressionDelta
     local delta = { session = batch.session, seq = batch.seq, xp = pending.xp, weapons = pending.weapons,
-        earned = pending.earned, spent = pending.spent, owned = pending.owned }
+        earned = pending.earned, spent = pending.spent, owned = pending.owned,
+        granted = pending.granted, revoked = pending.revoked, claims = pending.claims }
     store.sendDelta(ply, delta)
     return delta
 end

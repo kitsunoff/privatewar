@@ -45,6 +45,16 @@ local function defaultSource()
     return { modes = entry.Modes, maps = entry.Maps }
 end
 
+---The active playlist id for automatic rotation; an unavailable schedule behaves like Custom.
+---@return string
+local function defaultActivePlaylist()
+    local playlists = rawget(PW, "Playlist") --[[@as PW.PlaylistLib?]]
+    if playlists == nil or playlists.GetActive == nil then return "" end
+    local id = playlists.GetActive()
+    if id ~= "" and playlists._RotationAllowed ~= nil and not playlists._RotationAllowed(false) then return "" end
+    return id
+end
+
 ---@return string[]
 local function defaultPool()
     local mapList = rawget(PW, "MapList") --[[@as PW.MapListLib?]]
@@ -116,6 +126,8 @@ function lib._NewStore(opts)
         resolveMode = opts.resolveMode or defaultResolve,
         count = opts.count or function() return tonumber(PW.Setting("vote.options")) or 3 end,
         allowRepeat = opts.allowRepeat or function() return PW.Setting("vote.allowrepeat") == true end,
+        afterMatch = opts.afterMatch or function() return PW.Setting("vote.aftermatch") or "auto" end,
+        activePlaylist = opts.activePlaylist or defaultActivePlaylist,
         canPick = opts.canPick or function(ply) return PW.Can(ply, lib.Privilege) end,
         readIndex = opts.readIndex or function() return net.ReadUInt(8) end,
         readPick = opts.readPick or readPick,
@@ -280,6 +292,12 @@ function module:PW_PhaseChange(phase, oldPhase)
     elseif phase == "LIVE" and oldPhase == "PREMATCH" then
         lib._Played(game.GetMap())
     end
+end
+
+---Answers the core's after-match question from the live server setting and current playlist.
+---@return PW.AfterMatch
+function module:PW_AfterMatch()
+    return lib.ResolveAfterMatch(store().afterMatch(), store().activePlaylist())
 end
 
 ---@return PW.NextMatch?

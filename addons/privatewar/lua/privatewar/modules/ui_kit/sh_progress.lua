@@ -37,6 +37,8 @@ end
 ---@param unlock any
 ---@return integer?
 local function unlockLevel(unlock)
+    local authority = PW.Unlocks
+    if authority ~= nil then return authority._Spec(unlock).level or nil end
     if isnumber(unlock) then return math.floor(unlock --[[@as number]]) end
     if istable(unlock) and isnumber((unlock --[[@as table<string, any>]]).level) then
         return math.floor((unlock --[[@as table<string, any>]]).level --[[@as number]])

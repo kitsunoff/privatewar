@@ -4,6 +4,9 @@ local lib = PW.PlayerOverrides --[[@as PW.PlayerOverridesLib]]
 ---@type table<Player, PW.PlayerOverrideBaseline>
 local held = PW._PlayerOverrideBaselines or setmetatable({}, { __mode = "k" })
 PW._PlayerOverrideBaselines = held
+---@type table<Player, table<string, number>>
+local sources = PW._PlayerOverrideMoveSources or setmetatable({}, { __mode = "k" })
+PW._PlayerOverrideMoveSources = sources
 ---@type table<Player, boolean>
 local spawning = setmetatable({}, { __mode = "k" })
 
@@ -49,20 +52,36 @@ local function apply(ply, spawned)
     if not IsValid(ply) or not ply:IsPlayer() then return false, "invalid player" end
     local profile = PW.Ask("PW_PlayerOverrides", ply)
     local speed = PW.Stat ~= nil and PW.Stat(ply, "move_speed", 1) or 1
-    if profile == nil and speed == 1 then lib.Release(ply) return false, "no provider" end
+    local factor = lib._SpeedFactor(sources[ply])
+    if profile == nil and speed == 1 and factor == 1 then lib.Release(ply) return false, "no provider" end
     profile = profile or {}
     local baseline = held[ply] or capture(ply)
     if not valid(profile, baseline) then return false, "invalid profile" end
     held[ply] = baseline
     ply:SetMaxHealth(profile.maxHealth or baseline.max)
-    ply:SetWalkSpeed(baseline.walk * (profile.walkSpeedMult or 1) * speed)
-    ply:SetRunSpeed(baseline.run * (profile.runSpeedMult or 1) * speed)
+    ply:SetWalkSpeed(baseline.walk * (profile.walkSpeedMult or 1) * speed * factor)
+    ply:SetRunSpeed(baseline.run * (profile.runSpeedMult or 1) * speed * factor)
     if spawned and profile.spawnHealth ~= nil and ply:Alive() then ply:SetHealth(profile.spawnHealth) end
     return true
 end
 
 function lib.Refresh(ply)
     return apply(ply, false)
+end
+
+function lib.MoveSource(ply, id, mult)
+    local owned = sources[ply]
+    if mult == nil then
+        if owned ~= nil then
+            owned[id] = nil
+            if next(owned) == nil then sources[ply] = nil end
+        end
+    elseif IsValid(ply) and ply:IsPlayer() then
+        owned = owned or {}
+        owned[id] = mult
+        sources[ply] = owned
+    end
+    lib.Refresh(ply)
 end
 
 function MODULE:PW_PlayerStatsChanged(ply)
@@ -72,6 +91,7 @@ end
 
 PW.HookFor(MODULE, "PlayerSpawn", function(_, ply)
     spawning[ply] = true
+    sources[ply] = nil
     lib.Release(ply) -- never carry the previous life's owned speeds/max into ordinary initialization
 end)
 
@@ -91,8 +111,11 @@ function MODULE:PW_PlayerSpawned(ply)
 end
 
 function MODULE:PW_MatchEnd()
+    for ply in pairs(sources) do sources[ply] = nil end
     for ply in pairs(held) do lib.Release(ply) end
     for ply in pairs(spawning) do spawning[ply] = nil end
 end
 
-PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply) held[ply], spawning[ply] = nil, nil end)
+PW.HookFor(MODULE, "PlayerDisconnected", function(_, ply)
+    held[ply], spawning[ply], sources[ply] = nil, nil, nil
+end)

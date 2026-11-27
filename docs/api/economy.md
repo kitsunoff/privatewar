@@ -1,8 +1,8 @@
 # Economy API
 
 Module `economy` (T-4.12, `design/06-progression.md` d.6). A meta currency earned through score events, `Price` on
-entities, purchases through a validated net request, shop bundles and a date-seeded rotation. Disabling the module leaves
-level-only unlocks (prices and purchases stop counting in `PW.Progression.IsUnlocked`). The currency and the purchased
+entities, purchases through a validated net request, shop bundles and a date-seeded rotation. Disabling the module
+removes prices and purchases from the unlock decision; grants and other sources still count. The currency and the purchased
 items are stored by progression (see "Wallet (T-4.12)" in `progression.md`). The store screen is T-7.5 and reads this API.
 
 Files: `lua/privatewar/modules/economy/` (`shared.lua`, `sh_rotation.lua`, `sh_catalogue.lua`, `sh_purchase.lua`,
@@ -23,14 +23,17 @@ All three are data, never auto-subscribed, with the per-entity enable ConVar nam
 - `Items` of a bundle: `{ kind = "<registry kind>", id = "<id>" }`, or `{ kind = "camos", weapon = "<id>", id = "<camo>" }`
   (`"camo"` is accepted as the kind). A bundle with an item that does not resolve, an empty one or one that nests a bundle
   is not offered.
-- A `Price` of 1 or more (floored) makes any entity of any kind a single offer. An entity with a `Price` and no `Unlock` is
-  for sale only; with an `Unlock` it is also unlocked by level.
+- A `Price` of 1 or more (floored) makes an entity a single offer. With no `Unlock`, a priced entity has no level path
+  while economy is active; a grant, purchase or higher-priority rule can still open it. Models and calling cards use
+  [`PW.UnlockField`](progression.md#references-and-curation): an integer, `false`, or `{ level?, hint?, reward? }`.
+  A numeric level adds a level path; `false` (including `{ level = false }`) does not.
 - Samples (stock content only): playermodels `swat`, `urban`, `riot`, `combine_elite` (`models/player/*.mdl`), cards
   `gold_medal`, `bomb`, `lightning` (`icon16/*.png`), bundles `operator_pack`, `shadow_ops`, `elite_force`. The bundles
   also reference content of other modules: `operator_pack` holds the perk `adrenaline`, `elite_force` the streak `uav` and
   the equipment `frag`, so they are offered only while those entities exist. Prices: models 600 to 2000, cards 150 to 450,
   bundles 700 to 2400.
-- Equipping a model or a card is not part of T-4.12 (no consumer yet).
+- [Operators](operators.md) and [calling cards](calling-cards.md) validate equipped models and cards through
+  `PW.Unlocks`.
 
 ## Earning
 
@@ -68,7 +71,7 @@ A bundle can be bought only while it is featured today or this week; single offe
 | `PW.Economy.GetOffer(key) -> PW.EconomyOffer?` | Shared. `{ key, kind, id, name, price, rarity?, bundle, items }` |
 | `PW.Economy.Featured(date?)`, `PW.Economy.Weekly(date?)` | Shared. The bundle keys of the daily and the weekly selection |
 | `PW.Economy.GetCurrency(ply) -> number` | Shared (a client answers for the local player) |
-| `PW.Economy.IsOwned(ply, kind, id) -> boolean` | Shared. Purchased (not the level unlock; for that use `PW.Progression.IsUnlocked`) |
+| `PW.Economy.IsOwned(ply, kind, id) -> boolean` | Shared. Purchases only. Use `PW.Unlocks.IsEntitled` for grants or active purchases, and `PW.Unlocks.IsUnlocked` for the unlock decision |
 | `PW.Economy.Buy(ply, key) -> boolean, string?` | Server. The reason on failure |
 | `PW.Economy.RequestBuy(key)` | Client. Sends the request; the answer is the notification `PW_EconomyResult(result)` and `PW.Economy.LastResult` |
 
@@ -81,13 +84,14 @@ Purchase rules (`_Quote`), the first failing reason is returned:
 | `badkey` | Not a string of the form `"<kind>:<id>"`: the kind is lowercase letters and `_`, the id letters, digits and `_` |
 | `unknown` | No such offer (no price, an unresolved bundle, a missing entity) |
 | `notoffered` | A bundle the rotation does not feature today |
-| `owned` | The key is owned; a bundle whose items are all owned |
-| `unlocked` | A single entity the player's level already unlocks |
+| `owned` | The key is purchased or granted; for a bundle this also applies when all of its items are purchased or granted |
+| `unlocked` | A single entity already open through a non-entitlement source (for example level, `unlockall` or an override) |
 | `funds` | The price is above the currency |
 
-A bundle is charged in full even when some items are owned; it grants every item and itself. A successful purchase
-deducts the currency, records the keys as owned, sends the progression delta at once (the client file applies it through
-the delta path) and fires the server notification `PW_EconomyPurchase(ply, key, price)`.
+The quote evaluates the unlock decision without entitlements, but keeps the price-only rule active. A bundle is
+charged in full even when some items are owned; every item and the bundle itself are recorded as purchased. A successful
+purchase deducts the currency, records the keys as owned, sends the progression delta at once (the client file applies
+it through the delta path), refreshes classes and fires `PW_EconomyPurchase(ply, key, price)` on the server.
 
 ## Net messages
 

@@ -77,7 +77,16 @@ local function refresh(view)
     end
     view.items = store().ItemViews(offer, store().LiveLookup(), store().LiveFacts())
     view.item = view.item or (view.items[1] ~= nil and view.items[1].key or nil)
-    store().UpdateCards(view.itemList, store().ItemCards(view.items), view.item)
+    local cards = store().ItemCards(view.items)
+    local phrase = assert(store().UnlockPhrase)
+    for _, card in ipairs(cards) do
+        local reason, hint = phrase(card.text), phrase(card.footer)
+        card.text = reason ~= nil and hint ~= nil and (reason .. ". " .. hint) or reason or hint
+        card.footer = card.lockText
+    end
+    store().UpdateCards(view.itemList, cards, view.item)
+    local bind = assert(store().BindUnlockCard)
+    for index, panel in ipairs(view.itemList.panels) do bind(panel, cards[index].id) end
     showItem(view)
     showInfo(view, offer, data)
     view:InvalidateLayout(true)
@@ -133,6 +142,7 @@ function SCREEN:Build(ctx)
         refresh(view)
     end
     view.PWRefresh = function() refresh(view) end
+    assert(store().WatchUnlockView)(view, view.PWRefresh)
     view.OnAction = function(_, action)
         if action == "tertiary" then buy(view) end
     end

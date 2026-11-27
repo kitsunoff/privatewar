@@ -105,7 +105,7 @@ fields and other sources fill the rest. Id = the SWEP class. Accessor `PW.Weapon
 | --- | --- | --- |
 | `Category` | `string?` | Weapon category, for example `"ar"` or `"smg"` |
 | `Name` | `string?` | Display name |
-| `Unlock` | `integer?` | Unlock level, read by progression (`design/06-progression.md`); empty means its default |
+| `Unlock` | `PW.UnlockField?` | [Player-level or entitlement curation](progression.md#references-and-curation); omitted uses the default unlock rules |
 
 ## Weapon registration phase
 
@@ -574,8 +574,10 @@ Source: `gamemodes/privatewar/gamemode/core/sh_phase.lua` (shared rules), `sv_ma
   set through `LIVE`, `POSTMATCH` and `VOTE`, and is cleared on entering `LOBBY`, after `PW_PhaseChange`.
 - `MODE:Start()` runs on entering `LIVE`, `MODE:Cleanup()` on leaving it, both through `PW.Call`. A mode error
   aborts the match (see "Entity calls").
-- After `POSTMATCH`: `pw_aftermatch lobby` goes to `LOBBY`; `rotation` goes to `VOTE` for `pw_vote_time` seconds,
-  then a new `PREMATCH` (or earlier, through `PW.Match.EndVote`). The next match is the answer of the question hook
+- At the end of `POSTMATCH`, the current `PW_AfterMatch(mode)` answer chooses the route. `"rotation"` goes to `VOTE`
+  for `pw_vote_time` seconds; `"lobby"`, nil or an invalid answer goes to `LOBBY`. The core does not read vote or
+  playlist settings directly. When voting ends (or earlier through `PW.Match.EndVote`), the next match is the answer
+  of the question hook
   `PW_NextMatch(mode)`, asked once at that step (`mode` is `PW.ActiveMode`): a table `{ mode = <mode entity>,
   map = <string?> }` (`PW.NextMatch`) with a `ClassName` string on `mode` and a string or `nil` map. The step then
   runs the same path as `PW.Match.Start` (the mode's current registry table, a map change when `map` is another map).
@@ -603,7 +605,9 @@ ConVars (server, `FCVAR_ARCHIVE`, read when the phase that needs them starts):
 | `pw_countdown` | `10` | Countdown in seconds (min 0) |
 | `pw_postmatch_time` | `15` | POSTMATCH duration in seconds (min 0) |
 | `pw_vote_time` | `15` | VOTE duration in seconds (min 0) |
-| `pw_aftermatch` | `lobby` | `lobby` or `rotation`; any other value means `lobby` |
+
+The old `pw_aftermatch` ConVar is not created; an existing archived value is ignored, not migrated.
+See `vote.aftermatch` in [Vote module](modes.md#vote-module) for the generated host setting.
 
 Abort command: privilege `pw.match.abort` (default `superadmin`, declared by the core). Console command
 `pw_abort [reason]`: from the server console always allowed; a player without the privilege is refused with one
@@ -792,6 +796,7 @@ method with the hook's name as the default implementation, called after the list
 | `PW_MatchStart` | notification, via `PW.Notify` | — | Server. Entering `LIVE`: after `PW_PhaseChange` and after `MODE:Start` |
 | `PW_MatchEnd` | notification, via `PW.Notify` | `result: any` | Server. Leaving `LIVE` (to `POSTMATCH`, or to `LOBBY` by abort): after `MODE:Cleanup`, before `PW_PhaseChange`. `result` is the value given to `Finish`, `nil` on abort. `MODE:Cleanup` and `PW_MatchEnd` run only if the match started (`LIVE` was entered); an abort from `PREMATCH` fires neither. The core removes every live instance here |
 | `PW_PhaseChanged` | notification, via `PW.Notify` | `phase: PW.PhaseName, endsAt: number, seq: integer` | Client. Fired once per new `seq` the client sees: one frame after the `pw_phase_seq` NW2 proxy (`timer.Simple(0)`), reading the three globals then. Also fired once at client `InitPostEntity` with the current values (first sync, no delay). Transitions made in one server tick arrive as one call with the last values. Leaving `LIVE` ends the client instances first. On the client `PW.ActiveMode` is `nil`, so only listeners run |
+| `PW_AfterMatch` | question, via `PW.Ask` | `mode: table?` (current match mode, nil without one) | Server. Read with the phase settings; the current answer at the end of `POSTMATCH` wins. Return `"rotation"` to vote or `"lobby"` to return; nil and invalid values fall back to `LOBBY`. Keep answers cheap and side-effect-free. The vote module answers from the host setting and playlist state |
 | `PW_NextMatch` | question, via `PW.Ask` | `mode: table` (`PW.ActiveMode`, the mode that just ended) | Server. Asked once at the `VOTE` to `PREMATCH` step (timer end, or `PW.Match.EndVote`). The answer is `{ mode = <mode entity>, map = <string?> }` (`PW.NextMatch`); the core starts it through its usual path, a map change included. `nil` or an invalid answer: the same mode repeats on this map (an invalid non-nil answer logs one line). The first non-nil answer wins, the active mode's method of the same name is the default. Answered by the vote module (`modes.md`) |
 | `PW_PendingTeams` | question, via `PW.Ask` | `mode: table` (the target mode) | Server. Asked when `PW.Match.Start` writes `pending_match.json` for another map. The answer (`table<string, integer>?`, team by SteamID64 string) is written to `teams`; a non-table answer or none writes `{}`. The core does not check the content (the file check only needs a table). Answered by the teams module (`teams.md`) |
 | `PW_PendingMatchApplied` | notification, via `PW.Notify` | `pending: PW.PendingMatch` | Server. Fired on the new map after a valid pending file started the match: after `PW.Match.Start` entered `PREMATCH` (so after that `PW_PhaseChange`). Not fired for a rejected or missing file |

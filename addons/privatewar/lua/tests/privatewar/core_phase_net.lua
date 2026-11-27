@@ -1,7 +1,7 @@
 -- T-1.13 phase networking (TASKS.md, "Mandatory test cases" T-1.13; 00-core.md d.10, d.11). Every case swaps in a
 -- fresh machine store whose NW2 writer only records the writes (the real NW2 globals are never touched), a fresh
--- PW.Call store, a fresh instance store and fresh settings and enable stores, and restores them, PW.ActiveMode and
--- pw_aftermatch afterwards, so the real machine stays in LOBBY and the real stores keep no match snapshot. The
+-- PW.Call store, a fresh instance store and fresh settings and enable stores, and restores them and PW.ActiveMode
+-- afterwards, so the real machine stays in LOBBY and the real stores keep no match snapshot. The
 -- client side is covered through its pure parts (PW.Phase._Remaining, PW.Phase._EndsInstances, PW.Phase._Apply);
 -- the proxy itself is a checkpoint item (CP-1 items 2 and 6).
 
@@ -19,11 +19,6 @@ end
 ---@return PW.MatchLib
 local function match()
     return must(PW.Match)
-end
-
----@return ConVar
-local function afterMatchVar()
-    return must(GetConVar("pw_aftermatch"))
 end
 
 ---@param state table<string, any>
@@ -95,12 +90,10 @@ return {
         state.previousCall = PW._Call
         state.previousInstances = PW._Instances
         state.previousMode = PW.ActiveMode
-        state.previousAfterMatch = afterMatchVar():GetString()
         state.now = 1000
         state.writes = {}
         state.mode = { ClassName = "test_phase_net" }
         PW.ActiveMode = nil
-        afterMatchVar():SetString("lobby")
         PW._Call = { log = function() end, failed = setmetatable({}, { __mode = "k" }), profile = {} }
         PW._Instances = { live = {}, count = 0 }
     end,
@@ -111,7 +104,6 @@ return {
         PW._Call = state.previousCall
         PW._Instances = state.previousInstances
         PW.ActiveMode = state.previousMode
-        afterMatchVar():SetString(state.previousAfterMatch)
     end,
     cases = {
         {

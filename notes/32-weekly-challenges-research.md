@@ -1,7 +1,7 @@
 # 32 — Weekly challenges: research and event inventory
 
 Status: research (2026-11-21). Research explains *why*; it is not a decision. The plan is
-`../changes/planned/weekly-challenges.md`. Where this note and `../design/` disagree, `design/` wins.
+`../changes/in-progress/weekly-challenges.md`. Where this note and `../design/` disagree, `design/` wins.
 
 ## Question
 

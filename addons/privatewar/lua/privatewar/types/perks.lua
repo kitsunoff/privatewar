@@ -16,7 +16,7 @@
 ---@field Description? string
 ---Pick X cost (05-loadout.md d.2); default 1.
 ---@field Cost? number
----@field Unlock? integer
+---@field Unlock? PW.UnlockField player level or entitlement condition
 ---@field SilentFootsteps? boolean
 ---@field NextRevealAt? number
 ---Multipliers by stat id, read through PW.Stat. Weapon stats (reload_time, draw_time, ads_time, sprint_to_fire,

@@ -48,9 +48,10 @@ end
 local function complete(state, now)
     local interaction = state.interaction
     if interaction == nil then return end
-    local duration = interaction.action == "plant" and 5 or 7.5
+    local plant = interaction.action == "plant"
+    local duration = plant and 5 or 7.5
     if now - interaction.at < duration then return end
-    if interaction.action == "plant" then
+    if plant then
         for _, site in ipairs(state.map.sites) do
             if site.id == interaction.site then state.pos = site.approach end
         end
@@ -58,6 +59,8 @@ local function complete(state, now)
     else
         state.phase, state.winner = "resolved", 2
     end
+    state.completed = { action = plant and "plant" or "defuse", id = interaction.id,
+        userId = interaction.userId, site = interaction.site }
     state.interaction = nil
 end
 

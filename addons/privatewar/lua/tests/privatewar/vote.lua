@@ -185,6 +185,103 @@ local function driveToVote(state)
     assert(match().GetPhase() == "VOTE", "not in VOTE")
 end
 
+local afterMatchCases = {
+    {
+        name = "ResolveAfterMatch: auto with a playlist is rotation",
+        func = function()
+            expect(lib().ResolveAfterMatch("auto", "night")).to.equal("rotation")
+        end
+    },
+    {
+        name = "ResolveAfterMatch: auto in Custom is lobby",
+        func = function()
+            expect(lib().ResolveAfterMatch("auto", "")).to.equal("lobby")
+        end
+    },
+    {
+        name = "ResolveAfterMatch: lobby and rotation override the playlist state",
+        func = function()
+            for _, playlist in ipairs({ "", "night" }) do
+                expect(lib().ResolveAfterMatch("lobby", playlist)).to.equal("lobby")
+                expect(lib().ResolveAfterMatch("rotation", playlist)).to.equal("rotation")
+            end
+        end
+    },
+    {
+        name = "ResolveAfterMatch: an unknown value behaves like auto",
+        func = function()
+            expect(lib().ResolveAfterMatch("invalid", "night")).to.equal("rotation")
+            expect(lib().ResolveAfterMatch("invalid", "")).to.equal("lobby")
+        end
+    },
+    {
+        name = "PW_AfterMatch answers from the store",
+        func = function()
+            local setting, active = "auto", "night"
+            local opts = {
+                afterMatch = function() return setting end,
+                activePlaylist = function() return active end
+            }
+            PW._Vote = lib()._NewStore(opts)
+            expect(PW.Ask("PW_AfterMatch")).to.equal("rotation")
+            active = ""
+            expect(PW.Ask("PW_AfterMatch")).to.equal("lobby")
+            setting = "rotation"
+            expect(PW.Ask("PW_AfterMatch")).to.equal("rotation")
+        end
+    },
+    {
+        name = "PW_AfterMatch without the playlists module treats the game as Custom",
+        func = function()
+            PW._Vote = lib()._NewStore({ afterMatch = function() return "auto" end })
+            PW.Playlist = nil
+            expect(PW.Ask("PW_AfterMatch")).to.equal("lobby")
+        end
+    },
+    {
+        name = "auto with an expired scheduled playlist goes to the lobby",
+        func = function()
+            local playlists = must(PW.Playlist)
+            local active = true
+            stub(playlists, "GetActive").with(function() return "scheduled" end)
+            stub(playlists, "_RotationAllowed").with(function(resample)
+                expect(resample).to.beFalse()
+                return active
+            end)
+            PW._Vote = lib()._NewStore({ afterMatch = function() return "auto" end })
+            expect(PW.Ask("PW_AfterMatch")).to.equal("rotation")
+            active = false
+            expect(PW.Ask("PW_AfterMatch")).to.equal("lobby")
+        end
+    },
+    {
+        name = "vote.aftermatch schema: enum, default auto, three options, has a description",
+        func = function()
+            local def = PW.Settings._CurrentIndex()["vote.aftermatch"]
+            expect(def).to.exist()
+            expect(def.scope).to.equal("server")
+            expect(def.type).to.equal("enum")
+            expect(def.default).to.equal("auto")
+            expect(def.options).to.deepEqual({ "auto", "lobby", "rotation" })
+            expect(def.label).to.equal("After the match")
+            expect(def.description).to.equal(
+                "Auto: playlists continue with a vote for the next match, Custom games return to the lobby.")
+            expect(must(GetConVar("pw_vote_aftermatch")):GetDefault()).to.equal("auto")
+            local form = must(PW.UI).BuildForm(PW.Settings.GetGroups("server"))
+            ---@type PW.UIFormControl?
+            local control
+            for _, section in ipairs(form) do
+                for _, item in ipairs(section.controls) do
+                    if item.id == "vote.aftermatch" then control = item end
+                end
+            end
+            expect(must(control).widget).to.equal("combo")
+            expect(must(control).options).to.deepEqual(def.options)
+            expect(must(control).description).to.equal(def.description)
+        end
+    }
+}
+
 local selectionCases = {
     {
         name = "Options are sampled from the playlist: distinct pairs of its modes and fitting maps, vote.options",
@@ -582,6 +679,7 @@ return {
     beforeEach = function(state)
         state.previousNet = PW._Net
         state.previousVote = PW._Vote
+        state.previousPlaylist = PW.Playlist
         state.previousMatch = PW._Match
         state.previousMode = PW.ActiveMode
         state.now = 1000
@@ -597,11 +695,12 @@ return {
         hook.Remove("PW_NextMatch", listenerId)
         PW._Net = state.previousNet
         PW._Vote = state.previousVote
+        PW.Playlist = state.previousPlaylist
         PW._Match = state.previousMatch
         PW.ActiveMode = state.previousMode
         local registry = state.registry or nil --[[@as PW.Registry?]]
         if registry ~= nil then registry._Release() end
         state.registry = false
     end,
-    cases = join(selectionCases, tallyCases, serverCases, netCases, coreCases)
+    cases = join(afterMatchCases, selectionCases, tallyCases, serverCases, netCases, coreCases)
 }
