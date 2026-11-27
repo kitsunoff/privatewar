@@ -89,10 +89,25 @@
 ---@field nav? PW.LobbyNav
 ---@field navLine string
 
+---@class PW.LobbyPlaylistSetup
+---@field name string
+---@field description string
+---@field rows { [1]: string, [2]: string }[]
+---@field party PW.UIPlayerSection[]
+---@field warning? string
+---@field canEdit boolean
+---@field start PW.LobbyAction
+---@field actions PW.LobbyAction[]
+
+---@alias PW.LobbyPlaylistChoice fun(input: PW.LobbyHubInput, id: string, pick: fun(id: string),
+---    open: fun(id: string)): boolean
+
 ---@class PW.LobbyLib
 ---Pure: the hub model (U-5, notes/16 §4a).
 ---@field _Hub fun(input: PW.LobbyHubInput): PW.LobbyHub
 ---@field _PlaylistTimer fun(item: PW.PlaylistSummary, sampledAt: number, phrase?: fun(key: string): string): string
+---@field _ChoosePlaylist PW.LobbyPlaylistChoice
+---@field _PlaylistSetup fun(input: PW.LobbyHubInput, id: string): PW.LobbyPlaylistSetup
 ---Pure: the custom game model (U-5, notes/16 §4b).
 ---@field _Custom fun(input: PW.LobbyHubInput): PW.LobbyCustom
 ---Pure: the maxplayers warning (T-8.2) when the bots fill exceeds the server slots, else nil.
@@ -129,6 +144,8 @@
 ---@class PW.LobbyLib
 ---Client: pushes the custom game screen on the PLAY tab, showing a section ("modemap", "setup", ...).
 ---@field OpenCustom? fun(section?: string)
+---@field OpenPlaylist? fun(id: string)
+---@field PlaylistSetupId? fun(): string
 ---Internal client widget for the after-match summary; clicking opens SETTINGS > Host without editing a value.
 ---@field _AfterMatchButton? fun(parent: Panel): PWButton
 ---Client: the section asked by OpenCustom, once (nil after the first read).

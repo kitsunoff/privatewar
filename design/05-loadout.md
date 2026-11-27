@@ -117,6 +117,8 @@ Inherited from `04-weapons.md`:
    - On death the streak counter resets; earned but unused streaks are kept. `match` setting `streaks.persist` (default off) keeps the counter; a perk may enable it for its owner (Hardline-like).
    - Kills made by streaks do not extend the streak (MW2019 rule); `match` setting `streaks.chain`, default off.
    - Earned streaks wait in an inventory; the player selects one with a dedicated key and activates it. Activation creates an instance; a streak that needs a held item (airstrike designator, laptop) gives a SWEP and removes it in `OnUnequip`.
+   - Notify `PW_StreakEarned(ply, streakId)` on earning and `PW_StreakActivated(ply, streakId)` on successful
+     activation. `PW.Streaks.DamageStreakId()` identifies the current streak inside `StreakDamage`, otherwise it returns nil.
    - Bots decide through `STREAK:BotShouldUse(bot)` (details in `07-bots.md`).
    - Killstreaks are outside the Pick X budget (decision 2).
 

@@ -74,7 +74,7 @@ function lib._Award(store, registry, ply, eventId, opts)
     local score, teamScore = lib._Add(store, ply, team, points)
     publish(ply, score, team, teamScore)
     lib._NotifyOwner(store, ply, eventId, points)
-    PW.Notify("PW_ScoreEvent", ply, eventId, points, xp, weapon)
+    PW.Notify("PW_ScoreEvent", ply, eventId, points, xp, weapon, opts ~= nil and opts.context or nil)
     PW.Notify("PW_ScoreChanged", ply, score, points, team, teamScore)
     return true, points, xp
 end

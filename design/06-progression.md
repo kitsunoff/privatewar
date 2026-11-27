@@ -15,7 +15,7 @@ XP, unlocks, persistence.
      `unlockall`, addons) follow d.8.
    - Weapon level (XP per weapon) unlocks attachments (decision 2).
    - `server` setting `progression.unlockall`: the host opens everything with one switch (friends on a fresh install should not grind to play). Progression still accumulates.
-   - After MVP: prestige; challenges grant entitlements through d.8.
+   - After MVP: prestige and per-weapon camo challenges. Weekly challenges are defined by d.9.
 
 2. **Attachments and camos are curated inside the weapon entry; fallback by count.**
 
@@ -72,7 +72,11 @@ XP, unlocks, persistence.
    ```
 
    - Modes and modules award: `PW.Score.Award(ply, "kill", { weapon = wep })`.
-   - The `score` module adds match score and fires the notification `PW_ScoreEvent(ply, eventId, points, xp, weapon)`. Listeners: progression (player XP, and weapon XP when `weapon` is given), killstreaks in `score` mode (`05-loadout.md` decision 9), HUD popups and medals, announcer.
+   - `PW.Score.Award` accepts optional `opts.context`, a plain table of event facts (such as kill victim, headshot,
+     distance, ADS and stance). The `score` module adds match score and fires
+     `PW_ScoreEvent(ply, eventId, points, xp, weapon, context)`. The sixth argument is additive; old listeners are unchanged.
+     Listeners include progression, killstreaks in `score` mode (`05-loadout.md` d.9), HUD popups and medals, announcer
+     and weekly challenges (d.9).
    - Question hook `PW_ScoreValue(ply, eventId, points)` changes the value of any event (hardcore playlists, modes with other balance).
    - Medals are events with `Medal = true`. Their detectors (double kill, revenge, first blood, ...) are code in a medals module that calls `Award`. No separate `medals/` kind (replaces it in the draft kind list of `01-extensibility.md`).
    - Weapon XP comes only from events awarded with `weapon` (usually kills and headshots).
@@ -160,6 +164,24 @@ XP, unlocks, persistence.
    - The authority supplies the requirement for locked items, such as "Unlocks at level 20",
      "Buy it in the STORE for 600 CR", or a reward hint.
    - Bots are not checked against unlocks (`05-loadout.md` d.14) and cannot receive grants.
+
+9. **Weekly challenges** (approved 2026-11-22).
+   - The `challenges/` kind holds templates (data and optional predicates). On Monday at 00:00 UTC a new
+     week starts. Each host deterministically selects enabled, available templates with bound parameters and a
+     difficulty mix, using the week and host seed. The default seed is 0; the default set is two easy,
+     two medium and one hard. Dots separate components of the instance ID, never appear inside them, and the
+     assembled ID is at most 40 bytes.
+   - Server-authoritative score, match, round, death and streak notifications and `PW.Challenges.Report`
+     drive progress for humans only. Victims may be bots, including recruit bots, and `progression.unlockall`
+     does not turn off tracking. A live match retains the week it started in.
+   - Progress travels with the client in versioned `data/privatewar/challenges.json`, separate from
+     `progression.json`; client upload and server state, progress and delta messages synchronize it.
+     Client counters are forgeable (d.0). Only matching active instances carry over to another host.
+     Missed weeks expire; there are no rerolls or catch-up in the first version.
+   - Completion automatically grants a reward once through the entitlement claim ledger (d.8).
+     Completing four challenges grants the default weekly bonus. The whole reward waits for
+     `PW.Unlocks.IsReady` before claim lookup or queuing XP/currency. An empty item list can record a claim;
+     XP and currency queued before the grant flush with it, and the client persists the claim first.
 
 ## Interfaces
 

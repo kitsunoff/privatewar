@@ -39,6 +39,12 @@
 ---@field site string
 ---@field at number
 
+---@class PW.SNDCompletion
+---@field action "plant"|"defuse"
+---@field id string
+---@field userId integer current connection at the moment of completion
+---@field site string
+
 ---@class PW.SNDState
 ---@field generation integer
 ---@field deadline number
@@ -50,6 +56,7 @@
 ---@field site? string
 ---@field fuse number
 ---@field interaction? PW.SNDInteraction
+---@field completed? PW.SNDCompletion consumed by the mode after the authoritative step, never published
 ---@field winner? integer|false
 
 ---@class PW.SNDSnapshot

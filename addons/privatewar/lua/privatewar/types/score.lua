@@ -13,6 +13,7 @@
 ---Options of PW.Score.Award.
 ---@class PW.ScoreOpts
 ---@field weapon? Weapon the weapon of the event; weapon XP comes only from events awarded with one
+---@field context? table<string, any> optional facts about this event, passed unchanged to listeners
 
 ---Internal (server): scores of the current match. Player scores are kept by player; team scores by team index.
 ---@class PW.ScoreStore
@@ -28,9 +29,10 @@
 ---@class PW.ScoreLib
 ---Server. Awards an event: resolves the points (EVENT.Points, then the question PW_ScoreValue(ply, eventId, points):
 ---a number answer replaces the points), adds them to the player and, in a team mode, to the player's team, fires the
----notification PW_ScoreEvent(ply, eventId, points, xp, weapon) and then PW_ScoreChanged(ply, score, delta, team,
----teamScore). XP is EVENT.XP, or the final points when EVENT.XP is nil (a PW_ScoreValue answer never changes an
----explicit EVENT.XP). An unknown or disabled event id, or an invalid player, is rejected: one log line, returns false.
+---notification PW_ScoreEvent(ply, eventId, points, xp, weapon, context) and then
+---PW_ScoreChanged(ply, score, delta, team, teamScore). XP is EVENT.XP, or the final points when nil
+---(a PW_ScoreValue answer never changes explicit EVENT.XP). An unknown or disabled event id, or an invalid player,
+---is rejected: one log line, returns false.
 ---On success returns true, points, xp.
 ---@field Award fun(ply: Player, eventId: string, opts?: PW.ScoreOpts): boolean, number?, number?
 ---Match score of a player (0 if none). The server reads its store, a client the NW2 value.

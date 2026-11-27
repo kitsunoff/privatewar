@@ -262,6 +262,7 @@ function lib.Use(ply, id)
     local ok, result = pcall(use, ply, id)
     activating[ply] = nil
     if not ok then print("[PW] streak activation failed: " .. tostring(result)) return false end
+    if result then PW.Notify("PW_StreakActivated", ply, id) end
     return result
 end
 
@@ -281,13 +282,36 @@ function lib.IsDamage()
     return store().depth > 0
 end
 
-function lib.StreakDamage(fn, ...)
+function lib.DamageStreakId()
     local s = store()
+    return s.depth > 0 and s.damageId or nil
+end
+
+---@param id string?
+---@param fn fun(...: any)
+---@param ... any
+local function runDamage(id, fn, ...)
+    local s = store()
+    local previous = s.damageId
+    s.damageId = id or previous
     s.depth = s.depth + 1
     local ok, err = pcall(fn, ...)
     s.depth = s.depth - 1
+    s.damageId = previous
     if not ok then print("[PW] streaks: streak damage failed: " .. tostring(err)) end
 end
+
+---@param source string|fun(...: any)
+---@param ... any
+local function streakDamage(source, ...)
+    if type(source) == "string" then
+        runDamage(source, ...)
+    else
+        runDamage(nil, source, ...)
+    end
+end
+
+lib.StreakDamage = streakDamage --[[@as PW.StreakDamageFn]]
 
 function lib._Receive(ply)
     local s = store()
@@ -307,7 +331,7 @@ end
 lib._RegisterNet()
 
 function MODULE:PW_ScoreEvent(ply, eventId, points)
-    lib._OnScore(ply, eventId, points)
+    for _, id in ipairs(lib._OnScore(ply, eventId, points)) do PW.Notify("PW_StreakEarned", ply, id) end
 end
 
 function MODULE:PW_PhaseChange(phase, oldPhase)

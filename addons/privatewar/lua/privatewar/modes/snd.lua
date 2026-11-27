@@ -83,6 +83,20 @@ function MODE:PW_RoundStart()
     lib().Publish(state, true)
 end
 
+---@param state PW.SNDState
+local function awardCompletion(state)
+    local completed = state.completed
+    state.completed = nil -- Consume before score listeners can re-enter.
+    local score = PW.Score
+    if completed == nil or score == nil then return end
+    for _, ply in ipairs(player.GetAll()) do
+        if IsValid(ply) and ply:UserID() == completed.userId and lib().Identity(ply) == completed.id then
+            score.Award(ply, completed.action == "plant" and "snd_plant" or "snd_defuse")
+            return
+        end
+    end
+end
+
 ---@param _timedOut boolean
 ---@return integer|false|nil, boolean
 function MODE:RoundWinner(_timedOut)
@@ -90,6 +104,7 @@ function MODE:RoundWinner(_timedOut)
     if state == nil then return false, false end
     local phase, carrier = state.phase, state.carrier
     local winner, defer = lib().Step(state, CurTime(), lib().Actors(state))
+    awardCompletion(state)
     local changed = phase ~= state.phase or carrier ~= state.carrier
     if changed then
         lib().Invalidate(state)

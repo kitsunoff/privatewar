@@ -85,6 +85,74 @@ local function refusal(store, ply)
     return nil
 end
 
+---@class PW.ClaimBalances
+---@field xp number
+---@field params? PW.ProgressionParams
+---@field currency number
+
+---@param amount any
+---@return boolean
+local function validAmount(amount)
+    return amount == nil or (type(amount) == "number" and amount >= 0 and amount < math.huge)
+end
+
+---@param store PW.ProgressionStore
+---@param xp number?
+---@param currency number?
+---@return PW.ClaimBalances?
+local function prepareBalances(store, xp, currency)
+    ---@type PW.ClaimBalances
+    local balances = { xp = 0, currency = 0 }
+    if xp ~= nil and xp > 0 then
+        balances.xp, balances.params = progression._PrepareXP(store, xp)
+        if not validAmount(balances.xp) then return nil end
+    end
+    if currency ~= nil and currency > 0 and store.ownedActive() then balances.currency = currency end
+    return balances
+end
+
+---@param current table<string, integer>?
+---@param grant string
+---@param at integer
+---@return table<string, integer>
+local function retainedClaims(current, grant, at)
+    local claims = table.Copy(current or {}) --[[@as table<string, integer>]]
+    claims[grant] = at
+    return lib._CheckClaims(claims)
+end
+
+---@param store PW.ProgressionStore
+---@param ply Player
+---@param scaled number
+---@return string?
+local function rewardXPRefusal(store, ply, scaled)
+    -- Only a positive XP reward reserves room. Legacy and currency-only grants never gate unrelated XP.
+    if scaled <= 0 then return nil end
+    local limit = progression.MaxDeltaXP
+    if scaled > limit then return "badreward" end
+    local pending = store.pending[ply]
+    if pending ~= nil and pending.xp > limit - scaled then return "balancefull" end
+    return nil
+end
+
+---@param store PW.ProgressionStore
+---@param ply Player
+---@param balances PW.ClaimBalances?
+local function flushGrant(store, ply, balances)
+    local params = balances ~= nil and balances.params or nil
+    if balances == nil then
+        progression._Flush(store, ply)
+        return
+    end
+    progression._AddCurrency(store, ply, balances.currency)
+    ---@type integer?
+    local before
+    if params ~= nil and balances.xp > 0 then before = progression._StageClaimXP(store, ply, balances.xp, params) end
+    -- Nothing can observe or flush partially staged balances; even an XP listener may flush again.
+    progression._Flush(store, ply)
+    if params ~= nil and before ~= nil then progression._NotifyClaimXP(store, ply, balances.xp, before, params) end
+end
+
 function lib._Grant(store, ply, items, opts)
     local why = refusal(store, ply)
     if why ~= nil then return 0, why end
@@ -94,8 +162,20 @@ function lib._Grant(store, ply, items, opts)
     if opts.grant ~= nil and grant == nil then return 0, "badgrant" end
     local state = progression._StateOf(store, ply)
     if grant ~= nil and lib._HasClaim(state.claims, grant) then return 0, "claimed" end
+    local xp, currency = opts.xp, opts.currency
+    local hasReward = xp ~= nil or currency ~= nil
+    if hasReward and (grant == nil or not validAmount(xp) or not validAmount(currency)) then return 0, "badreward" end
     local keys, err = itemKeys(items, true)
     if keys == nil then return 0, err end
+    local balances = hasReward and prepareBalances(store, xp, currency) or nil
+    if hasReward then
+        if balances == nil then return 0, "badreward" end
+        -- Key resolution, settings and the economy edge can reenter before we stage anything.
+        why = refusal(store, ply)
+        if why ~= nil then return 0, why end
+        state = progression._StateOf(store, ply)
+        if grant ~= nil and lib._HasClaim(state.claims, grant) then return 0, "claimed" end
+    end
     local grants = state.grants or {}
     ---@type string[]
     local added = {}
@@ -103,8 +183,12 @@ function lib._Grant(store, ply, items, opts)
         if grants[key] == nil then added[#added + 1] = key end
     end
     if table.Count(grants) + #added > lib.MaxGrants then return 0, "full" end
+    why = balances ~= nil and rewardXPRefusal(store, ply, balances.xp) or nil
+    if why ~= nil then return 0, why end
     if #added > 0 or grant ~= nil then
         local at = os.time()
+        local claims = hasReward and grant ~= nil and retainedClaims(state.claims, grant, at) or nil
+        if hasReward and grant ~= nil and not lib._HasClaim(claims, grant) then return 0, "claimfull" end
         local pending = progression._PendingOf(store, ply)
         pending.granted, pending.claims = pending.granted or {}, pending.claims or {}
         for _, key in ipairs(added) do
@@ -113,12 +197,16 @@ function lib._Grant(store, ply, items, opts)
         end
         state.grants = grants
         if grant ~= nil then
-            local claims = state.claims or {}
-            claims[grant], pending.claims[grant] = at, at
-            state.claims = lib._CheckClaims(claims)
+            pending.claims[grant] = at
+            if claims == nil then
+                local previous = state.claims or {}
+                previous[grant] = at
+                claims = lib._CheckClaims(previous)
+            end
+            state.claims = claims
         end
     end
-    progression._Flush(store, ply)
+    flushGrant(store, ply, balances)
     if #added > 0 then
         store.refresh(ply)
         store.notify("PW_UnlockGranted", ply, added, source, grant)

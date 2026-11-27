@@ -17,6 +17,7 @@ local unlockCount = 8
 ---@field level PWInfoCard
 ---@field bar PWProgressBar
 ---@field summary PWInfoCard
+---@field challenges PWButton
 ---@field weaponList PWCardList
 ---@field unlocks PWInfoCard
 ---@field weapon? string the selected weapon class
@@ -104,7 +105,26 @@ local function showLevel(view, lib, catalogue)
 end
 
 ---@param view PWProgressHomeView
+local function showChallenges(view)
+    local lib = PW.Challenges
+    local getWeek, getProgress = lib and lib.GetWeek, lib and lib.GetProgress
+    local week = getWeek and getWeek()
+    local me = LocalPlayer()
+    local title = "WEEKLY CHALLENGES"
+    if week ~= nil and getProgress ~= nil and IsValid(me) then
+        local completed = 0
+        for _, item in ipairs(week.items) do
+            local row = getProgress(me, item.id)
+            if row ~= nil and row.done then completed = completed + 1 end
+        end
+        title = string.format("%s · %d / %d", title, completed, #week.items)
+    end
+    view.challenges:SetText(title)
+end
+
+---@param view PWProgressHomeView
 local function refresh(view)
+    showChallenges(view)
     local lib = rawget(PW, "Progression") --[[@as PW.ProgressionLib?]]
     if lib == nil or not IsValid(LocalPlayer()) then
         view.level:SetTitle("Progression is off")
@@ -131,9 +151,12 @@ local function layout(view, w, h)
     view.level:SetSize(left.w, levelH)
     view.bar:SetPos(left.x, left.y + levelH + px(8))
     view.bar:SetSize(left.w, px(36))
-    local summaryY = left.y + levelH + px(8) + px(36) + gap
+    local entryY = left.y + levelH + px(8) + px(36) + gap
+    view.challenges:SetPos(left.x, entryY)
+    view.challenges:SetSize(left.w, px(64))
+    local summaryY = entryY + px(64) + gap
     view.summary:SetPos(left.x, summaryY)
-    view.summary:SetSize(left.w, math.min(view.summary:WantedHeight(left.w), left.y + left.h - summaryY))
+    view.summary:SetSize(left.w, math.min(view.summary:WantedHeight(left.w), math.max(0, left.y + left.h - summaryY)))
     view.weaponList:SetPos(centre.x, centre.y)
     view.weaponList:SetSize(centre.w, centre.h)
     view.unlocks:SetPos(right.x, right.y)
@@ -146,6 +169,13 @@ function SCREEN:Build(ctx)
     view.nextTick = 0
     view.level = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
     view.bar = vgui.Create("PWProgressBar", view) --[[@as PWProgressBar]]
+    view.challenges = vgui.Create("PWButton", view) --[[@as PWButton]]
+    view.challenges:SetAlignLeft(true)
+    PW.UI.Focusable(view.challenges, "progress_challenges_entry", "weekly_challenges")
+    local root = ctx.root --[[@as PWRoot]]
+    view.challenges.DoClick = function()
+        if PW.UI.Router.Push(root.model, "progress_challenges") then root:Rebuild() end
+    end
     view.summary = vgui.Create("PWInfoCard", view) --[[@as PWInfoCard]]
     view.weaponList = vgui.Create("PWCardList", view) --[[@as PWCardList]]
     view.weaponList.OnSelect = function(_, id) view.weapon = id end

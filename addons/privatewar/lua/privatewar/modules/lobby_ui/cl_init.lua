@@ -22,6 +22,7 @@ local lib = PW.Lobby --[[@as PW.LobbyLib]]
 ---@field waiting? boolean a request was sent and no pw_lobby_state arrived since
 ---@field open? boolean the lobby opened the root
 ---@field section? string the custom game section to show next ("modemap", "setup", ...)
+---@field playlistSetup? string the playlist being reviewed on the local screen
 ---@field players? integer player count at the last refresh
 ---@field picker? PW.LobbyPickerOpts the options of the map picker to open next (OpenPicker)
 ---@field flowKey? string the START button countdown label shown last ("" for the normal button)
@@ -222,6 +223,18 @@ function lib.OpenCustom(section)
     local root, ui = currentRoot(), kit()
     if root == nil or ui == nil or ui.Router == nil then return end
     if ui.Router.Push(root.model, "lobby_custom") then root:Rebuild() end
+end
+
+function lib.OpenPlaylist(id)
+    local root, ui = currentRoot(), kit()
+    if root == nil or ui == nil or ui.Router == nil then return end
+    if not ui.Router.Push(root.model, "lobby_playlist") then return end
+    view.playlistSetup = id
+    root:Rebuild()
+end
+
+function lib.PlaylistSetupId()
+    return view.playlistSetup or ""
 end
 
 ---Pushes the map picker (screens/map_picker.lua). With opts.pick it is the pick mode: Enter gives the choice to
