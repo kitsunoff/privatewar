@@ -129,6 +129,23 @@ local function sampleState()
     }
 end
 
+---@class PW.TestPlaylistSetup
+---@field start PW.LobbyAction
+---@field canEdit boolean
+
+---@alias PW.TestPlaylistSetupBuild fun(input: PW.LobbyHubInput, id: string): PW.TestPlaylistSetup
+---@alias PW.TestPlaylistChoose fun(input: PW.LobbyHubInput, id: string, pick: fun(id: string),
+---    open: fun(id: string)): boolean
+
+---@return PW.LobbyHubInput
+local function playlistInput()
+    return { state = sampleState(), selection = {}, players = {}, maxPlayers = 12, seen = {},
+        playlists = { active = "", serial = 1, sampledAt = 1000, retained = false,
+            canPick = true, canStart = true, list = {
+                { id = "event", name = "Event", summary = "Fast rounds.", fill = 12, active = true, valid = true }
+            } } }
+end
+
 return {
     groupName = "PW lobby ui",
     -- The pool table is shared by every case (a field set inside a case is not).
@@ -185,6 +202,49 @@ return {
                 expect(must(PW._Privileges.defs["pw.match.start"]).MinAccess).to.equal("superadmin")
                 expect(must(PW._Privileges.defs["pw.entities.toggle"]).MinAccess).to.equal("superadmin")
                 timer.Simple(0.2, function() done() end)
+            end
+        },
+        {
+            name = "Playlist choice opens setup for the host only and sends only the pick",
+            func = function()
+                local choose = assert(rawget(lobby(), "_ChoosePlaylist")) --[[@as PW.TestPlaylistChoose]]
+                local input = playlistInput()
+                ---@type string[]
+                local calls = {}
+                ---@param id string
+                local function pick(id) calls[#calls + 1] = "pick:" .. id end
+                ---@param id string
+                local function open(id) calls[#calls + 1] = "open:" .. id end
+                expect(choose(input, "unknown", pick, open)).to.beFalse()
+                expect(choose(input, "event", pick, open)).to.beTrue()
+                expect(calls).to.deepEqual({ "pick:event", "open:event" })
+                local state = input.state --[[@as PW.LobbyState]]
+                state.canStart = false
+                expect(choose(input, "event", pick, open)).to.beFalse()
+                expect(#calls).to.equal(2)
+            end
+        },
+        {
+            name = "Playlist setup stays read-only and only starts the acknowledged available playlist as host",
+            func = function()
+                local setup = assert(rawget(lobby(), "_PlaylistSetup")) --[[@as PW.TestPlaylistSetupBuild]]
+                local input = playlistInput()
+                local list = input.playlists --[[@as PW.PlaylistListState]]
+                local state = input.state --[[@as PW.LobbyState]]
+                local pending = setup(input, "event")
+                expect(pending.canEdit).to.beFalse()
+                expect(pending.start.locked).to.beTrue()
+                expect(pending.start.request).to.equal(nil)
+                list.active = "event"
+                local selected = setup(input, "event")
+                expect(selected.canEdit).to.beFalse()
+                expect(selected.start.locked).to.beFalse()
+                expect(selected.start.request).to.deepEqual({ playlist = "event" })
+                list.canStart = false
+                expect(setup(input, "event").start.request).to.equal(nil)
+                list.canStart = true
+                state.canStart = false
+                expect(setup(input, "event").start.request).to.equal(nil)
             end
         },
         {

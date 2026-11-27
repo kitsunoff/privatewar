@@ -284,12 +284,15 @@ local function partyOf(input, fill)
     return kit.PlayerList(input.players, { phase = "LOBBY", maxPlayers = input.maxPlayers, botsFill = fill })
 end
 
-function lib._Hub(input)
+---@param input PW.LobbyHubInput
+---@param customOnly? boolean
+---@return PW.LobbyHub
+local function hub(input, customOnly)
     local state = input.state or nil
     local model = state ~= nil and lib._Model(state, input.selection, input.fits) or nil
     local mode = (state ~= nil and model ~= nil) and modeEntry(state, model.mode) or nil
     local summary = summaryOf(input, mode, model ~= nil and model.map or nil)
-    local active = activePlaylist(input)
+    local active = not customOnly and activePlaylist(input) or nil
     local cards, keys = playlistCards(input, state ~= nil and state.canStart
         and input.playlists ~= false and input.playlists ~= nil and input.playlists.canPick)
     local entryReason = input.playlists and active ~= nil and
@@ -310,6 +313,57 @@ function lib._Hub(input)
         summary = summary, rows = rows, warning = lib._SlotWarning(fill, input.maxPlayers),
         afterMatch = afterMatchText(input, active),
         party = partyOf(input, fill), note = not canStart and "waiting for host" or nil, model = model
+    }
+end
+
+function lib._Hub(input)
+    return hub(input)
+end
+
+---@param list PW.PlaylistListState?
+---@param id string
+---@return PW.PlaylistSummary?
+local function findPlaylist(list, id)
+    if list == nil then return nil end
+    for _, item in ipairs(list.list) do
+        if item.id == id then return item end
+    end
+end
+
+function lib._ChoosePlaylist(input, id, pick, open)
+    local state, list = input.state or nil, input.playlists or nil
+    if state == nil or not state.canStart or list == nil or not list.canPick then return false end
+    local item = findPlaylist(list, id)
+    if item == nil or not item.valid then return false end
+    if not item.active and not (list.active == id and list.canStart) then return false end
+    if list.active ~= id then pick(id) end
+    open(id)
+    return true
+end
+
+function lib._PlaylistSetup(input, id)
+    local state, list = input.state or nil, input.playlists or nil
+    local item = findPlaylist(list, id)
+    local start = action("start", "Start playlist", nil, "Waiting for the server to confirm the playlist")
+    start.label = "START PLAYLIST"
+    if state ~= nil and not state.canStart then
+        start.reason = reasons.start
+    elseif list ~= nil and item ~= nil then
+        if not item.valid or (not item.active and list.active ~= id) then
+            start.reason = "Playlist is unavailable"
+        elseif state ~= nil and list.active == id then
+            start = lib._Hub(input).start
+            if start.locked then start.request = nil end
+        end
+    elseif list ~= nil then
+        start.reason = "Playlist is unavailable"
+    end
+    local fill = item ~= nil and item.fill > 0 and item.fill or nil
+    return {
+        name = item ~= nil and item.name or "Playlist",
+        description = item ~= nil and description(item.summary) or "",
+        timer = item ~= nil and list ~= nil and lib._PlaylistTimer(item, list.sampledAt) or nil,
+        fill = fill, warning = lib._SlotWarning(fill, input.maxPlayers), canEdit = false, start = start
     }
 end
 
@@ -350,7 +404,7 @@ local function choiceCards(state, model, input)
 end
 
 function lib._Custom(input)
-    local custom = lib._Hub(input) --[[@as PW.LobbyCustom]]
+    local custom = hub(input, true) --[[@as PW.LobbyCustom]]
     custom.afterMatch = afterMatchText(input)
     local state = input.state or nil
     local model = custom.model

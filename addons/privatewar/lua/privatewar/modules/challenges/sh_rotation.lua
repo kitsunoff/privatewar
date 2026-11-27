@@ -154,27 +154,36 @@ local function prepare(candidate)
 end
 
 ---@param choices PW.ChallengeReadyCandidate[]
----@param draw PW.ChallengeDraw
----@return PW.ChallengeReadyCandidate?
-local function weighted(choices, draw)
-    if #choices == 0 then return nil end
-    ---@type number
+---@param scale number
+---@return number
+local function weightTotal(choices, scale)
     local total = 0
+    for _, choice in ipairs(choices) do total = total + choice.template.weight / scale end
+    return total
+end
+
+---@param choices PW.ChallengeReadyCandidate[]
+---@return number total
+---@return number scale
+local function weightRange(choices)
+    local total = weightTotal(choices, 1)
+    if total < math.huge then return total, 1 end
+    -- Preserve the weight ratios if their unscaled sum overflows.
     ---@type number
     local largest = 1
     for _, choice in ipairs(choices) do
         local weight = choice.template.weight
-        total = total + weight
-        largest = math.max(largest, weight)
+        if weight > largest then largest = weight end
     end
-    -- Keep the same ratios when adding finite weights would otherwise overflow.
-    ---@type number
-    local scale = 1
-    if total == math.huge then
-        scale = largest
-        total = 0
-        for _, choice in ipairs(choices) do total = total + choice.template.weight / scale end
-    end
+    return weightTotal(choices, largest), largest
+end
+
+---@param choices PW.ChallengeReadyCandidate[]
+---@param draw PW.ChallengeDraw
+---@return PW.ChallengeReadyCandidate?
+local function weighted(choices, draw)
+    if #choices == 0 then return nil end
+    local total, scale = weightRange(choices)
     local roll, cumulative = draw() * total, 0
     for _, choice in ipairs(choices) do
         cumulative = cumulative + choice.template.weight / scale

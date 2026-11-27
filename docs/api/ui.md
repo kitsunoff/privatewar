@@ -1000,12 +1000,15 @@ generated: the map reloads when it is done`, `No mode is offered on any installe
 and no playlist). The status line carries the note `waiting for host` for a player who cannot start.
 
 **The hub** (`lobby_hub`, `Root = true`, `Order = 10`, title "Private War"). Left: `PWCardList` of the playlists and the
-Custom game card. Centre: `PWOperator`. Right: `PWSummary`, the MATCH `PWInfoCard` (with the slot warning), the PARTY
-`PWPlayerList` (note "Teams are assigned when the match starts."; host first with HOST, then `+N bots`), and at the
-bottom GAME SETUP (secondary button, `PW.Lobby.OpenCustom("setup")`) and START (primary). Hints: Select (Enter), Game
-setup (F), and Start match (R) for a player who may start. Esc on the hub opens the leave dialog in `LOBBY` ("Leaving from the lobby"; the router itself stays, "Router
-(U-3)"). Selecting the Custom game card, even when it is already selected, sends `pw_playlist_pick ""` (the active
-playlist resets to Custom) and opens the custom screen on its mode and map section.
+Custom game card. Centre: `PWOperator`. Right: the weekly challenge preview at the top, the PARTY `PWPlayerList`
+near the bottom, and GAME SETUP below the party. The hub does not show match settings or start a match. GAME SETUP
+opens the selected playlist's setup or the custom game's setup section. Esc on the hub opens the leave dialog in
+`LOBBY` ("Leaving from the lobby"; see "Router (U-3)"). Selecting Custom sends `pw_playlist_pick ""` and opens the
+custom screen on its mode and map section.
+
+**Playlist setup** (`lobby_playlist`, pushed from the hub). Selecting an available playlist sends a pick and opens
+this screen only for the host; it does not move guests or start a match. The description, bot fill and schedule are
+read-only. START PLAYLIST requires a server-confirmed, startable selection and host privileges. Back returns to PLAY.
 
 **The custom game screen** (`lobby_custom`, pushed from the hub, title "Custom game"). Left: the actions as cards (START
 MATCH, MODE & MAP, GAME SETUP, ENABLED CONTENT, NAVMESH) and the summary. Centre: the section of the selected action:
